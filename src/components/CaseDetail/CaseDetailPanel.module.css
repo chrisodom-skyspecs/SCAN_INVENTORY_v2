@@ -1,0 +1,170 @@
+/**
+ * CaseDetailPanel.module.css
+ *
+ * Styles for the CaseDetailPanel container — the T1–T5 tab bar and
+ * the wrapper that hosts each T-layout component.
+ *
+ * No hex literals — only design-system CSS custom properties.
+ */
+
+/* ── Panel container ──────────────────────────────────────────────── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 0.5rem;
+  box-shadow: var(--elevation-2);
+  overflow: hidden;
+  height: 100%;
+}
+
+/* ── Tab bar ──────────────────────────────────────────────────────── */
+
+.tabBar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-bottom: 1px solid var(--border-default);
+  background-color: var(--surface-sunken);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+}
+
+.tabBar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--ink-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease,
+    background-color 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+  position: relative;
+}
+
+.tab:hover {
+  color: var(--ink-primary);
+  background-color: var(--surface-hover);
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  z-index: 1;
+}
+
+.tab.active {
+  color: var(--ink-brand);
+  border-bottom-color: var(--border-brand);
+  background-color: var(--surface-raised);
+  font-weight: 600;
+}
+
+.tabCode {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: inherit;
+  opacity: 0.75;
+}
+
+.tab.active .tabCode {
+  opacity: 1;
+}
+
+/* FF badge — shown next to T5 (audit) to signal feature-flag gating */
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 9999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background-color: var(--signal-neutral-fill-subtle);
+  color: var(--signal-neutral-text-subtle);
+  border: 1px solid var(--signal-neutral-border);
+}
+
+/* ── Panel body (scrollable) ──────────────────────────────────────── */
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.25rem;
+  scroll-padding-top: 0.5rem;
+}
+
+/* ── Loading skeleton ─────────────────────────────────────────────── */
+
+.skeleton {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.skeletonLine {
+  border-radius: 0.25rem;
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-hover) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonLine {
+    animation: none;
+  }
+}
+
+@keyframes shimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.skeletonLineShort {
+  height: 0.875rem;
+  width: 40%;
+}
+
+.skeletonLineMed {
+  height: 0.875rem;
+  width: 70%;
+}
+
+.skeletonLineFull {
+  height: 0.875rem;
+  width: 100%;
+}
+
+.skeletonBlock {
+  height: 4rem;
+  width: 100%;
+  border-radius: 0.375rem;
+}

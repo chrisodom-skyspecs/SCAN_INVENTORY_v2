@@ -1,0 +1,377 @@
+/**
+ * T4Shipping.module.css
+ * No hex literals — CSS custom properties only.
+ * IBM Plex Mono for tracking numbers and timestamps.
+ */
+
+.shipping {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Inspection summary banner ────────────────────────────────────── */
+
+.inspectionSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+/* ── Case context row ─────────────────────────────────────────────── */
+
+.caseContext {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.caseContextLabel {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-primary);
+}
+
+/* ── Active tracking card ─────────────────────────────────────────── */
+
+.activeTracking {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.statusHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.statusLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.carrierLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.statusDescription {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.refreshBtn {
+  flex-shrink: 0;
+  font-size: 0.75rem !important;
+  padding: 0.375rem 0.75rem !important;
+}
+
+.trackingMeta {
+  margin-top: 0.125rem;
+}
+
+/* ── Live badge ───────────────────────────────────────────────────── */
+
+.liveBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 9999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background-color: var(--signal-success-fill);
+  color: var(--signal-success-text);
+}
+
+/* Pulsing dot before the badge to indicate live data */
+.liveBadge::before {
+  content: "";
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background-color: var(--signal-success-text);
+  margin-right: 0.25rem;
+  animation: livePulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveBadge::before {
+    animation: none;
+  }
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* ── Tracking event timeline ──────────────────────────────────────── */
+
+.eventTimeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+/* Vertical line connecting dots */
+.eventTimeline::before {
+  content: "";
+  position: absolute;
+  left: 0.3125rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 1px;
+  background-color: var(--border-default);
+}
+
+.eventItem {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  position: relative;
+}
+
+.eventDot {
+  flex-shrink: 0;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background-color: var(--surface-brand);
+  border: 2px solid var(--surface-raised);
+  margin-top: 0.125rem;
+  position: relative;
+  z-index: 1;
+}
+
+.eventItem:first-child .eventDot {
+  background-color: var(--signal-success-fill);
+}
+
+.eventBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.eventHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.eventDescription {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+}
+
+.eventTime {
+  flex-shrink: 0;
+}
+
+.eventLocation {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+}
+
+/* ── Damage reports section ───────────────────────────────────────── */
+
+.damageSection {
+  padding: 0.75rem;
+  background-color: var(--signal-error-fill-subtle);
+  border: 1px solid var(--signal-error-border);
+  border-radius: 0.5rem;
+  margin-bottom: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.damageCounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+}
+
+.damageStat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+
+.damageStatVal {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--signal-error-text-subtle);
+  line-height: 1.1;
+}
+
+.damageStatLbl {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.damageStatWarn .damageStatVal {
+  color: var(--signal-warning-text-subtle, var(--ink-secondary));
+}
+
+.damageList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.damageItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--signal-error-border);
+}
+
+.damageItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.damageItemHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.damageItemName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--signal-error-text-subtle);
+  flex: 1;
+  min-width: 0;
+}
+
+.damagePhotoCount {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+/* ── Severity badge ───────────────────────────────────────────────── */
+
+.severityBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 9999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.severity-minor {
+  color: var(--signal-warning-text-subtle, var(--ink-secondary));
+  background-color: var(--signal-warning-fill-subtle, var(--surface-sunken));
+  border-color: var(--signal-warning-border, var(--border-default));
+}
+
+.severity-moderate {
+  color: var(--signal-error-text-subtle);
+  background-color: var(--signal-error-fill-subtle);
+  border-color: var(--signal-error-border);
+}
+
+.severity-severe {
+  color: var(--signal-error-text);
+  background-color: var(--signal-error-fill);
+  border-color: var(--signal-error-border);
+}
+
+/* ── Shipment history list ────────────────────────────────────────── */
+
+.historyList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.historyItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 0.375rem;
+  background-color: var(--surface-raised);
+}
+
+.historyItemActive {
+  border-color: var(--border-brand);
+  background-color: var(--surface-brand-subtle);
+}
+
+.historyItemHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.historyTrackingNum {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  letter-spacing: 0.02em;
+}

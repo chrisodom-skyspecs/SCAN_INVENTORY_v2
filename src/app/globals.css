@@ -1,0 +1,79 @@
+/**
+ * globals.css — Base reset + typography defaults
+ * Consumes design tokens from src/styles/tokens/base.css
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family: "Inter Tight", "Inter", system-ui, -apple-system, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--ink-primary);
+  background-color: var(--surface-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Monospace elements default to IBM Plex Mono */
+code,
+kbd,
+samp,
+pre {
+  font-family: "IBM Plex Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.875em;
+}
+
+/* Remove default list styles for navigation */
+ul[role="list"],
+ol[role="list"] {
+  list-style: none;
+}
+
+/* Improve media defaults */
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* Inherit fonts for form controls */
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+/* Focus visible ring — accessible keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

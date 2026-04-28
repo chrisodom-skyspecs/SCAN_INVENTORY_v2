@@ -1,0 +1,936 @@
+/**
+ * SCAN app — Checklist inspection screen — page.module.css
+ *
+ * Sub-AC 36b-2: Checklist update mutation + subscription invalidation styles.
+ *
+ * Rules
+ * ─────
+ * • Design tokens only — no hex literals, no raw hsl() in component rules.
+ * • IBM Plex Mono for case labels and mono data values.
+ * • Inter Tight for all other text.
+ * • Touch targets: minimum 44 × 44 px (WCAG 2.5.5).
+ * • WCAG AA contrast in both light (.default) and dark (.theme-dark) themes.
+ * • prefers-reduced-motion guards on all keyframes and transitions.
+ */
+
+/* ── Page shell ─────────────────────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 0 1rem 4rem;
+}
+
+/* ── Page header ────────────────────────────────────────────────────── */
+
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1.25rem 0 0.75rem;
+}
+
+.caseHeaderRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.caseLabel {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ink-primary);
+  margin: 0;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.pageSubheading {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.inspectorNote {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-quaternary);
+  margin: 0;
+}
+
+/* ── Divider ────────────────────────────────────────────────────────── */
+
+.divider {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 0.75rem 0;
+  border: none;
+}
+
+/* ── Section ────────────────────────────────────────────────────────── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.25rem 0;
+}
+
+.sectionTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+}
+
+.sectionIcon {
+  width: 1rem;
+  height: 1rem;
+  color: var(--ink-secondary);
+  flex-shrink: 0;
+}
+
+.countChip {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-tertiary);
+  background-color: var(--surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.875rem;
+  padding: 0.1rem 0.4375rem;
+  min-width: 1.25rem;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Progress section ───────────────────────────────────────────────── */
+
+.progressSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.25rem;
+}
+
+.progressBarTrack {
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--surface-muted);
+  overflow: hidden;
+}
+
+.progressBarFill {
+  height: 100%;
+  border-radius: 3px;
+  background-color: var(--surface-brand);
+  transition: width 350ms ease;
+}
+
+.progressBarFill[data-complete] {
+  background-color: var(--color-success-600, var(--surface-brand));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressBarFill {
+    transition: none;
+  }
+}
+
+.progressCounts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.progressPct {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-secondary);
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+
+.progressCountBadges {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.countBadgeOk,
+.countBadgeDamaged,
+.countBadgeMissing,
+.countBadgeUnchecked {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  text-transform: lowercase;
+}
+
+.countBadgeOk {
+  color: var(--ink-success);
+  background-color: var(--surface-success-subtle);
+  border: 1px solid var(--border-success);
+}
+
+.countBadgeDamaged {
+  color: var(--ink-danger);
+  background-color: var(--surface-danger-subtle);
+  border: 1px solid var(--border-danger);
+}
+
+.countBadgeMissing {
+  color: var(--ink-warning);
+  background-color: var(--surface-warning-subtle);
+  border: 1px solid var(--border-warning);
+}
+
+.countBadgeUnchecked {
+  color: var(--ink-tertiary);
+  background-color: var(--surface-subtle);
+  border: 1px solid var(--border-subtle);
+}
+
+.noItemsNote {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  text-align: center;
+  padding: 0.25rem 0;
+}
+
+/* ── Checklist list ─────────────────────────────────────────────────── */
+
+.checklistList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ── Checklist item ─────────────────────────────────────────────────── */
+
+.checklistItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4375rem;
+  padding: 0.875rem 1rem;
+  border: 1.5px solid var(--border-default);
+  border-radius: 0.625rem;
+  background-color: var(--surface-raised);
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checklistItem {
+    transition: none;
+  }
+}
+
+.checklistItemReviewed {
+  border-color: var(--border-subtle);
+  background-color: var(--surface-subtle);
+}
+
+.checklistItemDamaged {
+  border-color: var(--border-danger);
+  background-color: var(--surface-danger-subtle);
+}
+
+.checklistItemMissing {
+  border-color: var(--border-warning);
+  background-color: var(--surface-warning-subtle);
+}
+
+/* ── Item header ────────────────────────────────────────────────────── */
+
+.itemHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.625rem;
+}
+
+.itemTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.itemName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+/* ── Item expand button ─────────────────────────────────────────────── */
+
+.itemExpandBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-tertiary);
+  border-radius: 0.375rem;
+  padding: 0;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .itemExpandBtn {
+    transition: none;
+  }
+}
+
+.itemExpandBtn:hover {
+  color: var(--ink-primary);
+  background-color: var(--surface-subtle);
+}
+
+.itemExpandBtn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.itemExpandBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.expandChevron {
+  width: 1rem;
+  height: 1rem;
+  transition: transform 200ms ease;
+}
+
+.expandChevronOpen {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expandChevron {
+    transition: none;
+  }
+}
+
+/* ── Item meta (checked-by) ─────────────────────────────────────────── */
+
+.itemMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.itemMetaText {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  color: var(--ink-quaternary);
+  letter-spacing: 0.01em;
+}
+
+/* ── Item note preview ──────────────────────────────────────────────── */
+
+.itemNotePreview {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+  margin: 0;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Item expanded notes input ──────────────────────────────────────── */
+
+.itemExpanded {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease;
+  overflow: hidden;
+}
+
+.itemExpandedOpen {
+  grid-template-rows: 1fr;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .itemExpanded {
+    transition: none;
+  }
+}
+
+.itemExpanded > * {
+  overflow: hidden;
+}
+
+/* ── Notes input ────────────────────────────────────────────────────── */
+
+.notesInputWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-top: 0.25rem;
+}
+
+.notesLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.optionalBadge {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+  background-color: var(--surface-subtle);
+  border-radius: 0.25rem;
+  padding: 0.075rem 0.3rem;
+  letter-spacing: 0.02em;
+}
+
+.notesTextarea {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-primary);
+  background-color: var(--surface-canvas);
+  border: 1.5px solid var(--border-default);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  width: 100%;
+  resize: vertical;
+  min-height: 3.5rem;
+  transition: border-color 150ms ease;
+  box-sizing: border-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notesTextarea {
+    transition: none;
+  }
+}
+
+.notesTextarea:focus {
+  outline: none;
+  border-color: var(--border-brand);
+  box-shadow: 0 0 0 3px var(--surface-brand-subtle);
+}
+
+.notesTextarea::placeholder {
+  color: var(--ink-quaternary);
+}
+
+.notesTextarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Item action buttons ────────────────────────────────────────────── */
+
+.itemActions {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  padding-top: 0.125rem;
+}
+
+.itemActionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3125rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-radius: 0.4375rem;
+  border: 1.5px solid var(--border-default);
+  background-color: var(--surface-raised);
+  color: var(--ink-primary);
+  cursor: pointer;
+  padding: 0 0.75rem;
+  height: 2.25rem;
+  min-height: 44px;
+  min-width: 44px;
+  text-decoration: none;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .itemActionBtn {
+    transition: none;
+  }
+}
+
+.itemActionBtn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.itemActionBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* OK action */
+.itemActionBtn_ok:hover:not(:disabled):not(.itemActionBtnActive) {
+  border-color: var(--border-success);
+  background-color: var(--surface-success-subtle);
+  color: var(--ink-success);
+}
+
+.itemActionBtn_ok.itemActionBtnActive {
+  border-color: var(--border-success);
+  background-color: var(--surface-success-subtle);
+  color: var(--ink-success);
+}
+
+/* Damaged action */
+.itemActionBtn_damaged:hover:not(:disabled):not(.itemActionBtnActive) {
+  border-color: var(--border-danger);
+  background-color: var(--surface-danger-subtle);
+  color: var(--ink-danger);
+}
+
+.itemActionBtn_damaged.itemActionBtnActive {
+  border-color: var(--border-danger);
+  background-color: var(--surface-danger-subtle);
+  color: var(--ink-danger);
+}
+
+/* Missing action */
+.itemActionBtn_missing:hover:not(:disabled):not(.itemActionBtnActive) {
+  border-color: var(--border-warning);
+  background-color: var(--surface-warning-subtle);
+  color: var(--ink-warning);
+}
+
+.itemActionBtn_missing.itemActionBtnActive {
+  border-color: var(--border-warning);
+  background-color: var(--surface-warning-subtle);
+  color: var(--ink-warning);
+}
+
+/* Undo / revert */
+.itemActionBtnRevert {
+  border-color: var(--border-subtle);
+  color: var(--ink-tertiary);
+  background-color: transparent;
+  font-weight: 500;
+}
+
+.itemActionBtnRevert:hover:not(:disabled) {
+  border-color: var(--border-default);
+  color: var(--ink-secondary);
+  background-color: var(--surface-subtle);
+}
+
+/* ── No inspection notice ───────────────────────────────────────────── */
+
+.noInspectionNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.5rem;
+  background-color: var(--surface-subtle);
+  border: 1px solid var(--border-subtle);
+}
+
+.noticeIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.noInspectionNotice p {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Complete CTA section ───────────────────────────────────────────── */
+
+.completeCTASection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+}
+
+.completeCTAHint {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  text-align: center;
+}
+
+/* ── Flagged notice ─────────────────────────────────────────────────── */
+
+.flaggedNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.5rem;
+  background-color: var(--surface-warning-subtle);
+  border: 1px solid var(--border-warning);
+}
+
+.flaggedIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--ink-warning);
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.flaggedNotice span {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-warning);
+  line-height: 1.4;
+}
+
+/* ── Error banner ───────────────────────────────────────────────────── */
+
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.5rem;
+  background-color: var(--surface-danger-subtle);
+  border: 1px solid var(--border-danger);
+}
+
+.errorBannerIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--ink-danger);
+  flex-shrink: 0;
+  margin-top: 0.0625rem;
+}
+
+.errorBannerText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-danger);
+  line-height: 1.4;
+}
+
+/* ── CTA buttons ────────────────────────────────────────────────────── */
+
+.ctaButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border-radius: 0.625rem;
+  border: none;
+  cursor: pointer;
+  padding: 0 1.25rem;
+  height: 3rem;
+  min-height: 44px;
+  min-width: 44px;
+  text-decoration: none;
+  transition: opacity 150ms ease, background-color 150ms ease;
+  user-select: none;
+  white-space: nowrap;
+  box-sizing: border-box;
+  width: 100%;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctaButton {
+    transition: none;
+  }
+}
+
+.ctaButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.ctaButtonPrimary {
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+}
+
+.ctaButtonPrimary:hover:not(:disabled) {
+  background-color: var(--surface-brand-hover);
+}
+
+.ctaButtonPrimary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ctaButtonReady {
+  animation: pulseGlow 2.5s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%       { box-shadow: 0 0 0 4px var(--surface-brand-subtle); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctaButtonReady {
+    animation: none;
+  }
+}
+
+.ctaButtonSecondary {
+  background-color: var(--surface-raised);
+  color: var(--ink-primary);
+  border: 1.5px solid var(--border-default);
+}
+
+.ctaButtonSecondary:hover {
+  background-color: var(--surface-subtle);
+}
+
+.btnIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+}
+
+/* ── Navigation row ─────────────────────────────────────────────────── */
+
+.navRow {
+  display: flex;
+  padding: 0.25rem 0;
+}
+
+/* ── Spinner ────────────────────────────────────────────────────────── */
+
+.spinner {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 600ms linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ── Loading skeleton ───────────────────────────────────────────────── */
+
+.loadingShell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem 0;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingShell {
+    animation: none;
+  }
+}
+
+.skeletonHeader {
+  height: 2rem;
+  border-radius: 0.375rem;
+  background-color: var(--surface-muted);
+  width: 55%;
+}
+
+.skeletonProgress {
+  height: 2.5rem;
+  border-radius: 0.375rem;
+  background-color: var(--surface-muted);
+}
+
+.skeletonItem {
+  height: 5.5rem;
+  border-radius: 0.625rem;
+  background-color: var(--surface-muted);
+}
+
+/* ── Empty state ────────────────────────────────────────────────────── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.emptyIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--ink-quaternary);
+}
+
+.emptyTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.emptyBody {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  max-width: 22rem;
+  line-height: 1.5;
+}
+
+/* ── Success view ───────────────────────────────────────────────────── */
+
+.successView {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2.5rem 0 2rem;
+  text-align: center;
+}
+
+.successIconWrap {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  background-color: var(--surface-success-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pop 300ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.successIconWrapFlagged {
+  background-color: var(--surface-warning-subtle);
+}
+
+@keyframes pop {
+  0%   { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .successIconWrap {
+    animation: none;
+  }
+}
+
+.successIcon {
+  width: 2rem;
+  height: 2rem;
+  color: var(--ink-success);
+}
+
+.successIconWrapFlagged .successIcon {
+  color: var(--ink-warning);
+}
+
+.successTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.successSubtitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+  margin: 0;
+  max-width: 28rem;
+  line-height: 1.5;
+}
+
+.successRealtime {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-quaternary);
+  margin: 0;
+}
+
+.successActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  width: 100%;
+  max-width: 22rem;
+}

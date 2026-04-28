@@ -1,0 +1,201 @@
+/**
+ * T5Audit.module.css
+ * No hex literals — CSS custom properties only.
+ * IBM Plex Mono for hash values and IDs.
+ */
+
+.audit {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.auditBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 9999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background-color: var(--signal-info-fill-subtle);
+  color: var(--signal-info-text-subtle);
+  border: 1px solid var(--signal-info-border);
+}
+
+/* ── Timeline ─────────────────────────────────────────────────────── */
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.eventItem {
+  display: flex;
+  gap: 0.75rem;
+  position: relative;
+}
+
+.eventConnector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  padding-top: 0.25rem;
+}
+
+.eventDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--surface-brand);
+  border: 2px solid var(--surface-raised);
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.eventLine {
+  width: 1px;
+  flex: 1;
+  background-color: var(--border-default);
+  margin-top: 0.25rem;
+}
+
+.eventItem:last-child .eventLine {
+  display: none;
+}
+
+.eventContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-bottom: 1rem;
+  min-width: 0;
+}
+
+.eventHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.eventType {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.eventMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.eventActor {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+  font-weight: 500;
+}
+
+.eventDetail {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+/* ── Hash chain display ───────────────────────────────────────────── */
+
+.hashRow {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.125rem;
+}
+
+.hashLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.hash {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  color: var(--ink-tertiary);
+  background-color: var(--surface-sunken);
+  padding: 0.0625rem 0.25rem;
+  border-radius: 0.1875rem;
+  letter-spacing: 0.04em;
+  user-select: all;
+}
+
+/* ── Checklist snapshot (manifest audit section) ──────────────────── */
+
+.checklistSnapshot {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.checklistSnapshotItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.checklistSnapshotItem:last-child {
+  border-bottom: none;
+}
+
+.checklistSnapshotBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.checklistSnapshotName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+}
+
+.checklistSnapshotNote {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+/* ── Feature flag gate ────────────────────────────────────────────── */
+
+.ffCode {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.75rem;
+  background-color: var(--surface-sunken);
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  color: var(--ink-brand);
+}

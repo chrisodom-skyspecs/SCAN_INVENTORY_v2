@@ -1,0 +1,964 @@
+/**
+ * base.css — Design System Tokens
+ *
+ * Defines surface (background), ink (foreground/text), border, and elevation
+ * (shadow) CSS custom properties for the SkySpecs INVENTORY + SCAN design system.
+ *
+ * Structure:
+ *   1. Raw palette (private, prefixed --_)  — never use directly in component code
+ *   2. Semantic tokens (:root)              — light theme defaults
+ *   3. Dark theme overrides (.theme-dark)   — applied to <html class="theme-dark">
+ *
+ * Rules:
+ *   - Component code must consume semantic tokens (var(--surface-base), etc.)
+ *   - No hex, hsl, or oklch literals in component/module CSS — only var() references
+ *   - WCAG AA contrast: ≥4.5:1 for body text, ≥3:1 for large/UI text
+ */
+
+/* ============================================================
+   §1  RAW PALETTE  (private reference tokens)
+   These color ramps are referenced only by semantic tokens.
+   ============================================================ */
+
+:root {
+  /* --- Neutral --- */
+  --_n-0:    hsl(0, 0%, 100%);          /* pure white */
+  --_n-50:   hsl(210, 20%, 98%);
+  --_n-100:  hsl(210, 17%, 95%);
+  --_n-150:  hsl(210, 15%, 92%);
+  --_n-200:  hsl(210, 14%, 89%);
+  --_n-300:  hsl(210, 12%, 80%);
+  --_n-400:  hsl(210, 10%, 66%);
+  --_n-500:  hsl(210, 9%, 50%);
+  --_n-600:  hsl(210, 10%, 38%);
+  --_n-700:  hsl(210, 12%, 27%);
+  --_n-800:  hsl(210, 15%, 18%);
+  --_n-850:  hsl(210, 17%, 13%);
+  --_n-900:  hsl(210, 18%, 9%);
+  --_n-950:  hsl(210, 20%, 6%);
+  --_n-975:  hsl(210, 20%, 4%);         /* deep dark well */
+  --_n-1000: hsl(0, 0%, 0%);            /* pure black */
+
+  /* --- Brand (Sky Blue) --- */
+  --_b-50:   hsl(211, 100%, 96%);
+  --_b-100:  hsl(211, 100%, 90%);
+  --_b-200:  hsl(211, 95%, 78%);
+  --_b-300:  hsl(211, 90%, 64%);
+  --_b-400:  hsl(211, 85%, 52%);
+  --_b-500:  hsl(211, 100%, 42%);       /* primary brand */
+  --_b-600:  hsl(211, 100%, 34%);
+  --_b-700:  hsl(211, 100%, 27%);
+  --_b-800:  hsl(211, 100%, 20%);
+  --_b-900:  hsl(211, 100%, 14%);
+
+  /* --- Positive (Green) --- */
+  --_g-50:   hsl(142, 76%, 95%);
+  --_g-100:  hsl(141, 76%, 86%);
+  --_g-200:  hsl(141, 68%, 72%);
+  --_g-300:  hsl(141, 60%, 56%);
+  --_g-400:  hsl(141, 60%, 42%);
+  --_g-500:  hsl(141, 72%, 31%);        /* accessible on white ✓ */
+  --_g-600:  hsl(141, 72%, 24%);
+  --_g-700:  hsl(141, 72%, 18%);
+
+  /* --- Caution (Amber) --- */
+  --_a-50:   hsl(45, 100%, 95%);
+  --_a-100:  hsl(45, 100%, 85%);
+  --_a-200:  hsl(42, 97%, 70%);
+  --_a-300:  hsl(38, 95%, 54%);
+  --_a-400:  hsl(34, 92%, 44%);
+  --_a-500:  hsl(30, 90%, 35%);        /* accessible on white ✓ */
+  --_a-600:  hsl(24, 90%, 27%);
+
+  /* --- Critical (Red) --- */
+  --_r-50:   hsl(0, 100%, 97%);
+  --_r-100:  hsl(0, 100%, 91%);
+  --_r-200:  hsl(0, 87%, 78%);
+  --_r-300:  hsl(0, 79%, 63%);
+  --_r-400:  hsl(0, 74%, 50%);
+  --_r-500:  hsl(0, 80%, 40%);         /* accessible on white ✓ */
+  --_r-600:  hsl(0, 80%, 31%);
+  --_r-700:  hsl(0, 80%, 23%);
+
+  /* --- Info (Cyan / Teal) — distinct from brand sky-blue (hsl 211) --- */
+  --_i-50:   hsl(196, 100%, 95%);
+  --_i-100:  hsl(196, 100%, 87%);
+  --_i-200:  hsl(196, 90%,  73%);
+  --_i-300:  hsl(196, 80%,  57%);
+  --_i-400:  hsl(196, 75%,  44%);
+  --_i-500:  hsl(196, 80%,  34%);        /* accessible on white ✓ */
+  --_i-600:  hsl(196, 80%,  26%);
+  --_i-700:  hsl(196, 80%,  19%);
+
+  /* --- Alpha channels (for overlays / scrim) --- */
+  --_scrim-light: hsl(0, 0%, 0%, 0.32);
+  --_scrim-heavy: hsl(0, 0%, 0%, 0.56);
+}
+
+
+/* ============================================================
+   §2  SEMANTIC TOKENS — LIGHT THEME (default)
+   ============================================================ */
+
+:root {
+  /* ──────────────────────────────────────────────────────────
+     SURFACE  (backgrounds / fill layers)
+     ────────────────────────────────────────────────────────── */
+
+  /** Page/app background */
+  --surface-base:          var(--_n-50);
+  /** Cards, panels, sidebar — one step above base */
+  --surface-raised:        var(--_n-0);
+  /** Dialogs, modals, popovers */
+  --surface-overlay:       var(--_n-0);
+  /** Inputs, code blocks, recessed wells */
+  --surface-sunken:        var(--_n-100);
+  /** Hover fill on interactive rows/buttons (no border needed) */
+  --surface-hover:         var(--_n-100);
+  /** Active / pressed state fill */
+  --surface-active:        var(--_n-150);
+  /** Selected row / list item */
+  --surface-selected:      var(--_b-50);
+
+  /** Brand fill — primary CTA background */
+  --surface-brand:         var(--_b-500);
+  /** Brand fill — subtle tint (badges, tag chips) */
+  --surface-brand-subtle:  var(--_b-50);
+
+  /** Positive (success / healthy) fill */
+  --surface-positive:      var(--_g-500);
+  --surface-positive-subtle: var(--_g-50);
+
+  /** Caution (warning / at-risk) fill */
+  --surface-caution:       var(--_a-400);
+  --surface-caution-subtle: var(--_a-50);
+
+  /** Critical (error / danger) fill */
+  --surface-critical:      var(--_r-500);
+  --surface-critical-subtle: var(--_r-50);
+
+  /** Neutral info fill */
+  --surface-neutral:       var(--_n-600);
+  --surface-neutral-subtle: var(--_n-100);
+
+  /** Inverse surface — dark chip on light page */
+  --surface-inverse:       var(--_n-900);
+
+  /* ── Surface level aliases (explicit UI-layer naming) ──────
+     These tokens map UI structural layers to the neutral ramp.
+     Use these in layout/component code for clarity; they are
+     intentional aliases — not duplicates — of the base ramp.
+     ────────────────────────────────────────────────────────── */
+
+  /**
+   * Background layers — page canvas hierarchy.
+   * bg-0  = deepest canvas (same as surface-base; the HTML/body background).
+   * bg-1  = one step above, used for tinted section bands / full-bleed rows.
+   * bg-2  = lightest neutral tint for alternating areas or inset regions.
+   */
+  --surface-bg-0:          var(--_n-50);
+  --surface-bg-1:          var(--_n-100);
+  --surface-bg-2:          var(--_n-150);
+
+  /**
+   * Container — wraps major page sections (main content area, column wrappers).
+   * Sits one step above the page background so sections feel distinct.
+   */
+  --surface-container:     var(--_n-0);
+
+  /**
+   * Card — individual card/tile elements elevated above containers.
+   * Default resting state uses the same token as surface-raised;
+   * kept as a named alias so card-specific overrides are scoped.
+   */
+  --surface-card:          var(--_n-0);
+  /** Card hover state — subtle lift on interactive cards */
+  --surface-card-hover:    var(--_n-50);
+  /** Card selected state — brand-tinted selection */
+  --surface-card-selected: var(--_b-50);
+
+  /**
+   * Sidebar levels — multi-tier navigation panel hierarchy.
+   * sidebar       = outer panel shell / chrome
+   * sidebar-item  = normal row/item background (transparent by default)
+   * sidebar-hover = row hover fill
+   * sidebar-active = current-page / active route fill
+   * sidebar-section = grouped section header band
+   * sidebar-nested = second-level indent area (sub-nav, sub-menu)
+   */
+  --surface-sidebar:        var(--_n-0);
+  --surface-sidebar-item:   transparent;
+  --surface-sidebar-hover:  var(--_n-100);
+  --surface-sidebar-active: var(--_b-50);
+  --surface-sidebar-section: var(--_n-50);
+  --surface-sidebar-nested: var(--_n-100);
+
+  /* ──────────────────────────────────────────────────────────
+     SCRIM  (modal backdrop / overlay dimming)
+     ────────────────────────────────────────────────────────── */
+
+  /** Light scrim — tooltip / popover backdrop */
+  --scrim-light:           var(--_scrim-light);
+  /** Heavy scrim — modal / dialog backdrop */
+  --scrim-overlay:         var(--_scrim-heavy);
+
+  /* ──────────────────────────────────────────────────────────
+     INK  (foreground / text / icon colors)
+     ────────────────────────────────────────────────────────── */
+
+  /** Primary body text — high contrast */
+  --ink-primary:           var(--_n-900);
+  /** Secondary text — labels, supporting copy */
+  --ink-secondary:         var(--_n-600);
+  /** Tertiary text — captions, placeholders, meta */
+  --ink-tertiary:          var(--_n-500);
+  /** Muted text / icons — intentionally de-emphasized copy (timestamps, breadcrumbs, quiet labels) */
+  --ink-muted:             var(--_n-500);
+  /** Disabled text / icons */
+  --ink-disabled:          var(--_n-400);
+  /** Text on inverse/dark surface */
+  --ink-inverse:           var(--_n-0);
+
+  /** Brand-colored text / icon (links, active nav) */
+  --ink-brand:             var(--_b-600);
+  /** Text that appears ON a brand-filled surface */
+  --ink-on-brand:          var(--_n-0);
+
+  /** Semantic text colors */
+  --ink-positive:          var(--_g-600);
+  --ink-on-positive:       var(--_n-0);
+
+  --ink-caution:           var(--_a-600);
+  --ink-on-caution:        var(--_n-0);
+
+  --ink-critical:          var(--_r-600);
+  --ink-on-critical:       var(--_n-0);
+
+  --ink-neutral:           var(--_n-600);
+  --ink-on-neutral:        var(--_n-0);
+
+  /** On subtle / tinted surfaces — darker foreground */
+  --ink-on-brand-subtle:   var(--_b-700);
+  --ink-on-positive-subtle: var(--_g-700);
+  --ink-on-caution-subtle: var(--_a-600);
+  --ink-on-critical-subtle: var(--_r-700);
+  --ink-on-neutral-subtle: var(--_n-700);
+
+  /* ──────────────────────────────────────────────────────────
+     BORDER  (strokes / dividers / outlines)
+     ────────────────────────────────────────────────────────── */
+
+  /** Decorative dividers — hairline, lowest contrast */
+  --border-subtle:         var(--_n-150);
+  /** Standard card / panel border */
+  --border-default:        var(--_n-200);
+  /** High-contrast border for inputs at rest */
+  --border-strong:         var(--_n-400);
+  /** Focused element outline */
+  --border-focus:          var(--_b-500);
+  /** Focus visible ring (offset) */
+  --border-focus-ring:     var(--_b-300);
+
+  /** Semantic borders */
+  --border-brand:          var(--_b-400);
+  --border-positive:       var(--_g-400);
+  --border-caution:        var(--_a-300);
+  --border-critical:       var(--_r-400);
+  --border-neutral:        var(--_n-300);
+
+  /** Inverse border (on dark surfaces) */
+  --border-inverse:        var(--_n-700);
+
+  /* ──────────────────────────────────────────────────────────
+     ELEVATION  (box-shadow layers)
+     Follows a stepped system — each level adds depth.
+     ────────────────────────────────────────────────────────── */
+
+  /**
+   * Level 0 — Flat (no shadow; use border instead)
+   * Appropriate for: resting cards on a panel background
+   */
+  --elevation-0: none;
+
+  /**
+   * Level 1 — Subtle lift
+   * Appropriate for: cards, list items, input fields
+   */
+  --elevation-1:
+    0 1px 2px  hsl(210, 18%, 12%, 0.04),
+    0 1px 4px  hsl(210, 18%, 12%, 0.06);
+
+  /**
+   * Level 2 — Low lift
+   * Appropriate for: dropdowns, date pickers, small menus
+   */
+  --elevation-2:
+    0 2px 4px  hsl(210, 18%, 12%, 0.06),
+    0 4px 12px hsl(210, 18%, 12%, 0.10);
+
+  /**
+   * Level 3 — Medium lift
+   * Appropriate for: navigation drawers, side panels
+   */
+  --elevation-3:
+    0 4px 8px  hsl(210, 18%, 12%, 0.08),
+    0 8px 24px hsl(210, 18%, 12%, 0.14);
+
+  /**
+   * Level 4 — High lift
+   * Appropriate for: modals, dialogs, full-screen overlays
+   */
+  --elevation-4:
+    0 8px 16px  hsl(210, 18%, 12%, 0.10),
+    0 16px 40px hsl(210, 18%, 12%, 0.18);
+
+  /**
+   * Level 5 — Max lift
+   * Appropriate for: toasts, tooltips, drag-and-drop previews
+   */
+  --elevation-5:
+    0 12px 24px hsl(210, 18%, 12%, 0.12),
+    0 24px 56px hsl(210, 18%, 12%, 0.22);
+
+  /** Focus ring elevation (for keyboard-focused elements) */
+  --elevation-focus:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--border-focus);
+
+  /* ──────────────────────────────────────────────────────────
+     SIGNAL  (status indicator tokens — consumed by StatusPill
+              and all status-aware UI: banners, badges, map pins)
+
+     Naming convention:
+       --signal-{kind}-fill         solid background (pill filled state)
+       --signal-{kind}-fill-subtle  tinted background (banner / subtle badge)
+       --signal-{kind}-text         text / icon on solid fill
+       --signal-{kind}-text-subtle  text / icon on subtle fill
+       --signal-{kind}-border       border / outline
+
+     Kinds: success | warning | error | info | neutral
+     ────────────────────────────────────────────────────────── */
+
+  /* ── success (maps to positive / green ramp) ── */
+  --signal-success-fill:         var(--_g-500);
+  --signal-success-fill-subtle:  var(--_g-50);
+  --signal-success-text:         var(--_n-0);
+  --signal-success-text-subtle:  var(--_g-700);
+  --signal-success-border:       var(--_g-400);
+
+  /* ── warning (maps to caution / amber ramp) ── */
+  --signal-warning-fill:         var(--_a-400);
+  --signal-warning-fill-subtle:  var(--_a-50);
+  --signal-warning-text:         var(--_n-0);
+  --signal-warning-text-subtle:  var(--_a-600);
+  --signal-warning-border:       var(--_a-300);
+
+  /* ── error (maps to critical / red ramp) ── */
+  --signal-error-fill:           var(--_r-500);
+  --signal-error-fill-subtle:    var(--_r-50);
+  --signal-error-text:           var(--_n-0);
+  --signal-error-text-subtle:    var(--_r-700);
+  --signal-error-border:         var(--_r-400);
+
+  /* ── info (maps to info / cyan ramp) ── */
+  --signal-info-fill:            var(--_i-500);
+  --signal-info-fill-subtle:     var(--_i-50);
+  --signal-info-text:            var(--_n-0);
+  --signal-info-text-subtle:     var(--_i-700);
+  --signal-info-border:          var(--_i-300);
+
+  /* ── neutral (maps to neutral / gray ramp) ── */
+  --signal-neutral-fill:         var(--_n-600);
+  --signal-neutral-fill-subtle:  var(--_n-100);
+  --signal-neutral-text:         var(--_n-0);
+  --signal-neutral-text-subtle:  var(--_n-700);
+  --signal-neutral-border:       var(--_n-300);
+}
+
+
+/* ============================================================
+   §3  DARK THEME OVERRIDES  (.theme-dark on <html>)
+   ============================================================ */
+
+.theme-dark {
+  /* ── Surface ── */
+  --surface-base:          var(--_n-950);
+  --surface-raised:        var(--_n-900);
+  --surface-overlay:       var(--_n-850);
+  --surface-sunken:        var(--_n-975);
+  --surface-hover:         var(--_n-800);
+  --surface-active:        var(--_n-700);
+  --surface-selected:      var(--_b-900);
+
+  --surface-brand:         var(--_b-400);
+  --surface-brand-subtle:  var(--_b-900);
+
+  --surface-positive:      var(--_g-400);
+  --surface-positive-subtle: var(--_g-700);
+
+  --surface-caution:       var(--_a-300);
+  --surface-caution-subtle: var(--_a-600);
+
+  --surface-critical:      var(--_r-400);
+  --surface-critical-subtle: var(--_r-700);
+
+  --surface-neutral:       var(--_n-500);
+  --surface-neutral-subtle: var(--_n-800);
+
+  --surface-inverse:       var(--_n-50);
+
+  /* ── Surface level aliases — dark overrides ── */
+  --surface-bg-0:          var(--_n-950);
+  --surface-bg-1:          var(--_n-900);
+  --surface-bg-2:          var(--_n-850);
+
+  --surface-container:     var(--_n-900);
+
+  --surface-card:          var(--_n-850);
+  --surface-card-hover:    var(--_n-800);
+  --surface-card-selected: var(--_b-900);
+
+  --surface-sidebar:        var(--_n-900);
+  --surface-sidebar-item:   transparent;
+  --surface-sidebar-hover:  var(--_n-800);
+  --surface-sidebar-active: var(--_b-900);
+  --surface-sidebar-section: var(--_n-950);
+  --surface-sidebar-nested: var(--_n-850);
+
+  /* ── Ink ── */
+  --ink-primary:           var(--_n-50);
+  --ink-secondary:         var(--_n-300);
+  --ink-tertiary:          var(--_n-500);
+  --ink-muted:             var(--_n-500);
+  --ink-disabled:          var(--_n-700);
+  --ink-inverse:           var(--_n-950);
+
+  --ink-brand:             var(--_b-300);
+  --ink-on-brand:          var(--_n-950);
+
+  --ink-positive:          var(--_g-300);
+  --ink-on-positive:       var(--_n-950);
+
+  --ink-caution:           var(--_a-200);
+  --ink-on-caution:        var(--_n-950);
+
+  --ink-critical:          var(--_r-300);
+  --ink-on-critical:       var(--_n-950);
+
+  --ink-neutral:           var(--_n-300);
+  --ink-on-neutral:        var(--_n-950);
+
+  --ink-on-brand-subtle:   var(--_b-200);
+  --ink-on-positive-subtle: var(--_g-200);
+  --ink-on-caution-subtle: var(--_a-200);
+  --ink-on-critical-subtle: var(--_r-200);
+  --ink-on-neutral-subtle: var(--_n-200);
+
+  /* ── Border ── */
+  --border-subtle:         var(--_n-850);
+  --border-default:        var(--_n-800);
+  --border-strong:         var(--_n-600);
+  --border-focus:          var(--_b-400);
+  --border-focus-ring:     var(--_b-700);
+
+  --border-brand:          var(--_b-600);
+  --border-positive:       var(--_g-600);
+  --border-caution:        var(--_a-500);
+  --border-critical:       var(--_r-600);
+  --border-neutral:        var(--_n-700);
+
+  --border-inverse:        var(--_n-200);
+
+  /* ── Scrim — dark theme overrides ── */
+  --scrim-light:           hsl(0, 0%, 0%, 0.44);
+  --scrim-overlay:         hsl(0, 0%, 0%, 0.72);
+
+  /* ── Signal — dark theme overrides ──
+     Filled states use lighter palette steps so they pop against dark surfaces.
+     Subtle states use the deepest ramp step for contained tinting.
+     Text on filled stays near-black so contrast is preserved (≥4.5:1). */
+
+  --signal-success-fill:         var(--_g-400);
+  --signal-success-fill-subtle:  var(--_g-700);
+  --signal-success-text:         var(--_n-950);
+  --signal-success-text-subtle:  var(--_g-200);
+  --signal-success-border:       var(--_g-600);
+
+  --signal-warning-fill:         var(--_a-300);
+  --signal-warning-fill-subtle:  var(--_a-600);
+  --signal-warning-text:         var(--_n-950);
+  --signal-warning-text-subtle:  var(--_a-200);
+  --signal-warning-border:       var(--_a-500);
+
+  --signal-error-fill:           var(--_r-400);
+  --signal-error-fill-subtle:    var(--_r-700);
+  --signal-error-text:           var(--_n-950);
+  --signal-error-text-subtle:    var(--_r-200);
+  --signal-error-border:         var(--_r-600);
+
+  --signal-info-fill:            var(--_i-300);
+  --signal-info-fill-subtle:     var(--_i-700);
+  --signal-info-text:            var(--_n-950);
+  --signal-info-text-subtle:     var(--_i-200);
+  --signal-info-border:          var(--_i-500);
+
+  --signal-neutral-fill:         var(--_n-500);
+  --signal-neutral-fill-subtle:  var(--_n-800);
+  --signal-neutral-text:         var(--_n-950);
+  --signal-neutral-text-subtle:  var(--_n-200);
+  --signal-neutral-border:       var(--_n-700);
+
+  /* ── Elevation — darken shadows further in dark mode ── */
+  --elevation-1:
+    0 1px 2px  hsl(0, 0%, 0%, 0.20),
+    0 1px 4px  hsl(0, 0%, 0%, 0.28);
+
+  --elevation-2:
+    0 2px 4px  hsl(0, 0%, 0%, 0.28),
+    0 4px 12px hsl(0, 0%, 0%, 0.38);
+
+  --elevation-3:
+    0 4px 8px  hsl(0, 0%, 0%, 0.34),
+    0 8px 24px hsl(0, 0%, 0%, 0.46);
+
+  --elevation-4:
+    0 8px 16px  hsl(0, 0%, 0%, 0.40),
+    0 16px 40px hsl(0, 0%, 0%, 0.54);
+
+  --elevation-5:
+    0 12px 24px hsl(0, 0%, 0%, 0.46),
+    0 24px 56px hsl(0, 0%, 0%, 0.60);
+
+  --elevation-focus:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--border-focus);
+}
+
+
+/* ============================================================
+   §4  REDUCED MOTION  (elevation-only — no keyframe tokens here)
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Flatten shadows so they don't draw attention without animation */
+  :root,
+  .theme-dark {
+    --elevation-3: var(--elevation-2);
+    --elevation-4: var(--elevation-2);
+    --elevation-5: var(--elevation-2);
+  }
+}
+
+
+/* ============================================================
+   §5  MAP PALETTE — Raw + Semantic
+   Tokens for Mapbox GL JS overlays, CSS-rendered pins, cluster
+   bubbles, layer tints, and data-driven styling across all five
+   INVENTORY map modes (M1–M5).
+
+   Structure:
+     §5a  Additional raw palette ramps (private --_map-*)
+     §5b  Shared map chrome tokens (mode-agnostic)
+     §5c  M1 — Case Status Overview
+     §5d  M2 — Activity Density / Heat
+     §5e  M3 — Shipping / Route Tracking
+     §5f  M4 — Deployment & Field Staging
+     §5g  M5 — Mission Control  (consumed only when FF_MAP_MISSION=1)
+     §5h  Dark theme overrides for all map tokens
+   ============================================================ */
+
+
+/* ── §5a  ADDITIONAL RAW PALETTE  (map-specific private ramps) ─── */
+
+:root {
+  /* Indigo/Purple — cool anchor for M2 heat ramp; M4 assembly state */
+  --_map-ind-200: hsl(248, 90%, 78%);
+  --_map-ind-300: hsl(248, 82%, 66%);
+  --_map-ind-400: hsl(248, 74%, 54%);
+  --_map-ind-500: hsl(248, 68%, 43%);
+  --_map-ind-600: hsl(248, 68%, 33%);
+
+  /* Orange — M3 in-transit route; M2 heat warm-mid; distinct from amber */
+  --_map-org-200: hsl(25, 97%, 72%);
+  --_map-org-300: hsl(25, 94%, 60%);
+  --_map-org-400: hsl(25, 90%, 50%);
+  --_map-org-500: hsl(25, 88%, 40%);
+  --_map-org-600: hsl(25, 86%, 32%);
+
+  /* Magenta/Rose — M5 mission highlight; colorblind-safe accent */
+  --_map-mag-200: hsl(322, 80%, 74%);
+  --_map-mag-300: hsl(322, 76%, 62%);
+  --_map-mag-400: hsl(322, 70%, 52%);
+  --_map-mag-500: hsl(322, 68%, 42%);
+  --_map-mag-600: hsl(322, 68%, 33%);
+
+  /* Lime — M4 returning / recovered state; distinct from green ramp */
+  --_map-lim-200: hsl(84, 72%, 68%);
+  --_map-lim-300: hsl(84, 68%, 52%);
+  --_map-lim-400: hsl(84, 64%, 40%);
+  --_map-lim-500: hsl(84, 62%, 31%);
+}
+
+
+/* ── §5b  SHARED MAP CHROME  (mode-agnostic) ──────────────────── */
+
+:root {
+  /**
+   * Base scrim applied under floating map UI (search bar, legend)
+   * — distinct from --_scrim-* which is for modal backdrops.
+   */
+  --map-ui-scrim:            hsl(210, 18%, 9%, 0.48);
+
+  /** Cluster bubble — shared across M1, M3, M4 */
+  --map-cluster-fill:        var(--_n-800);
+  --map-cluster-stroke:      var(--_n-600);
+  --map-cluster-text:        var(--_n-0);
+
+  /** Selected / focused pin halo ring */
+  --map-pin-halo:            hsl(0, 0%, 100%, 0.85);
+  --map-pin-halo-dark:       hsl(0, 0%, 0%, 0.40);
+
+  /** Attribution / watermark text */
+  --map-attribution-bg:      hsl(0, 0%, 100%, 0.72);
+  --map-attribution-text:    var(--_n-700);
+
+  /** Tooltip / data label chip */
+  --map-tooltip-bg:          var(--_n-900);
+  --map-tooltip-text:        var(--_n-50);
+  --map-tooltip-border:      var(--_n-700);
+
+  /** Crosshair / center-target indicator */
+  --map-crosshair:           var(--_b-500);
+
+  /** Generic polygon outline (used when no mode-specific token applies) */
+  --map-layer-stroke-default: var(--_b-400);
+  --map-layer-fill-default:   hsl(211, 85%, 52%, 0.12);
+}
+
+
+/* ── §5c  M1 — CASE STATUS OVERVIEW ───────────────────────────── */
+/*
+ * Visualizes case health using status-colored CSS pins.
+ * Marker colors map 1-to-1 with signal token kinds so that the
+ * map legend and StatusPill labels stay in sync.
+ */
+
+:root {
+  /* Status pin fills — solid, high-contrast */
+  --map-m1-marker-healthy:       var(--_g-500);
+  --map-m1-marker-warning:       var(--_a-400);
+  --map-m1-marker-critical:      var(--_r-500);
+  --map-m1-marker-inactive:      var(--_n-500);
+  --map-m1-marker-transit:       var(--_b-400);
+
+  /* Stroke on each pin (slightly darker than fill for definition) */
+  --map-m1-marker-healthy-stroke:   var(--_g-600);
+  --map-m1-marker-warning-stroke:   var(--_a-500);
+  --map-m1-marker-critical-stroke:  var(--_r-600);
+  --map-m1-marker-inactive-stroke:  var(--_n-600);
+  --map-m1-marker-transit-stroke:   var(--_b-600);
+
+  /* Selected pin ring — drawn on top of the pin */
+  --map-m1-marker-selected-fill:    var(--_b-500);
+  --map-m1-marker-selected-ring:    var(--_b-300);
+
+  /* Map layer tints — applied to region/zone polygons in M1 */
+  --map-m1-layer-fill:          hsl(211, 85%, 52%, 0.10);
+  --map-m1-layer-stroke:        var(--_b-400);
+  --map-m1-layer-fill-active:   hsl(211, 85%, 52%, 0.22);
+  --map-m1-layer-stroke-active: var(--_b-500);
+
+  /* Cluster bubble (overrides shared cluster for M1 branding) */
+  --map-m1-cluster-fill:        var(--_n-700);
+  --map-m1-cluster-fill-critical: var(--_r-500);   /* cluster with ≥1 critical case */
+  --map-m1-cluster-stroke:      var(--_n-500);
+  --map-m1-cluster-text:        var(--_n-0);
+
+  /* Count badge on cluster bubble */
+  --map-m1-cluster-badge-fill:  var(--_r-500);
+  --map-m1-cluster-badge-text:  var(--_n-0);
+}
+
+
+/* ── §5d  M2 — ACTIVITY DENSITY / HEAT ────────────────────────── */
+/*
+ * Sequential 8-stop colorblind-safe ramp (viridis-inspired):
+ *   indigo → brand-blue → teal → green → lime → amber → orange → red
+ * Used for heatmap layers and choropleth fill-color expressions.
+ * Stop 0 is fully transparent (zero activity).
+ */
+
+:root {
+  --map-m2-heat-0:           hsl(0, 0%, 0%, 0);          /* none — transparent */
+  --map-m2-heat-1:           hsl(248, 74%, 54%, 0.55);   /* very low — indigo */
+  --map-m2-heat-2:           hsl(211, 85%, 52%, 0.65);   /* low — brand blue */
+  --map-m2-heat-3:           hsl(196, 80%, 44%, 0.70);   /* medium-low — teal */
+  --map-m2-heat-4:           hsl(141, 60%, 42%, 0.72);   /* medium — green */
+  --map-m2-heat-5:           hsl(84,  64%, 40%, 0.75);   /* medium-high — lime */
+  --map-m2-heat-6:           hsl(45,  92%, 44%, 0.80);   /* high — amber */
+  --map-m2-heat-7:           hsl(25,  90%, 50%, 0.85);   /* very high — orange */
+  --map-m2-heat-8:           hsl(0,   74%, 50%, 0.90);   /* peak — red */
+
+  /* Solid equivalents for legend swatches (no alpha) */
+  --map-m2-swatch-1:         var(--_map-ind-400);
+  --map-m2-swatch-2:         var(--_b-400);
+  --map-m2-swatch-3:         var(--_i-400);
+  --map-m2-swatch-4:         var(--_g-400);
+  --map-m2-swatch-5:         var(--_map-lim-400);
+  --map-m2-swatch-6:         var(--_a-300);
+  --map-m2-swatch-7:         var(--_map-org-400);
+  --map-m2-swatch-8:         var(--_r-400);
+
+  /* Hotspot overlay (peak density region highlight) */
+  --map-m2-hotspot-fill:     hsl(0, 74%, 50%, 0.20);
+  --map-m2-hotspot-stroke:   var(--_r-400);
+  --map-m2-hotspot-label-bg: var(--_r-50);
+  --map-m2-hotspot-label-text: var(--_r-700);
+}
+
+
+/* ── §5e  M3 — SHIPPING / ROUTE TRACKING ──────────────────────── */
+/*
+ * Polyline routes and origin/destination/waypoint markers.
+ * Three route states: pending (not yet shipped), active (in transit),
+ * completed (delivered / received).
+ */
+
+:root {
+  /* Route line colors */
+  --map-m3-route-pending:    var(--_n-400);
+  --map-m3-route-active:     var(--_map-org-400);
+  --map-m3-route-completed:  var(--_g-400);
+  --map-m3-route-exception:  var(--_r-400);          /* delivery exception / lost */
+
+  /* Route line opacity (applied to the layer paint expression) */
+  --map-m3-route-opacity-pending:   0.45;
+  --map-m3-route-opacity-active:    0.90;
+  --map-m3-route-opacity-completed: 0.60;
+
+  /* Dashed-line gap color (contrasts against satellite/street base) */
+  --map-m3-route-dash-bg:   hsl(0, 0%, 100%, 0.00);  /* transparent gap */
+
+  /* Origin marker */
+  --map-m3-origin-fill:      var(--_b-500);
+  --map-m3-origin-stroke:    var(--_b-700);
+  --map-m3-origin-text:      var(--_n-0);
+
+  /* Destination marker */
+  --map-m3-dest-fill:        var(--_g-500);
+  --map-m3-dest-stroke:      var(--_g-700);
+  --map-m3-dest-text:        var(--_n-0);
+
+  /* Waypoint / hub stop marker */
+  --map-m3-waypoint-fill:    var(--_map-org-400);
+  --map-m3-waypoint-stroke:  var(--_map-org-600);
+  --map-m3-waypoint-text:    var(--_n-0);
+
+  /* FedEx tracking label chip (floats along route midpoint) */
+  --map-m3-label-bg:         var(--_n-0);
+  --map-m3-label-stroke:     var(--_map-org-300);
+  --map-m3-label-text:       var(--_n-900);
+  --map-m3-label-icon:       var(--_map-org-500);
+
+  /* Route corridor fill (subtle polygon showing estimated delivery corridor) */
+  --map-m3-corridor-fill:    hsl(25, 90%, 50%, 0.08);
+  --map-m3-corridor-stroke:  hsl(25, 90%, 50%, 0.30);
+}
+
+
+/* ── §5f  M4 — DEPLOYMENT & FIELD STAGING ─────────────────────── */
+/*
+ * Four categorical case deployment states:
+ *   assembly → staging → deployed → returning
+ * Each state has a distinct marker fill and a zone polygon tint.
+ */
+
+:root {
+  /* Marker fills per deployment state */
+  --map-m4-marker-assembly:  var(--_map-ind-400);    /* purple — in assembly */
+  --map-m4-marker-staging:   var(--_a-400);           /* amber — at staging depot */
+  --map-m4-marker-deployed:  var(--_b-400);           /* brand blue — in the field */
+  --map-m4-marker-returning: var(--_map-lim-400);     /* lime — on return journey */
+  --map-m4-marker-retired:   var(--_n-500);           /* neutral — decommissioned */
+
+  /* Marker strokes */
+  --map-m4-marker-assembly-stroke:  var(--_map-ind-600);
+  --map-m4-marker-staging-stroke:   var(--_a-500);
+  --map-m4-marker-deployed-stroke:  var(--_b-600);
+  --map-m4-marker-returning-stroke: var(--_map-lim-500);
+  --map-m4-marker-retired-stroke:   var(--_n-600);
+
+  /* Zone polygon fills (geographic deployment regions) */
+  --map-m4-zone-assembly-fill:  hsl(248, 74%, 54%, 0.10);
+  --map-m4-zone-assembly-stroke: var(--_map-ind-400);
+  --map-m4-zone-staging-fill:   hsl(34, 92%, 44%, 0.10);
+  --map-m4-zone-staging-stroke: var(--_a-400);
+  --map-m4-zone-deployed-fill:  hsl(211, 85%, 52%, 0.10);
+  --map-m4-zone-deployed-stroke: var(--_b-400);
+  --map-m4-zone-hub-fill:       hsl(141, 60%, 42%, 0.08);
+  --map-m4-zone-hub-stroke:     var(--_g-400);
+
+  /* Shared text on any M4 marker (contrasts on all fill colors above) */
+  --map-m4-marker-text:         var(--_n-0);
+
+  /* Count label / badge on grouped markers */
+  --map-m4-badge-fill:          var(--_n-900);
+  --map-m4-badge-text:          var(--_n-0);
+}
+
+
+/* ── §5g  M5 — MISSION CONTROL  (FF_MAP_MISSION) ──────────────── */
+/*
+ * Live telemetry tracks, current position pulses, mission zone
+ * polygons, and exclusion/no-fly areas. Designed for high contrast
+ * against a dark satellite base style.
+ * Only rendered when the FF_MAP_MISSION feature flag is active.
+ */
+
+:root {
+  /* Live aircraft / drone track polyline */
+  --map-m5-track-active:        var(--_i-300);         /* bright teal */
+  --map-m5-track-history:       hsl(196, 80%, 57%, 0.35); /* faded teal */
+  --map-m5-track-lost:          hsl(0, 74%, 50%, 0.60);   /* red for signal lost */
+
+  /* Current position dot (rendered as CSS pin) */
+  --map-m5-position-fill:       var(--_i-300);
+  --map-m5-position-stroke:     var(--_n-0);
+
+  /* Animated pulse ring — keyframe animation uses this color */
+  --map-m5-position-pulse:      hsl(196, 100%, 57%, 0.40);
+  --map-m5-position-pulse-end:  hsl(196, 100%, 57%, 0.00);
+
+  /* Mission area polygon (active flight envelope) */
+  --map-m5-mission-zone-fill:   hsl(196, 80%, 44%, 0.15);
+  --map-m5-mission-zone-stroke: var(--_i-300);
+
+  /* No-fly / exclusion zone */
+  --map-m5-exclusion-fill:      hsl(0, 74%, 50%, 0.18);
+  --map-m5-exclusion-stroke:    var(--_r-400);
+  --map-m5-exclusion-pattern:   var(--_r-300);         /* diagonal hatch color */
+
+  /* Mission highlight accent (differentiates multiple concurrent missions) */
+  --map-m5-accent-1:            var(--_i-300);         /* teal — primary */
+  --map-m5-accent-2:            var(--_map-mag-300);   /* magenta — secondary */
+  --map-m5-accent-3:            var(--_a-200);         /* amber — tertiary */
+  --map-m5-accent-4:            var(--_map-lim-300);   /* lime — quaternary */
+
+  /* Telemetry data label HUD chip */
+  --map-m5-telemetry-bg:        hsl(210, 18%, 9%, 0.82);
+  --map-m5-telemetry-border:    var(--_i-400);
+  --map-m5-telemetry-text:      var(--_n-50);
+  --map-m5-telemetry-value:     var(--_i-200);         /* highlighted metric value */
+
+  /* Replay scrubber track line (drawn over historical path during replay) */
+  --map-m5-scrubber-fill:       var(--_map-mag-300);
+  --map-m5-scrubber-thumb:      var(--_n-0);
+  --map-m5-scrubber-track:      hsl(0, 0%, 100%, 0.20);
+}
+
+
+/* ── §5h  DARK THEME MAP OVERRIDES  (.theme-dark) ─────────────── */
+/*
+ * In dark mode the Mapbox base style switches to a dark variant.
+ * Overlays and pins need brighter/higher-chroma values to stand out,
+ * while fills must remain semi-transparent so map features show through.
+ */
+
+.theme-dark {
+  /* §5b — Shared chrome */
+  --map-ui-scrim:            hsl(0, 0%, 0%, 0.64);
+  --map-cluster-fill:        var(--_n-700);
+  --map-cluster-stroke:      var(--_n-500);
+  --map-attribution-bg:      hsl(210, 18%, 9%, 0.80);
+  --map-attribution-text:    var(--_n-300);
+  --map-tooltip-bg:          var(--_n-850);
+  --map-tooltip-border:      var(--_n-700);
+  --map-layer-fill-default:  hsl(211, 90%, 64%, 0.15);
+
+  /* §5c — M1 markers: brighter on dark base map */
+  --map-m1-marker-healthy:       var(--_g-300);
+  --map-m1-marker-warning:       var(--_a-200);
+  --map-m1-marker-critical:      var(--_r-300);
+  --map-m1-marker-inactive:      var(--_n-400);
+  --map-m1-marker-transit:       var(--_b-300);
+  --map-m1-marker-healthy-stroke:   var(--_g-500);
+  --map-m1-marker-warning-stroke:   var(--_a-400);
+  --map-m1-marker-critical-stroke:  var(--_r-500);
+  --map-m1-marker-inactive-stroke:  var(--_n-500);
+  --map-m1-marker-transit-stroke:   var(--_b-500);
+  --map-m1-marker-selected-fill:    var(--_b-300);
+  --map-m1-marker-selected-ring:    var(--_b-200);
+  --map-m1-layer-fill:          hsl(211, 90%, 64%, 0.14);
+  --map-m1-layer-stroke:        var(--_b-300);
+  --map-m1-layer-fill-active:   hsl(211, 90%, 64%, 0.28);
+  --map-m1-layer-stroke-active: var(--_b-200);
+  --map-m1-cluster-fill:        var(--_n-600);
+  --map-m1-cluster-fill-critical: var(--_r-400);
+  --map-m1-cluster-badge-fill:  var(--_r-400);
+
+  /* §5d — M2 heat ramp: more saturated stops for dark base */
+  --map-m2-heat-1:           hsl(248, 82%, 66%, 0.60);
+  --map-m2-heat-2:           hsl(211, 90%, 64%, 0.70);
+  --map-m2-heat-3:           hsl(196, 80%, 57%, 0.75);
+  --map-m2-heat-4:           hsl(141, 60%, 56%, 0.75);
+  --map-m2-heat-5:           hsl(84,  68%, 52%, 0.78);
+  --map-m2-heat-6:           hsl(45, 100%, 54%, 0.80);
+  --map-m2-heat-7:           hsl(25,  95%, 60%, 0.85);
+  --map-m2-heat-8:           hsl(0,   79%, 63%, 0.92);
+  --map-m2-hotspot-fill:     hsl(0, 79%, 63%, 0.24);
+  --map-m2-hotspot-stroke:   var(--_r-300);
+  --map-m2-hotspot-label-bg: var(--_r-700);
+  --map-m2-hotspot-label-text: var(--_r-100);
+
+  /* §5e — M3 routes: brighter on dark base */
+  --map-m3-route-pending:    var(--_n-500);
+  --map-m3-route-active:     var(--_map-org-300);
+  --map-m3-route-completed:  var(--_g-300);
+  --map-m3-route-exception:  var(--_r-300);
+  --map-m3-origin-fill:      var(--_b-300);
+  --map-m3-origin-stroke:    var(--_b-500);
+  --map-m3-dest-fill:        var(--_g-300);
+  --map-m3-dest-stroke:      var(--_g-500);
+  --map-m3-waypoint-fill:    var(--_map-org-300);
+  --map-m3-waypoint-stroke:  var(--_map-org-500);
+  --map-m3-label-bg:         var(--_n-850);
+  --map-m3-label-stroke:     var(--_map-org-400);
+  --map-m3-label-text:       var(--_n-100);
+  --map-m3-label-icon:       var(--_map-org-300);
+  --map-m3-corridor-fill:    hsl(25, 94%, 60%, 0.10);
+  --map-m3-corridor-stroke:  hsl(25, 94%, 60%, 0.36);
+
+  /* §5f — M4 markers: brighter on dark base */
+  --map-m4-marker-assembly:  var(--_map-ind-300);
+  --map-m4-marker-staging:   var(--_a-200);
+  --map-m4-marker-deployed:  var(--_b-300);
+  --map-m4-marker-returning: var(--_map-lim-300);
+  --map-m4-marker-retired:   var(--_n-400);
+  --map-m4-marker-assembly-stroke:  var(--_map-ind-500);
+  --map-m4-marker-staging-stroke:   var(--_a-400);
+  --map-m4-marker-deployed-stroke:  var(--_b-500);
+  --map-m4-marker-returning-stroke: var(--_map-lim-400);
+  --map-m4-marker-retired-stroke:   var(--_n-500);
+  --map-m4-zone-assembly-fill:  hsl(248, 74%, 66%, 0.14);
+  --map-m4-zone-staging-fill:   hsl(45, 100%, 54%, 0.12);
+  --map-m4-zone-deployed-fill:  hsl(211, 90%, 64%, 0.14);
+  --map-m4-zone-hub-fill:       hsl(141, 60%, 56%, 0.10);
+  --map-m4-badge-fill:          var(--_n-800);
+
+  /* §5g — M5 mission control: already designed for dark; minor adjustments */
+  --map-m5-track-active:        var(--_i-200);
+  --map-m5-position-fill:       var(--_i-200);
+  --map-m5-position-pulse:      hsl(196, 100%, 73%, 0.45);
+  --map-m5-position-pulse-end:  hsl(196, 100%, 73%, 0.00);
+  --map-m5-mission-zone-stroke: var(--_i-200);
+  --map-m5-exclusion-stroke:    var(--_r-300);
+  --map-m5-exclusion-pattern:   var(--_r-200);
+  --map-m5-accent-1:            var(--_i-200);
+  --map-m5-accent-2:            var(--_map-mag-200);
+  --map-m5-accent-3:            var(--_a-100);
+  --map-m5-accent-4:            var(--_map-lim-200);
+  --map-m5-telemetry-bg:        hsl(0, 0%, 0%, 0.88);
+  --map-m5-telemetry-border:    var(--_i-300);
+  --map-m5-telemetry-value:     var(--_i-100);
+  --map-m5-scrubber-fill:       var(--_map-mag-200);
+}

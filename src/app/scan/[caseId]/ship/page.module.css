@@ -1,0 +1,845 @@
+/**
+ * SCAN Shipment Screen — page.module.css
+ *
+ * Mobile-first styles for the /scan/[caseId]/ship route.
+ * Design tokens only — no hex literals, no hard-coded hsl().
+ * IBM Plex Mono for tracking numbers and timestamps.
+ * Inter Tight for all other text.
+ * Touch targets: minimum 44×44px (WCAG 2.5.5).
+ */
+
+/* ── Page shell ────────────────────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* ── Page header ───────────────────────────────────────────────────── */
+
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 1.25rem 0 0.75rem;
+}
+
+.caseRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.caseLabel {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ink-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.caseLocation {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+.locationIcon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  color: var(--ink-tertiary);
+}
+
+/* ── Divider ───────────────────────────────────────────────────────── */
+
+.divider {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 0.5rem 0;
+  border: none;
+}
+
+/* ── Section shared ────────────────────────────────────────────────── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem 0;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.sectionTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+/* ── Form lead text ────────────────────────────────────────────────── */
+
+.formLead {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.caseRef {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  letter-spacing: 0.02em;
+}
+
+/* ── Form ──────────────────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.fieldLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  user-select: none;
+}
+
+.fieldRequired {
+  color: var(--ink-critical);
+}
+
+.fieldInput {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  /* Touch target: min 44px height */
+  min-height: 2.75rem;
+  padding: 0.625rem 0.875rem;
+  background-color: var(--surface-sunken);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 0.5rem;
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  letter-spacing: 0.03em;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.fieldInput::placeholder {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-disabled);
+}
+
+.fieldInput:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--border-focus-ring);
+  background-color: var(--surface-raised);
+}
+
+.fieldInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: var(--surface-sunken);
+}
+
+.fieldTextarea {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  background-color: var(--surface-sunken);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  color: var(--ink-primary);
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fieldTextarea::placeholder {
+  color: var(--ink-disabled);
+}
+
+.fieldTextarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--border-focus-ring);
+  background-color: var(--surface-raised);
+}
+
+.fieldTextarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fieldHint {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  line-height: 1.4;
+}
+
+/* ── Optional details / accordion ──────────────────────────────────── */
+
+.optionalDetails {
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.optionalSummary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.75rem 1rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  background-color: var(--surface-raised);
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+}
+
+.optionalSummary::-webkit-details-marker {
+  display: none;
+}
+
+.optionalSummary::before {
+  content: "+";
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--ink-brand);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.optionalDetails[open] .optionalSummary::before {
+  content: "−";
+}
+
+.optionalSummary:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.optionalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: var(--surface-sunken);
+}
+
+/* ── CTA buttons ───────────────────────────────────────────────────── */
+
+.ctaButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem; /* 44px touch target */
+  padding: 0.6875rem 1.25rem;
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease, opacity 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  width: 100%;
+}
+
+.ctaButtonPrimary {
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+  border-color: var(--surface-brand);
+}
+
+.ctaButtonPrimary:hover:not(:disabled) {
+  background-color: var(--_b-600, var(--surface-brand));
+  border-color: var(--_b-600, var(--surface-brand));
+  filter: brightness(0.92);
+}
+
+.ctaButtonPrimary:active:not(:disabled) {
+  filter: brightness(0.85);
+}
+
+.ctaButtonPrimary:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.ctaButtonPrimary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ctaButtonSecondary {
+  background-color: var(--surface-raised);
+  color: var(--ink-brand);
+  border-color: var(--border-brand);
+  width: auto;
+}
+
+.ctaButtonSecondary:hover:not(:disabled) {
+  background-color: var(--surface-brand-subtle);
+}
+
+.ctaButtonSecondary:active:not(:disabled) {
+  background-color: var(--surface-active);
+}
+
+.ctaButtonSecondary:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.ctaButtonSecondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.refreshBtn {
+  min-height: 2.25rem;
+  padding: 0.4375rem 0.875rem;
+  font-size: 0.8125rem;
+}
+
+.btnIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Banners (success / error) ─────────────────────────────────────── */
+
+.successBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--signal-success-fill-subtle);
+  border: 1px solid var(--signal-success-border);
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--signal-success-text-subtle);
+  margin: 0.75rem 0;
+}
+
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--signal-error-fill-subtle);
+  border: 1px solid var(--signal-error-border);
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--signal-error-text-subtle);
+  line-height: 1.45;
+}
+
+.bannerIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  margin-top: 0.0625rem;
+}
+
+/* ── Spinner ───────────────────────────────────────────────────────── */
+
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: currentColor;
+    opacity: 0.4;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Loading skeleton ──────────────────────────────────────────────── */
+
+.loadingShell {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem 0;
+}
+
+.skeletonHeader,
+.skeletonBody {
+  background-color: var(--surface-sunken);
+  border-radius: 0.375rem;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.skeletonHeader {
+  height: 1.75rem;
+  width: 55%;
+}
+
+.skeletonBody {
+  height: 1rem;
+  width: 85%;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonHeader,
+  .skeletonBody {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ── Error / Not Found state ────────────────────────────────────────── */
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+
+.errorIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--signal-error-fill);
+  opacity: 0.65;
+}
+
+.errorTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.errorText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-tertiary);
+  max-width: 20rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.errorCode {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+  background-color: var(--surface-sunken);
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.25rem;
+}
+
+/* ── Tracking status section ────────────────────────────────────────── */
+
+.trackingSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 1.25rem 0;
+}
+
+/* ── Status card ────────────────────────────────────────────────────── */
+
+.statusCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 0.75rem;
+  box-shadow: var(--elevation-1);
+  margin-bottom: 1rem;
+}
+
+.statusCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.statusCardLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.carrierLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.statusDescription {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* ── Details grid ───────────────────────────────────────────────────── */
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.875rem 1rem;
+  margin: 0 0 1.25rem;
+}
+
+.detailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+}
+
+.detailLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.detailValue {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.35;
+}
+
+.detailValueMono {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* ── Timestamp (mono small) ─────────────────────────────────────────── */
+
+.timestamp {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+}
+
+/* ── Events section ─────────────────────────────────────────────────── */
+
+.eventsSection {
+  margin-bottom: 1.25rem;
+}
+
+/* ── Live badge ─────────────────────────────────────────────────────── */
+
+.liveBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background-color: var(--signal-success-fill);
+  color: var(--signal-success-text);
+}
+
+.liveBadge::before {
+  content: "";
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: livePulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveBadge::before {
+    animation: none;
+  }
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* ── Event timeline ─────────────────────────────────────────────────── */
+
+.eventTimeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.eventTimeline::before {
+  content: "";
+  position: absolute;
+  left: 0.3rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 1px;
+  background-color: var(--border-default);
+}
+
+.eventItem {
+  display: flex;
+  gap: 0.875rem;
+  padding: 0.625rem 0;
+  position: relative;
+}
+
+.eventDot {
+  flex-shrink: 0;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background-color: var(--surface-brand);
+  border: 2px solid var(--surface-raised);
+  margin-top: 0.125rem;
+  position: relative;
+  z-index: 1;
+}
+
+.eventItem:first-child .eventDot {
+  background-color: var(--signal-success-fill);
+}
+
+.eventBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.eventHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.eventDescription {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.4;
+}
+
+.eventTime {
+  flex-shrink: 0;
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+}
+
+.eventLocation {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+}
+
+/* ── No events hint ─────────────────────────────────────────────────── */
+
+.noEventsHint {
+  padding: 0.75rem 0;
+}
+
+.noEventsText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+.inlineLink {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink-brand);
+  text-decoration: underline;
+  text-underline-offset: 0.125rem;
+  font-weight: 500;
+  min-height: 2.75rem;
+  display: inline;
+}
+
+.inlineLink:hover {
+  text-decoration: none;
+}
+
+.inlineLink:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  border-radius: 0.125rem;
+}
+
+/* ── Shipment history ───────────────────────────────────────────────── */
+
+.historySection {
+  margin-top: 0.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.historyList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.historyItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--surface-raised);
+}
+
+.historyItemActive {
+  border-color: var(--border-brand);
+  background-color: var(--surface-brand-subtle);
+}
+
+.historyItemHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.historyTrackingNum {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  letter-spacing: 0.02em;
+}
+
+/* ── Tablet / desktop adjustments ───────────────────────────────────── */
+
+@media (min-width: 640px) {
+  .page {
+    padding: 0 1.5rem;
+  }
+
+  .ctaButton {
+    width: auto;
+  }
+
+  .detailsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .page {
+    padding: 0 2rem;
+  }
+}

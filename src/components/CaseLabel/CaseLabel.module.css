@@ -1,0 +1,519 @@
+/**
+ * CaseLabel.module.css
+ *
+ * Print-optimized label styles for physical case attachment labels.
+ *
+ * Supports three physical sizes (controlled via `data-label-size` attribute):
+ *   4x6  → 4" × 6" portrait   (default; standard shipping label / hanging tag)
+ *   4x3  → 4" × 3" landscape  (small surface label; common DYMO / Zebra size)
+ *   2x35 → 2" × 3.5" portrait (minimal ID tag; wallet-card footprint)
+ *
+ * Print isolation strategy:
+ *   @media print applies `visibility: hidden` to <body>, then restores
+ *   visibility only on [data-case-label-root] and its children.
+ *   This works regardless of DOM nesting depth and survives Next.js layouts.
+ *
+ * Typography:
+ *   - "Inter Tight" for UI text (header, labels, hints)
+ *   - "IBM Plex Mono" for data fields (case ID, identifier, URL)
+ *
+ * Design tokens:
+ *   All colors reference CSS custom properties from base.css.
+ *   No hex, hsl, or rgb literals in this file.
+ */
+
+/* ── Screen wrapper (preview shell) ───────────────────────────── */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+/* ── Print button (screen-only UI above the label) ─────────────── */
+
+.printControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.printButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-on-brand);
+  background-color: var(--surface-brand);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.printButton:hover {
+  opacity: 0.88;
+}
+
+.printButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.printButton:active {
+  opacity: 0.76;
+}
+
+/* ── Label container ────────────────────────────────────────────── */
+
+.label {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  overflow: hidden;
+  box-shadow: var(--elevation-2);
+  /* Screen preview: fixed physical dimensions at 96 DPI */
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  color: var(--ink-primary);
+}
+
+/* Size: 4" × 6" portrait (default) */
+.label[data-label-size="4x6"] {
+  width: calc(4in);
+  min-height: calc(6in);
+}
+
+/* Size: 4" × 3" landscape */
+.label[data-label-size="4x3"] {
+  width: calc(4in);
+  min-height: calc(3in);
+}
+
+/* Size: 2" × 3.5" portrait */
+.label[data-label-size="2x35"] {
+  width: calc(2in);
+  min-height: calc(3.5in);
+}
+
+/* ── Header band ────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+  flex-shrink: 0;
+}
+
+.brandName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.printDate {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.5625rem;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+/* ── Body (QR + metadata) ───────────────────────────────────────── */
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* QR code column */
+.qrSection {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0.5rem;
+  flex-shrink: 0;
+}
+
+.qrCode {
+  display: block;
+  line-height: 0;
+}
+
+/* Size-specific QR dimensions */
+.label[data-label-size="4x6"] .qrCode {
+  width: 2.25in;
+  height: 2.25in;
+}
+
+.label[data-label-size="4x3"] .qrCode {
+  width: 1.6in;
+  height: 1.6in;
+}
+
+.label[data-label-size="2x35"] .qrCode {
+  width: 1.4in;
+  height: 1.4in;
+}
+
+/* Ensure the inline SVG fills its container */
+.qrCode svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Metadata column */
+.meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.5rem 0.5rem 0.25rem;
+  gap: 0.25rem;
+  border-left: 1px solid var(--border-subtle);
+}
+
+/* 2×3.5 label: stack QR and meta vertically */
+.label[data-label-size="2x35"] .body {
+  flex-direction: column;
+}
+
+.label[data-label-size="2x35"] .meta {
+  border-left: none;
+  border-top: 1px solid var(--border-subtle);
+  padding: 0.375rem 0.5rem;
+}
+
+/* Case display label (large, human-readable: CASE-001) */
+.caseLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--ink-primary);
+  letter-spacing: -0.01em;
+}
+
+.label[data-label-size="4x6"] .caseLabel {
+  font-size: 1.5rem;
+}
+
+.label[data-label-size="2x35"] .caseLabel {
+  font-size: 0.9375rem;
+}
+
+/* Status pill row */
+.statusRow {
+  display: flex;
+  align-items: center;
+  margin-top: 0.0625rem;
+}
+
+/* Data fields (definition list) */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin: 0;
+  padding: 0;
+  margin-top: 0.25rem;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.25rem;
+  align-items: baseline;
+}
+
+.label[data-label-size="4x6"] .field {
+  grid-template-columns: 5.5rem 1fr;
+}
+
+.label[data-label-size="2x35"] .field {
+  grid-template-columns: 4rem 1fr;
+}
+
+.fieldLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  margin: 0;
+  padding: 0;
+}
+
+.fieldValue {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.625rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--ink-primary);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.label[data-label-size="4x6"] .fieldLabel {
+  font-size: 0.625rem;
+}
+
+.label[data-label-size="4x6"] .fieldValue {
+  font-size: 0.6875rem;
+}
+
+.label[data-label-size="2x35"] .fieldValue {
+  font-size: 0.5625rem;
+}
+
+/* Notes field wraps (long text) */
+.fieldNotes .fieldValue {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Identifier field: extra mono styling */
+.fieldIdentifier .fieldValue {
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--ink-secondary);
+}
+
+/* ── Footer band ─────────────────────────────────────────────────── */
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem 0.5rem;
+  background-color: var(--surface-sunken);
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.footerScanHint {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  text-align: center;
+}
+
+.footerPayload {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.4375rem;
+  font-weight: 400;
+  color: var(--ink-tertiary);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* ── QR loading / error states (screen only) ────────────────────── */
+
+.qrPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--surface-sunken);
+  border: 1px dashed var(--border-default);
+  border-radius: 0.25rem;
+  color: var(--ink-tertiary);
+  font-size: 0.625rem;
+  text-align: center;
+  padding: 0.5rem;
+}
+
+/* Same dimensions as .qrCode */
+.label[data-label-size="4x6"] .qrPlaceholder {
+  width: 2.25in;
+  height: 2.25in;
+}
+
+.label[data-label-size="4x3"] .qrPlaceholder {
+  width: 1.6in;
+  height: 1.6in;
+}
+
+.label[data-label-size="2x35"] .qrPlaceholder {
+  width: 1.4in;
+  height: 1.4in;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PRINT MEDIA
+   ─────────────────────────────────────────────────────────────
+   Isolation strategy: hide all body content via visibility:hidden,
+   then restore visibility on [data-case-label-root] and all its
+   descendants. This works regardless of DOM nesting depth.
+   ═══════════════════════════════════════════════════════════════ */
+
+@media print {
+  /* Page size follows the label's physical size attribute */
+  :global([data-case-label-root][data-label-size="4x6"]) {
+    page: label-4x6;
+  }
+
+  :global([data-case-label-root][data-label-size="4x3"]) {
+    page: label-4x3;
+  }
+
+  :global([data-case-label-root][data-label-size="2x35"]) {
+    page: label-2x35;
+  }
+
+  /* Named page rules for each label size */
+  @page label-4x6 {
+    size: 4in 6in portrait;
+    margin: 0;
+  }
+
+  @page label-4x3 {
+    size: 4in 3in landscape;
+    margin: 0;
+  }
+
+  @page label-2x35 {
+    size: 2in 3.5in portrait;
+    margin: 0;
+  }
+
+  /* Fallback @page for all other pages (should be none) */
+  @page {
+    margin: 0;
+  }
+
+  /* ── Print isolation ── */
+  :global(body) {
+    visibility: hidden;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Restore visibility for the label root and all descendants */
+  :global([data-case-label-root]),
+  :global([data-case-label-root]) * {
+    visibility: visible;
+  }
+
+  /* Position the label at the top of the page */
+  :global([data-case-label-root]) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  /* ── Label print styles ── */
+  .label {
+    /* Fill the page exactly */
+    width: 100% !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    /* Force white background for print */
+    background-color: white !important;
+    color: black !important;
+  }
+
+  /* Header: use ink instead of brand fill for black-and-white compatibility */
+  .header {
+    background-color: black !important;
+    color: white !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+
+  /* Restore body text color */
+  .caseLabel,
+  .fieldValue {
+    color: black !important;
+  }
+
+  .fieldLabel {
+    /* Near-black for secondary label text — clear on white paper */
+    color: var(--ink-tertiary, currentColor) !important;
+    opacity: 0.7;
+  }
+
+  /* Footer */
+  .footer {
+    background-color: var(--surface-sunken, transparent) !important;
+    border-top: 1px solid var(--border-subtle, currentColor) !important;
+  }
+
+  .footerScanHint,
+  .footerPayload {
+    color: var(--ink-secondary, black) !important;
+  }
+
+  /* Meta column border */
+  .meta {
+    border-left-color: var(--border-subtle, currentColor) !important;
+  }
+
+  /* Hide the screen-only controls */
+  .printControls {
+    display: none !important;
+  }
+
+  /* Ensure QR code SVG prints correctly */
+  .qrCode svg {
+    color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* QR code sizing for print — scale to fill column */
+  .label[data-label-size="4x6"] .qrCode {
+    width: 2.25in;
+    height: 2.25in;
+  }
+
+  .label[data-label-size="4x3"] .qrCode {
+    width: 1.6in;
+    height: 1.6in;
+  }
+
+  .label[data-label-size="2x35"] .qrCode {
+    width: 1.4in;
+    height: 1.4in;
+  }
+
+  /* Expand text for easier readability on print */
+  .label[data-label-size="4x6"] .fieldLabel {
+    font-size: 0.625rem !important;
+  }
+
+  .label[data-label-size="4x6"] .fieldValue {
+    font-size: 0.6875rem !important;
+  }
+}

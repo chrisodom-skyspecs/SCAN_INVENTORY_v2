@@ -1,0 +1,351 @@
+/**
+ * shared.module.css — Shared layout primitives for T1–T5 case detail views.
+ *
+ * All values use design-system CSS custom properties.
+ * IBM Plex Mono for data/tabular content.
+ * Inter Tight for UI labels and headings.
+ */
+
+/* ── Section header ───────────────────────────────────────────────── */
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.sectionTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+/* ── Case header row ──────────────────────────────────────────────── */
+
+.caseHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.caseLabel {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.caseLabelSub {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  margin-top: 0.1875rem;
+  letter-spacing: 0.02em;
+}
+
+/* ── Metadata row (location, assignee, etc.) ──────────────────────── */
+
+.metaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.metaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+}
+
+.metaLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.metaValue {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.35;
+}
+
+.metaValueMono {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  letter-spacing: 0.02em;
+}
+
+.metaValueEmpty {
+  color: var(--ink-disabled);
+  font-style: italic;
+}
+
+/* ── Divider ──────────────────────────────────────────────────────── */
+
+.divider {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 1rem 0;
+  border: none;
+}
+
+/* ── Inline icon + text row ───────────────────────────────────────── */
+
+.iconRow {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+}
+
+.icon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: var(--ink-tertiary);
+}
+
+/* ── Empty / placeholder state ────────────────────────────────────── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--ink-tertiary);
+}
+
+.emptyStateIcon {
+  width: 2rem;
+  height: 2rem;
+  opacity: 0.4;
+  color: var(--ink-tertiary);
+}
+
+.emptyStateTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.emptyStateText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  max-width: 18rem;
+}
+
+/* ── Progress bar ─────────────────────────────────────────────────── */
+
+.progressBar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.progressTrack {
+  height: 0.375rem;
+  background-color: var(--surface-sunken);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background-color: var(--surface-brand);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressFill {
+    transition: none;
+  }
+}
+
+.progressFillDamaged {
+  background-color: var(--signal-error-fill);
+}
+
+.progressMeta {
+  display: flex;
+  justify-content: space-between;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+}
+
+/* ── Note / text block ────────────────────────────────────────────── */
+
+.noteBlock {
+  background-color: var(--surface-sunken);
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-subtle);
+  padding: 0.625rem 0.75rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── CTA button ───────────────────────────────────────────────────── */
+
+.ctaButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease;
+  user-select: none;
+}
+
+.ctaButtonPrimary {
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+}
+
+.ctaButtonPrimary:hover {
+  background-color: var(--_b-600, #0055b3);
+}
+
+.ctaButtonPrimary:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.ctaButtonPrimary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ctaButtonSecondary {
+  background-color: var(--surface-raised);
+  color: var(--ink-brand);
+  border-color: var(--border-brand);
+}
+
+.ctaButtonSecondary:hover {
+  background-color: var(--surface-brand-subtle);
+}
+
+.ctaButtonSecondary:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.ctaButtonSecondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Timestamp display (data / mono) ──────────────────────────────── */
+
+.timestamp {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+}
+
+/* ── Inline action link ───────────────────────────────────────────── */
+
+.actionLink {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-brand);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.125rem;
+}
+
+.actionLink:hover {
+  color: var(--ink-brand);
+  text-decoration: none;
+}
+
+.actionLink:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  border-radius: 0.125rem;
+}
+
+/* ── Loading spinner ──────────────────────────────────────────────── */
+
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--ink-brand);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-color: var(--ink-brand);
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error banner ─────────────────────────────────────────────────── */
+
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  background-color: var(--signal-error-fill-subtle);
+  border: 1px solid var(--signal-error-border);
+  border-radius: 0.375rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--signal-error-text-subtle);
+  line-height: 1.45;
+}

@@ -1,0 +1,969 @@
+/**
+ * SCAN Damage Report Screen — page.module.css
+ *
+ * Sub-AC 36b-3: Damage photo submission mutation wiring + subscription invalidation.
+ *
+ * Rules
+ * ─────
+ * • Design tokens only — no hex literals, no raw hsl() in component rules.
+ * • IBM Plex Mono for case labels and mono data values.
+ * • Inter Tight for all other text.
+ * • Touch targets: minimum 44 × 44 px (WCAG 2.5.5).
+ * • WCAG AA contrast in both light (.default) and dark (.theme-dark) themes.
+ * • prefers-reduced-motion guards on all keyframes and transitions.
+ */
+
+/* ── Page shell ─────────────────────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 0 1rem 4rem;
+}
+
+/* ── Page header ────────────────────────────────────────────────────── */
+
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1.25rem 0 0.75rem;
+}
+
+.caseHeaderRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.caseLabel {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ink-primary);
+  margin: 0;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.pageSubheading {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* ── Divider ────────────────────────────────────────────────────────── */
+
+.divider {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 0.75rem 0;
+  border: none;
+}
+
+/* ── Sections ───────────────────────────────────────────────────────── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 0.5rem 0 0.25rem;
+}
+
+.sectionHeading {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+/* ── Photo capture ──────────────────────────────────────────────────── */
+
+/* Hidden actual file input — triggered by the styled capture button */
+.photoInputHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.photoCaptureBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  width: 100%;
+  min-height: 10rem;
+  padding: 1.5rem 1rem;
+  background-color: var(--surface-sunken);
+  border: 2px dashed var(--border-strong);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.photoCaptureBtn:hover:not(:disabled) {
+  background-color: var(--surface-raised);
+  border-color: var(--border-brand);
+}
+
+.photoCaptureBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.photoCaptureBtn:active:not(:disabled) {
+  background-color: var(--surface-brand-subtle);
+}
+
+.photoCaptureBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cameraIcon {
+  width: 2rem;
+  height: 2rem;
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+}
+
+.captureBtnText {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink-brand);
+}
+
+.captureBtnSubtext {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ink-tertiary);
+  text-align: center;
+}
+
+/* ── Photo preview + annotation overlay ─────────────────────────────── */
+
+.photoPreviewWrap {
+  position: relative;
+  width: 100%;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  /* Aspect ratio maintained by the image itself */
+  cursor: crosshair;
+  touch-action: none; /* prevent scroll interference during tap-to-annotate */
+  user-select: none;
+}
+
+.photoPreviewImg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 22rem;
+  object-fit: contain;
+  pointer-events: none; /* clicks flow through to the wrap */
+}
+
+/* Annotation pin container — absolutely positioned over the image */
+.annotationLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* pins are visual only; wrap captures clicks */
+}
+
+/* Each annotation pin */
+.annotationPin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  pointer-events: none;
+}
+
+.annotationPinDot {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 50%;
+  background-color: var(--signal-error-fill);
+  border: 2px solid var(--surface-raised);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+}
+
+.annotationPinLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--surface-raised);
+  background-color: var(--ink-primary);
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.25rem;
+  max-width: 6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0;
+  opacity: 0.9;
+}
+
+/* Annotation hint text below the image */
+.annotationHint {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  margin: 0.3125rem 0 0;
+  text-align: center;
+}
+
+/* Annotation list under the preview */
+.annotationList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.annotationListItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+}
+
+.annotationListIndex {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+  min-width: 1.25rem;
+}
+
+.annotationListLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.annotationListPos {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  color: var(--ink-quaternary);
+  flex-shrink: 0;
+}
+
+.annotationRemoveBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--ink-tertiary);
+  border-radius: 0.25rem;
+  flex-shrink: 0;
+  transition: color 0.1s ease, background-color 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.annotationRemoveBtn:hover {
+  color: var(--signal-error-fill);
+  background-color: var(--signal-error-fill-subtle);
+}
+
+.annotationRemoveBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+/* ── Add annotation input row ───────────────────────────────────────── */
+
+.addAnnotationRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.addAnnotationInput {
+  flex: 1;
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 2.75rem;
+  padding: 0.5625rem 0.75rem;
+  background-color: var(--surface-sunken);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.addAnnotationInput::placeholder {
+  color: var(--ink-disabled);
+  font-size: 0.8125rem;
+}
+
+.addAnnotationInput:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--border-focus-ring);
+  background-color: var(--surface-raised);
+}
+
+.addAnnotationInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.addAnnotationBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.5625rem 0.875rem;
+  background-color: var(--surface-raised);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-brand);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.addAnnotationBtn:hover:not(:disabled) {
+  background-color: var(--surface-brand-subtle);
+  border-color: var(--border-brand);
+}
+
+.addAnnotationBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.addAnnotationBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pendingPinNotice {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-brand);
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--surface-brand-subtle);
+  border: 1px solid var(--border-brand);
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+/* ── Severity selector ──────────────────────────────────────────────── */
+
+.severityGroup {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.severityBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3125rem;
+  min-height: 4rem;
+  padding: 0.75rem 0.5rem;
+  background-color: var(--surface-raised);
+  border: 2px solid var(--border-default);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  text-align: center;
+}
+
+.severityBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.severityBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Minor — neutral / info-level */
+.severityBtnMinor.severityBtnSelected {
+  background-color: var(--signal-info-fill-subtle);
+  border-color: var(--signal-info-border);
+  color: var(--signal-info-text);
+}
+
+/* Moderate — warning-level */
+.severityBtnModerate.severityBtnSelected {
+  background-color: var(--signal-warning-fill-subtle);
+  border-color: var(--signal-warning-border);
+  color: var(--signal-warning-text);
+}
+
+/* Severe — error-level */
+.severityBtnSevere.severityBtnSelected {
+  background-color: var(--signal-error-fill-subtle);
+  border-color: var(--signal-error-border);
+  color: var(--signal-error-text);
+}
+
+.severityBtnMinor:hover:not(:disabled):not(.severityBtnSelected) {
+  background-color: var(--signal-info-fill-subtle);
+  border-color: var(--signal-info-border);
+}
+
+.severityBtnModerate:hover:not(:disabled):not(.severityBtnSelected) {
+  background-color: var(--signal-warning-fill-subtle);
+  border-color: var(--signal-warning-border);
+}
+
+.severityBtnSevere:hover:not(:disabled):not(.severityBtnSelected) {
+  background-color: var(--signal-error-fill-subtle);
+  border-color: var(--signal-error-border);
+}
+
+.severityIcon {
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ── Field group (shared inputs) ────────────────────────────────────── */
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.fieldLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  user-select: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.optionalBadge {
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-quaternary);
+  text-transform: uppercase;
+}
+
+.fieldSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5625rem 2.25rem 0.5625rem 0.875rem;
+  background-color: var(--surface-sunken);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='4 6 8 10 12 6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  background-size: 1rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  color: var(--ink-primary);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fieldSelect:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--border-focus-ring);
+  background-color: var(--surface-raised);
+}
+
+.fieldSelect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fieldTextarea {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  background-color: var(--surface-sunken);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  color: var(--ink-primary);
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fieldTextarea::placeholder {
+  color: var(--ink-disabled);
+}
+
+.fieldTextarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--border-focus-ring);
+  background-color: var(--surface-raised);
+}
+
+.fieldTextarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Retake photo button ─────────────────────────────────────────────── */
+
+.retakePhotoBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  min-height: 2.75rem;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  align-self: flex-start;
+}
+
+.retakePhotoBtn:hover:not(:disabled) {
+  background-color: var(--surface-sunken);
+}
+
+.retakePhotoBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+/* ── Upload progress ─────────────────────────────────────────────────── */
+
+.uploadProgress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.uploadProgressLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+  font-weight: 500;
+}
+
+.uploadProgressTrack {
+  height: 0.375rem;
+  background-color: var(--surface-sunken);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.uploadProgressFill {
+  height: 100%;
+  background-color: var(--surface-brand);
+  border-radius: 9999px;
+  transition: width 0.25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uploadProgressFill {
+    transition: none;
+  }
+}
+
+/* ── CTA buttons ───────────────────────────────────────────────────── */
+
+.ctaButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem; /* 44px touch target */
+  padding: 0.6875rem 1.25rem;
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease, opacity 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  width: 100%;
+  text-decoration: none;
+}
+
+.ctaButtonPrimary {
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+  border-color: var(--surface-brand);
+}
+
+.ctaButtonPrimary:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.ctaButtonPrimary:active:not(:disabled) {
+  filter: brightness(0.85);
+}
+
+.ctaButtonPrimary:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.ctaButtonPrimary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ctaButtonSecondary {
+  background-color: var(--surface-raised);
+  color: var(--ink-brand);
+  border-color: var(--border-brand);
+  width: auto;
+}
+
+.ctaButtonSecondary:hover:not(:disabled) {
+  background-color: var(--surface-brand-subtle);
+}
+
+.ctaButtonSecondary:active:not(:disabled) {
+  background-color: var(--surface-active);
+}
+
+.ctaButtonSecondary:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.btnIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Error banner ───────────────────────────────────────────────────── */
+
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--signal-error-fill-subtle);
+  border: 1px solid var(--signal-error-border);
+  border-radius: 0.5rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--signal-error-text-subtle);
+  line-height: 1.45;
+}
+
+.errorBannerIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  margin-top: 0.0625rem;
+  color: var(--signal-error-fill);
+}
+
+.errorBannerText {
+  flex: 1;
+}
+
+/* ── Submit section ─────────────────────────────────────────────────── */
+
+.submitSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0 0;
+}
+
+/* ── Spinner ───────────────────────────────────────────────────────── */
+
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: currentColor;
+    opacity: 0.4;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Loading skeleton ──────────────────────────────────────────────── */
+
+.loadingShell {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem 0;
+}
+
+.skeletonHeader,
+.skeletonBody {
+  background-color: var(--surface-sunken);
+  border-radius: 0.375rem;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.skeletonHeader {
+  height: 1.75rem;
+  width: 55%;
+}
+
+.skeletonBody {
+  height: 1rem;
+  width: 85%;
+}
+
+.skeletonPhoto {
+  height: 14rem;
+  width: 100%;
+  border-radius: 0.75rem;
+  background-color: var(--surface-sunken);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonHeader,
+  .skeletonBody,
+  .skeletonPhoto {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ── Success view ───────────────────────────────────────────────────── */
+
+.successView {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 2.5rem 0 1.5rem;
+  text-align: center;
+}
+
+.successIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background-color: var(--signal-error-fill-subtle);
+  border: 2px solid var(--signal-error-border);
+  flex-shrink: 0;
+}
+
+.successIcon {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--signal-error-fill);
+}
+
+.successTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin: 0;
+}
+
+.successSubtitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+  line-height: 1.55;
+  max-width: 22rem;
+  margin: 0;
+}
+
+.successMeta {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+.successRealtime {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--signal-success-text-subtle);
+  background-color: var(--signal-success-fill-subtle);
+  border: 1px solid var(--signal-success-border);
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.5rem;
+  margin: 0;
+  max-width: 26rem;
+  line-height: 1.45;
+}
+
+.successActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  width: 100%;
+  max-width: 18rem;
+}
+
+/* ── Not-found / error state ────────────────────────────────────────── */
+
+.notFoundState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+
+.notFoundIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--signal-error-fill);
+  opacity: 0.65;
+}
+
+.notFoundTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.notFoundText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-tertiary);
+  max-width: 20rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Navigation row ─────────────────────────────────────────────────── */
+
+.navRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+/* ── Tablet / desktop adjustments ───────────────────────────────────── */
+
+@media (min-width: 640px) {
+  .page {
+    padding: 0 1.5rem 4rem;
+  }
+
+  .ctaButton {
+    width: auto;
+  }
+
+  .successActions {
+    flex-direction: row;
+    justify-content: center;
+    max-width: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page {
+    padding: 0 2rem 4rem;
+  }
+}

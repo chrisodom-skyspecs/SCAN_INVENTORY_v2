@@ -1,0 +1,107 @@
+/**
+ * StatusPill.module.css
+ *
+ * Pill badge component for all status values in INVENTORY + SCAN.
+ * Consumes design-system signal tokens — no hex literals.
+ *
+ * Variants:
+ *   - subtle  (default): tinted background, colored text, colored border
+ *   - filled          : solid background, white/near-black text
+ *
+ * Signal kinds: success | warning | error | info | neutral
+ */
+
+/* ── Base pill ─────────────────────────────────────────────────── */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;   /* 11px */
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: none; /* no motion by default; honor prefers-reduced-motion */
+  user-select: none;
+}
+
+/* ── Subtle variant (default) ──────────────────────────────────── */
+
+.subtle.signalSuccess {
+  background-color: var(--signal-success-fill-subtle);
+  color: var(--signal-success-text-subtle);
+  border-color: var(--signal-success-border);
+}
+
+.subtle.signalWarning {
+  background-color: var(--signal-warning-fill-subtle);
+  color: var(--signal-warning-text-subtle);
+  border-color: var(--signal-warning-border);
+}
+
+.subtle.signalError {
+  background-color: var(--signal-error-fill-subtle);
+  color: var(--signal-error-text-subtle);
+  border-color: var(--signal-error-border);
+}
+
+.subtle.signalInfo {
+  background-color: var(--signal-info-fill-subtle);
+  color: var(--signal-info-text-subtle);
+  border-color: var(--signal-info-border);
+}
+
+.subtle.signalNeutral {
+  background-color: var(--signal-neutral-fill-subtle);
+  color: var(--signal-neutral-text-subtle);
+  border-color: var(--signal-neutral-border);
+}
+
+/* ── Filled variant ────────────────────────────────────────────── */
+
+.filled.signalSuccess {
+  background-color: var(--signal-success-fill);
+  color: var(--signal-success-text);
+  border-color: transparent;
+}
+
+.filled.signalWarning {
+  background-color: var(--signal-warning-fill);
+  color: var(--signal-warning-text);
+  border-color: transparent;
+}
+
+.filled.signalError {
+  background-color: var(--signal-error-fill);
+  color: var(--signal-error-text);
+  border-color: transparent;
+}
+
+.filled.signalInfo {
+  background-color: var(--signal-info-fill);
+  color: var(--signal-info-text);
+  border-color: transparent;
+}
+
+.filled.signalNeutral {
+  background-color: var(--signal-neutral-fill);
+  color: var(--signal-neutral-text);
+  border-color: transparent;
+}
+
+/* ── Print: flatten to high-contrast black/white ───────────────── */
+
+@media print {
+  .pill {
+    border: 1px solid currentColor;
+    background-color: transparent !important;
+    color: inherit !important;
+    padding: 0.0625rem 0.375rem;
+  }
+}
