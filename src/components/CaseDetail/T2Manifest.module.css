@@ -181,3 +181,72 @@
   border-radius: 0.1875rem;
   padding: 0.0625rem 0.25rem;
 }
+
+/* ── Shipment status banner (compact in-transit indicator) ──────────── */
+
+.shipmentBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.375rem;
+  flex-wrap: wrap;
+  row-gap: 0.375rem;
+}
+
+.shipmentBannerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.shipmentBannerLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.shipmentBannerTracking {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  letter-spacing: 0.01em;
+}
+
+.shipmentBannerEta {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+}
+
+.shipmentBannerLink {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-brand);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.shipmentBannerLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.125rem;
+}
+
+.shipmentBannerLink:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  border-radius: 0.125rem;
+}

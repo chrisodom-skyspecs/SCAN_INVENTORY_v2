@@ -64,6 +64,57 @@ const urlOrPath = z
 // code only (Route Handlers, Server Actions, Convex actions, middleware).
 
 const serverEnvSchema = z.object({
+  // ── Kinde Authentication ─────────────────────────────────────────────────
+  /**
+   * Kinde application client ID. Required.
+   * Obtain from: Kinde dashboard → Applications → Your App → App keys
+   */
+  KINDE_CLIENT_ID: z
+    .string()
+    .min(1, "KINDE_CLIENT_ID must be a non-empty string"),
+
+  /**
+   * Kinde application client secret. Required.
+   * Obtain from: Kinde dashboard → Applications → Your App → App keys
+   */
+  KINDE_CLIENT_SECRET: z
+    .string()
+    .min(1, "KINDE_CLIENT_SECRET must be a non-empty string"),
+
+  /**
+   * Kinde issuer URL (your Kinde domain). Required.
+   * Format: https://<your-subdomain>.kinde.com
+   */
+  KINDE_ISSUER_URL: z
+    .string()
+    .url("KINDE_ISSUER_URL must be a valid URL (e.g. https://your-org.kinde.com)"),
+
+  /**
+   * The base URL of this application. Required.
+   * Used by Kinde to construct redirect URIs.
+   * Development: http://localhost:3000
+   * Production:  https://your-app.vercel.app
+   */
+  KINDE_SITE_URL: z
+    .string()
+    .url("KINDE_SITE_URL must be a valid URL"),
+
+  /**
+   * URL to redirect to after the user logs out. Required.
+   * Typically the app root or a dedicated signed-out page.
+   */
+  KINDE_POST_LOGOUT_REDIRECT_URL: z
+    .string()
+    .url("KINDE_POST_LOGOUT_REDIRECT_URL must be a valid URL"),
+
+  /**
+   * URL to redirect to after the user successfully logs in. Required.
+   * Typically the INVENTORY dashboard home (/inventory).
+   */
+  KINDE_POST_LOGIN_REDIRECT_URL: z
+    .string()
+    .url("KINDE_POST_LOGIN_REDIRECT_URL must be a valid URL"),
+
   // ── FedEx Tracking API ──────────────────────────────────────────────────
   /** OAuth 2.0 client ID from the FedEx Developer Portal. Required. */
   FEDEX_CLIENT_ID: z

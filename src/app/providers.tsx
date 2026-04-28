@@ -2,14 +2,21 @@
  * providers.tsx
  *
  * Client-side provider tree for the SkySpecs INVENTORY + SCAN apps.
- * Wraps children with ConvexProvider for real-time reactive subscriptions.
+ * Wraps children with:
+ *   1. KindeProvider — authentication state (user session, org, permissions)
+ *   2. ConvexProvider — real-time reactive subscriptions
  *
  * Must be "use client" so it can use React context and Convex hooks.
  * The root layout imports this as a server component boundary.
+ *
+ * Provider order matters:
+ *   KindeProvider must be outermost so that ConvexProvider (and any Convex
+ *   hooks that read auth state) can access the Kinde session context.
  */
 
 "use client";
 
+import { KindeProvider } from "@kinde-oss/kinde-auth-nextjs";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 
 /**
@@ -30,7 +37,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // Convex provider.  All Convex hooks will be inert (undefined data) but
   // the app shell will still server-render cleanly.
   if (!convex) {
-    return <>{children}</>;
+    return <KindeProvider>{children}</KindeProvider>;
   }
-  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
+
+  return (
+    <KindeProvider>
+      <ConvexProvider client={convex}>{children}</ConvexProvider>
+    </KindeProvider>
+  );
 }

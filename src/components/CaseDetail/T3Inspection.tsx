@@ -14,6 +14,11 @@
 
 import { useChecklistWithInspection } from "../../hooks/use-checklist";
 import { useDamageReportsByCase } from "../../hooks/use-damage-reports";
+import {
+  useCaseShippingLayout,
+  getTrackingUrl,
+} from "../../hooks/use-shipment-status";
+import type { CaseShippingLayout } from "../../hooks/use-shipment-status";
 import { StatusPill } from "../StatusPill";
 import CustodySection from "./CustodySection";
 import shared from "./shared.module.css";
@@ -30,10 +35,117 @@ const MANIFEST_TO_STATUS_KIND: Record<ManifestItemStatus, StatusKind> = {
   missing:   "exception",
 };
 
+// Valid shipment status values for StatusPill rendering
+const VALID_SHIPMENT_PILL_STATUSES: Set<string> = new Set([
+  "label_created", "picked_up", "in_transit",
+  "out_for_delivery", "delivered", "exception",
+]);
+
+// ─── Shipment context banner ──────────────────────────────────────────────────
+//
+// Shown in T3 when the case is currently in shipping status.
+// Provides a compact in-transit context to operators reviewing inspection data
+// for a case that is already in transit.
+//
+// Real-time behavior:
+//   useCaseShippingLayout subscribes to api.shipping.getCaseShippingLayout.
+//   Convex re-evaluates and pushes within ~100–300 ms whenever:
+//     • SCAN app calls shipCase (cases table + shipments insert)
+//     • updateShipmentStatus runs (shipments table update)
+//   This satisfies the ≤ 2-second real-time fidelity requirement.
+
+interface ShipmentContextBannerProps {
+  layout: CaseShippingLayout;
+  onNavigateToShipping?: () => void;
+}
+
+function ShipmentContextBanner({
+  layout,
+  onNavigateToShipping,
+}: ShipmentContextBannerProps) {
+  if (!layout.trackingNumber?.trim()) return null;
+
+  // Use latestShipment status for the pill (more accurate than case-level status)
+  const shipmentStatus = layout.latestShipment?.status ?? "in_transit";
+  const validStatus = VALID_SHIPMENT_PILL_STATUSES.has(shipmentStatus)
+    ? shipmentStatus
+    : "in_transit";
+
+  // ETA from the latest shipment record
+  const estimatedDelivery = layout.latestShipment?.estimatedDelivery;
+  let etaLabel: string | null = null;
+  if (estimatedDelivery) {
+    try {
+      etaLabel = new Date(estimatedDelivery).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      // optional
+    }
+  }
+
+  return (
+    <div
+      className={styles.shipmentContextBanner}
+      data-testid="t3-shipment-context-banner"
+      role="status"
+      aria-label={`Case is in ${shipmentStatus.replace(/_/g, " ")} transit`}
+    >
+      <div className={styles.shipmentContextLeft}>
+        {/* Carrier label */}
+        {layout.carrier && (
+          <span className={styles.shipmentContextCarrier}>{layout.carrier}</span>
+        )}
+
+        {/* Tracking status pill */}
+        <StatusPill
+          kind={validStatus as Parameters<typeof StatusPill>[0]["kind"]}
+        />
+
+        {/* Tracking number — links to FedEx portal */}
+        <a
+          href={getTrackingUrl(layout.trackingNumber)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.shipmentContextTracking}
+          aria-label={`Track FedEx shipment ${layout.trackingNumber}`}
+        >
+          {layout.trackingNumber}
+        </a>
+
+        {/* ETA chip */}
+        {etaLabel && (
+          <span
+            className={styles.shipmentContextEta}
+            aria-label={`Estimated delivery: ${etaLabel}`}
+          >
+            ETA {etaLabel}
+          </span>
+        )}
+      </div>
+
+      {/* Navigate to T4 for full shipping detail */}
+      {onNavigateToShipping && (
+        <button
+          type="button"
+          className={styles.shipmentContextLink}
+          onClick={onNavigateToShipping}
+          aria-label="View full shipping details in Shipping tab"
+        >
+          View Shipping →
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface T3InspectionProps {
   caseId: string;
+  /** Called when the user clicks "View Shipping →" to navigate to T4. */
+  onNavigateToShipping?: () => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -50,13 +162,21 @@ function formatDate(epochMs: number): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function T3Inspection({ caseId }: T3InspectionProps) {
+export default function T3Inspection({ caseId, onNavigateToShipping }: T3InspectionProps) {
   // useChecklistWithInspection is a real-time subscription via Convex.
   // The server-side query loads manifestItems + inspections in a single
   // Promise.all and returns a consistent snapshot. Convex re-runs it whenever
   // either table changes — the T3 panel updates within ~100–300 ms of any SCAN
   // app inspection action without requiring a page reload.
   const data = useChecklistWithInspection(caseId) as ChecklistWithInspection | undefined;
+
+  // useCaseShippingLayout subscribes to api.shipping.getCaseShippingLayout.
+  // Sub-AC 36d-4: provides real-time shipment tracking state for the in-transit
+  // context banner.  Convex re-evaluates within ~100–300 ms of any SCAN app
+  // shipCase call or FedEx tracking status change.
+  // Returns undefined while loading, null when case not found, CaseShippingLayout
+  // when loaded — so it does NOT block the T3 inspection render.
+  const shippingLayout = useCaseShippingLayout(caseId) as CaseShippingLayout | null | undefined;
 
   // useDamageReportsByCase subscribes to getDamageReportsByCase, which joins
   // damaged manifest items with their audit events.  Convex re-runs the query
@@ -85,6 +205,23 @@ export default function T3Inspection({ caseId }: T3InspectionProps) {
 
   return (
     <div className={styles.inspection} data-testid="t3-inspection">
+      {/*
+        ── Shipment context banner — real-time via useCaseShippingLayout ──
+        Sub-AC 36d-4: useCaseShippingLayout subscribes to
+        api.shipping.getCaseShippingLayout via Convex real-time transport.
+        Convex re-evaluates and pushes within ~100–300 ms of any SCAN app
+        shipCase call or FedEx tracking status update.
+        Only rendered when the case has an active shipment tracking number —
+        shows operators that this case is currently in transit even while
+        reviewing inspection results.
+      */}
+      {shippingLayout?.trackingNumber && (
+        <ShipmentContextBanner
+          layout={shippingLayout}
+          onNavigateToShipping={onNavigateToShipping}
+        />
+      )}
+
       {/* ── Inspection record ─────────────────────────────────────── */}
       {inspection ? (
         <section aria-label="Current inspection">

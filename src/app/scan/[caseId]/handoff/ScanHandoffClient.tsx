@@ -845,6 +845,45 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
 
       <hr className={styles.divider} aria-hidden="true" />
 
+      {/* ── Handoff Type (spec §23 telemetry field) ───────────────────────── */}
+      <section
+        className={styles.section}
+        aria-labelledby="handoff-type-section-label"
+      >
+        <h2 id="handoff-type-section-label" className={styles.sectionTitle}>
+          Handoff Type
+        </h2>
+        <p className={styles.sectionHint}>
+          Classify this transfer for operations reporting and audit logs.
+        </p>
+        <div className={styles.fieldGroup}>
+          <label htmlFor="handoffType" className={styles.fieldLabel}>
+            Transfer Type
+            <span className={styles.fieldRequired} aria-hidden="true"> *</span>
+          </label>
+          <select
+            id="handoffType"
+            className={styles.fieldInput}
+            value={handoffType}
+            onChange={(e) => setHandoffType(e.target.value as HandoffType)}
+            disabled={phase === "submitting"}
+            aria-required="true"
+            aria-describedby="handoff-type-hint"
+            data-testid="handoff-type-select"
+          >
+            <option value="peer_to_peer">Peer-to-peer (field transfer)</option>
+            <option value="field_transfer">Field transfer (same deployment)</option>
+            <option value="return">Return to base / warehouse</option>
+            <option value="initial_assignment">Initial assignment (first holder)</option>
+          </select>
+          <span id="handoff-type-hint" className={styles.fieldHint}>
+            Recorded in telemetry for custody audit (spec §23).
+          </span>
+        </div>
+      </section>
+
+      <hr className={styles.divider} aria-hidden="true" />
+
       {/* ── Location ──────────────────────────────────────────────────────── */}
       <section
         className={styles.section}

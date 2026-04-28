@@ -140,14 +140,36 @@ export function CaseDetailPanel({
     previousTabRef.current = activeWindow;
   }, [activeWindow, caseId]);
 
+  // Navigate to T4 (Shipping) — wired into T1, T2, T3 tracking elements so
+  // operators can jump directly to the full shipping panel from the compact
+  // badges in summary and inspection views.
+  function navigateToShipping() {
+    onWindowChange?.("T4");
+  }
+
   function renderActiveLayout() {
     switch (activeWindow) {
       case "T1":
-        return <T1Overview caseId={caseId} />;
+        return (
+          <T1Overview
+            caseId={caseId}
+            onNavigateToShipping={navigateToShipping}
+          />
+        );
       case "T2":
-        return <T2Manifest caseId={caseId} />;
+        return (
+          <T2Manifest
+            caseId={caseId}
+            onNavigateToShipping={navigateToShipping}
+          />
+        );
       case "T3":
-        return <T3Inspection caseId={caseId} />;
+        return (
+          <T3Inspection
+            caseId={caseId}
+            onNavigateToShipping={navigateToShipping}
+          />
+        );
       case "T4":
         return <T4Shipping caseId={caseId} />;
       case "T5":
@@ -157,7 +179,7 @@ export function CaseDetailPanel({
           <T5Audit caseId={caseId} ffEnabled={false} />
         );
       default:
-        return <T1Overview caseId={caseId} />;
+        return <T1Overview caseId={caseId} onNavigateToShipping={navigateToShipping} />;
     }
   }
 

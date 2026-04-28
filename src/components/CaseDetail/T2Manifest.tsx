@@ -14,6 +14,11 @@
 import { useState } from "react";
 import { useChecklistWithInspection } from "../../hooks/use-checklist";
 import { useDamageReportsByCase } from "../../hooks/use-damage-reports";
+import {
+  useLatestShipment,
+  getTrackingUrl,
+} from "../../hooks/use-shipment-status";
+import type { ShipmentRecord } from "../../hooks/use-shipment-status";
 import { StatusPill } from "../StatusPill";
 import CustodySection from "./CustodySection";
 import shared from "./shared.module.css";
@@ -25,6 +30,110 @@ import type { StatusKind } from "../StatusPill/StatusPill";
 
 interface T2ManifestProps {
   caseId: string;
+  /** Called when the user clicks "View Shipping Details →" to navigate to T4. */
+  onNavigateToShipping?: () => void;
+}
+
+// ─── Shipment status banner ───────────────────────────────────────────────────
+//
+// Compact in-transit indicator shown at the top of T2 when a shipment with a
+// tracking number has been recorded for this case.
+//
+// Real-time behavior:
+//   useLatestShipment subscribes to api.shipping.listShipmentsByCase via Convex.
+//   Convex re-evaluates and pushes an update within ~100–300 ms whenever:
+//     • The SCAN app calls shipCase (new shipment row inserted)
+//     • updateShipmentStatus changes a shipment's status (tracking poll result)
+//   This satisfies the ≤ 2-second real-time fidelity requirement between a
+//   SCAN app action and visibility on the INVENTORY dashboard.
+
+const VALID_PILL_STATUSES: Set<string> = new Set([
+  "label_created", "picked_up", "in_transit",
+  "out_for_delivery", "delivered", "exception",
+]);
+
+interface ShipmentStatusBannerProps {
+  caseId: string;
+  onNavigateToShipping?: () => void;
+}
+
+function ShipmentStatusBanner({
+  caseId,
+  onNavigateToShipping,
+}: ShipmentStatusBannerProps) {
+  // useLatestShipment is a real-time Convex subscription backed by
+  // api.shipping.listShipmentsByCase.  Updates arrive within ~100–300 ms of any
+  // SCAN app shipCase call or FedEx tracking status change.
+  const shipment: ShipmentRecord | null | undefined = useLatestShipment(caseId);
+
+  // Still loading or no shipment — render nothing
+  if (!shipment || !shipment.trackingNumber?.trim()) return null;
+
+  const validStatus = VALID_PILL_STATUSES.has(shipment.status)
+    ? shipment.status
+    : "in_transit";
+
+  // Build a short ETA label when estimatedDelivery is present
+  let etaLabel: string | null = null;
+  if (shipment.estimatedDelivery) {
+    try {
+      etaLabel = new Date(shipment.estimatedDelivery).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      // ignore parse errors — ETA is optional
+    }
+  }
+
+  return (
+    <div
+      className={styles.shipmentBanner}
+      data-testid="t2-shipment-banner"
+      role="status"
+      aria-label={`Case is in ${shipment.status.replace(/_/g, " ")} transit`}
+    >
+      <div className={styles.shipmentBannerLeft}>
+        {/* Carrier label */}
+        <span className={styles.shipmentBannerLabel}>{shipment.carrier}</span>
+
+        {/* Tracking status pill — uses the shared <StatusPill /> component */}
+        <StatusPill
+          kind={validStatus as Parameters<typeof StatusPill>[0]["kind"]}
+        />
+
+        {/* Tracking number — monospace, links to FedEx portal */}
+        <a
+          href={getTrackingUrl(shipment.trackingNumber)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.shipmentBannerTracking}
+          aria-label={`Track FedEx shipment ${shipment.trackingNumber}`}
+        >
+          {shipment.trackingNumber}
+        </a>
+
+        {/* ETA chip — shown when an estimated delivery date is known */}
+        {etaLabel && (
+          <span className={styles.shipmentBannerEta} aria-label={`Estimated delivery: ${etaLabel}`}>
+            ETA {etaLabel}
+          </span>
+        )}
+      </div>
+
+      {/* "View Shipping →" navigation link to T4 */}
+      {onNavigateToShipping && (
+        <button
+          type="button"
+          className={styles.shipmentBannerLink}
+          onClick={onNavigateToShipping}
+          aria-label="View full shipping details"
+        >
+          View Shipping →
+        </button>
+      )}
+    </div>
+  );
 }
 
 // ─── Filter config ────────────────────────────────────────────────────────────
@@ -52,7 +161,7 @@ const MANIFEST_STATUS_KIND: Record<ManifestItemStatus, StatusKind> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function T2Manifest({ caseId }: T2ManifestProps) {
+export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestProps) {
   const [filter, setFilter] = useState<FilterKind>("all");
 
   // useChecklistWithInspection is a real-time subscription via Convex.
@@ -104,6 +213,20 @@ export default function T2Manifest({ caseId }: T2ManifestProps) {
 
   return (
     <div className={styles.manifest} data-testid="t2-manifest">
+      {/*
+        ── Shipment status banner — real-time via useLatestShipment ──────
+        Sub-AC 36d-4: useLatestShipment subscribes to
+        api.shipping.listShipmentsByCase via Convex real-time transport.
+        Convex re-evaluates and pushes within ~100–300 ms of any SCAN app
+        shipCase call or FedEx tracking status update — the banner
+        appears/updates live without a page reload.
+        Only rendered when the case has a recorded shipment with a tracking number.
+      */}
+      <ShipmentStatusBanner
+        caseId={caseId}
+        onNavigateToShipping={onNavigateToShipping}
+      />
+
       {/* ── Progress bar ─────────────────────────────────────────── */}
       <div className={styles.progressSection}>
         <div className={shared.sectionHeader}>

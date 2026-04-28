@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@auth/core": "^0.37.0",
+    "@kinde-oss/kinde-auth-nextjs": "^2.12.1",
     "convex": "^1.17.0",
     "mapbox-gl": "^3.9.4",
     "next": "^15.5.15",

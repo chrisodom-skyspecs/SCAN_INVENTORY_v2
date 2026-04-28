@@ -20,8 +20,12 @@ import { api } from "../../../convex/_generated/api";
 import { StatusPill } from "../StatusPill";
 import { useChecklistByCase } from "../../hooks/use-checklist";
 import { useDamageReportEvents } from "../../hooks/use-damage-reports";
+import {
+  useShipmentsByCase,
+  getTrackingUrl,
+} from "../../hooks/use-shipment-status";
 import type { DamageReportEvent } from "../../hooks/use-damage-reports";
-import type { ShipmentRecord } from "../../hooks/use-fedex-tracking";
+import type { ShipmentRecord } from "../../hooks/use-shipment-status";
 import type { ManifestItemStatus } from "../../hooks/use-checklist";
 import CustodySection from "./CustodySection";
 import shared from "./shared.module.css";
@@ -206,11 +210,15 @@ export default function T5Audit({ caseId, ffEnabled = true }: T5AuditProps) {
   // The T5 panel queries events directly for the audit view.
   const caseDoc = useQuery(api.cases.getCaseById, { caseId });
 
-  // We use listShipmentsByCase here as a proxy to see if there's any activity.
-  // Full event log query would require an `api.events.listByCaseId` function;
-  // as that's not yet in the generated stub, we display a minimal audit view.
-  const rawShipments = useQuery(api.shipping.listShipmentsByCase, { caseId });
-  const shipments = rawShipments as ShipmentRecord[] | undefined;
+  // Sub-AC 36d-4: useShipmentsByCase provides a real-time subscription to
+  // api.shipping.listShipmentsByCase via the use-shipment-status hook module.
+  // Convex re-evaluates and pushes updates within ~100–300 ms of any SCAN app
+  // shipCase call or FedEx tracking status change, satisfying the ≤ 2-second
+  // real-time fidelity requirement.
+  // Using the hook (rather than raw useQuery) also ensures the ShipmentRecord
+  // type aligns with the canonical projection from shippingHelpers, and provides
+  // access to getTrackingUrl for FedEx label URL links in the timeline.
+  const shipments: ShipmentRecord[] | undefined = useShipmentsByCase(caseId);
 
   // useChecklistByCase provides real-time manifest item state for the audit view.
   // Convex re-evaluates getChecklistByCase whenever any manifestItem row for this
