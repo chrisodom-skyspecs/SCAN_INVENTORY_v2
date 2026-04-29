@@ -1,0 +1,281 @@
+# Ouroboros Seed Specification
+# SkySpecs INVENTORY Dashboard + SCAN Mobile App
+# Generated from interview session · 2026-04-28
+
+goal: >
+  Build the SkySpecs INVENTORY dashboard and companion SCAN mobile-first web app
+  for tracking equipment cases through assembly, deployment, field inspection,
+  shipping, and return. The INVENTORY dashboard provides 5 map modes (M1-M5) and
+  5 case detail layouts (T1-T5) for operations visibility. The SCAN mobile app
+  enables field technicians and pilots to scan case QR codes, inspect item
+  checklists, report damage with annotated photos, ship cases via FedEx, and
+  perform custody handoffs. Both apps share real-time state via Convex.
+
+constraints:
+  - Next.js full-stack framework (App Router)
+  - Convex for database, real-time subscriptions, serverless functions, and file storage
+  - Kinde for authentication (both dashboard and mobile app)
+  - Mapbox GL JS (react-map-gl) for all map views
+  - Deploy on Vercel
+  - TypeScript throughout
+  - Single-tenant architecture (organizations represent internal staff vs. contractors, not separate tenants)
+  - Online-only mobile app (no offline capability required)
+  - FedEx tracking number entry only (no FedEx shipment creation API)
+  - In-app notifications only (no push notifications, no email)
+  - Hash-chain audit (T5) behind feature flag FF_AUDIT_HASH_CHAIN
+  - Mission control (M5) behind feature flag FF_MAP_MISSION
+  - Master redesign behind feature flag FF_INV_REDESIGN
+  - Design tokens as CSS custom properties, no hex literals in component code
+  - Inter Tight for UI typography, IBM Plex Mono for data/tabular content
+  - Light theme default, dark theme via .theme-dark on html element
+  - All status pills via single <StatusPill kind="..." /> component
+  - WCAG AA contrast compliance for both themes
+  - Predefined case templates (packing lists) managed via admin UI
+
+acceptance_criteria:
+  # Dashboard - Foundation
+  - Design system tokens (CSS custom properties) for surfaces, ink, signal, map palettes implemented
+  - App shell with 52px top bar (logo, global search cmd-K, live indicator, bell, avatar) and 220px side nav
+  - Status vocabulary enum (hangar, assembled, transit_out, deployed, flagged, transit_in, received, archived) with StatusPill component
+  - Dark mode toggle functional
+
+  # Dashboard - Map & Movement (M1-M5)
+  - "M1 Operations Console: three-column layout (layers panel, map, in-view list) with stat strip and SCAN ticker"
+  - "M2 Single-Case Journey: numbered stops derived from events, replay scrubber with play/pause/step/speed controls, stop cards with evidence thumbnails"
+  - "M3 Heatmap Mode: server-binned density cells rendered as CSS radial gradients, insights panel with top sites and busiest corridors"
+  - "M4 Map + Manifest: manifest panel showing item status (verified/flagged/missing) with map-manifest hover binding"
+  - "M5 Mission Control: full-bleed map with draggable floating glass panels, cluster bubbles at low zoom, kiosk URL parameter for always-on TV mode"
+  - Layer engine with independent toggles (deployed, transit, flagged, hangar, heat, history, turbines)
+  - Single GET /api/cases/map endpoint returns all map data in one round-trip (<200ms p50 target)
+  - URL-driven state persistence for all map params (view, case, window, layers, org, kit, at)
+
+  # Dashboard - Case Detail (T1-T5)
+  - "T1 Map + Timeline Split: 50/50 grid with case map and vertical event timeline"
+  - "T2 Vertical Spine: timeline-is-the-page layout with sticky date headers and mini-map sidebar"
+  - "T3 Phase Swim-Lanes: four-column grid (Hangar, Carrier, Field, Returning) with events as cards"
+  - "T4 Tabbed Dossier: tabs (Overview, Timeline, Map, Manifest, Evidence, Activity) with sign-off sidebar — default layout for ~70% of users"
+  - "T5 Audit Ledger: compliance tabular view with filter/search, Print PDF, Export CSV, hash-chain verification footer (feature-flagged)"
+  - Layout preference stored per user (localStorage + backend sync) with smart defaults based on case state
+  - Inline edits on case header (status, holder, site) with click-to-edit forms
+  - "Recall flow: two-step modal (Confirm, Reroute with return method selection)"
+
+  # Dashboard - Admin
+  - Template management UI for creating and editing predefined case packing lists (kit types with item definitions)
+  - Organization management (internal staff vs. contractor groupings)
+  - User management with role assignment
+
+  # Dashboard - Case Assembly
+  - Create new case from template, assign items, generate QR code
+  - QR code generation (printable label) and association of pre-existing physical QR labels
+  - QC sign-off workflow before dispatch
+
+  # Mobile SCAN App
+  - Mobile-first responsive web app (PWA-capable)
+  - QR code scanner using device camera
+  - Post-scan context choice screen (Start Inspection, View History, Report Issue, Ship Case, In-person Handoff)
+  - "Inspection flow: item-by-item checklist against case template, each item marked Present/Missing/Damaged"
+  - "Missing item flow: text entry for description and replacement request"
+  - "Damaged item flow: photo capture with annotation (draw/circle on photo), stored in Convex file storage"
+  - "Ship Case flow: enter FedEx tracking number, select destination field tech/pilot"
+  - "In-person handoff: select receiving person, confirm transfer"
+  - View case history and past inspections
+
+  # Integration & Real-time
+  - Convex real-time subscriptions sync SCAN app actions to dashboard instantly
+  - In-app notification system (bell icon with badge count) for damage reports, flags, and recall requests
+  - Dashboard can flag a case to alert the current field holder
+  - FedEx tracking status pulled via tracking number (FedEx API read-only)
+  - SCAN ticker on dashboard showing last 4 real-time events via websocket
+
+  # Cross-cutting
+  - Keyboard shortcuts (cmd-K search, map zoom, view switching, timeline navigation)
+  - Telemetry events per spec section 23
+  - Accessibility (aria-labels on status pills, keyboard focus on map pins, screen reader timeline, color-blind safe, reduced motion support)
+  - Comfy and compact density modes via data-density attribute
+
+  # Production Readiness
+  - Deployed to Vercel with Convex backend
+  - Kinde authentication working for both dashboard and mobile
+  - FedEx tracking integration functional
+  - All 5 map modes and 5 case detail layouts operational
+  - "End-to-end workflow: assemble case in hangar -> dispatch -> field user scans QR -> inspects items -> reports damage with photos -> dashboard reflects in real-time"
+
+ontology_schema:
+  name: SkySpecsInventory
+  description: >
+    Domain model for equipment case tracking across hangar assembly,
+    field deployment, inspection, shipping, and return lifecycle.
+  fields:
+    # Core entities
+    - name: cases
+      type: array
+      description: "Equipment cases (e.g., Pelican cases) that hold kits of items"
+    - name: case.id
+      type: string
+      description: "Unique case identifier (e.g., PCN-12)"
+    - name: case.name
+      type: string
+      description: "Human-readable case name (e.g., Pelican Case #12)"
+    - name: case.qr
+      type: string
+      description: "QR code identifier mapped to the physical label"
+    - name: case.status
+      type: string
+      description: "Enum: hangar | assembled | transit_out | deployed | flagged | transit_in | received | archived"
+    - name: case.kit
+      type: object
+      description: "Kit template reference (id, name, type) — defines expected contents"
+    - name: case.holder
+      type: object
+      description: "Current custodian (user id, name, role, organization)"
+    - name: case.location
+      type: object
+      description: "Current location (lat, lng, site name, since timestamp)"
+    - name: case.flags
+      type: array
+      description: "Open condition notes or alerts (kind, text, openedBy, eventId)"
+    - name: case.manifest
+      type: object
+      description: "Manifest summary (total, verified, flagged, missing) and items array"
+    - name: case.events
+      type: array
+      description: "Ordered list of lifecycle events (inspections, handoffs, transits, flags)"
+
+    # Kit templates
+    - name: kitTemplates
+      type: array
+      description: "Predefined packing list templates managed via admin UI"
+    - name: kitTemplate.items
+      type: array
+      description: "Expected items in the kit (serial, name, group, required flag)"
+
+    # Manifest items
+    - name: manifestItem.serial
+      type: string
+      description: "Item serial number"
+    - name: manifestItem.state
+      type: string
+      description: "Enum: verified | flagged | missing"
+    - name: manifestItem.lastSeenAt
+      type: string
+      description: "ISO timestamp of last verification"
+
+    # Events
+    - name: event.kind
+      type: string
+      description: "Event type: qc_pass | qc_fail | assemble | pickup | scan_transit | receive | deploy | condition_note | discrepancy | handoff | return | restock"
+    - name: event.phase
+      type: string
+      description: "Derived lifecycle phase: Hangar | Carrier | Field | Returning"
+    - name: event.tone
+      type: string
+      description: "Derived severity: ok | info | warn | danger | deployed | transit"
+    - name: event.evidence
+      type: array
+      description: "Attached photos and notes (kind: photo|note, url, text)"
+    - name: event.items
+      type: array
+      description: "Manifest item serials touched by this event"
+
+    # Inspections (SCAN app)
+    - name: inspection
+      type: object
+      description: "A completed inspection from SCAN app — references case, checklist results, photos"
+    - name: inspection.results
+      type: array
+      description: "Per-item results: itemSerial, status (present|missing|damaged), notes, photoIds"
+
+    # Shipping
+    - name: shipment
+      type: object
+      description: "FedEx shipment tracking — tracking number, origin, destination, status, ETA"
+    - name: shipment.trackingNumber
+      type: string
+      description: "FedEx tracking number entered by field user"
+
+    # Notifications
+    - name: notification
+      type: object
+      description: "In-app notification (type, message, caseId, read status, timestamp)"
+
+    # Users & Organizations
+    - name: user
+      type: object
+      description: "User profile (id, name, role: hangar_staff|field_user, organizationId)"
+    - name: organization
+      type: object
+      description: "Organization grouping (id, name, type: internal|contractor)"
+
+    # QR Codes
+    - name: qrCode
+      type: object
+      description: "QR code record (id, caseId, generated vs. pre-existing, printable label URL)"
+
+evaluation_principles:
+  - name: real_time_fidelity
+    description: "SCAN app actions must reflect on the dashboard within 2 seconds via Convex subscriptions"
+    weight: 0.9
+
+  - name: design_system_compliance
+    description: "All UI must use design tokens (CSS custom properties), StatusPill component, and spec typography — no hard-coded hex values or ad-hoc status rendering"
+    weight: 0.85
+
+  - name: mobile_usability
+    description: "SCAN app must be fully functional on mobile browsers with touch-optimized controls, camera access for QR scanning and photo capture, and annotation support"
+    weight: 0.9
+
+  - name: map_performance
+    description: "Map endpoint responds in <200ms p50, CSS pins for <200 cases, clustered rendering above 200, 60fps replay scrubber animation"
+    weight: 0.8
+
+  - name: data_integrity
+    description: "Case status transitions follow valid paths, manifest item states are consistent with inspection results, event timeline is immutable and ordered"
+    weight: 0.95
+
+  - name: spec_fidelity
+    description: "Implementation matches the INVENTORY redesign spec (sections 0-25) and hi-fi prototype for all views, layouts, data contracts, and interactions"
+    weight: 0.9
+
+  - name: accessibility
+    description: "WCAG AA contrast, keyboard navigation on map and timeline, screen reader support, color-blind safe status differentiation, reduced motion support"
+    weight: 0.7
+
+  - name: production_readiness
+    description: "Deployed to Vercel, Kinde auth functional, FedEx tracking working, feature flags operational, both apps accessible via production URLs"
+    weight: 0.85
+
+exit_conditions:
+  - name: full_lifecycle_complete
+    description: "End-to-end case lifecycle works in production"
+    criteria: "A case can be created from template, QR generated, dispatched, scanned in SCAN app, inspected with damage/missing reporting and photos, shipped via FedEx tracking, handed off, flagged from dashboard, and returned — all reflected in real-time on the dashboard"
+
+  - name: all_views_operational
+    description: "All specified views are functional"
+    criteria: "Map modes M1-M5 and case detail layouts T1-T5 render correctly with real data, URL state persistence works, layout preference persists per user"
+
+  - name: mobile_app_complete
+    description: "SCAN mobile app covers all field workflows"
+    criteria: "QR scan, context choice, item inspection checklist, damage photo with annotation, ship case with FedEx tracking, in-person handoff, and case history — all functional on mobile browsers"
+
+  - name: auth_and_deploy
+    description: "Production infrastructure operational"
+    criteria: "Kinde authentication works for both apps, Convex backend deployed, Vercel hosting live, feature flags controllable"
+
+metadata:
+  version: "1.0.0"
+  generated: "2026-04-28"
+  ambiguity_score: 0.10
+  source: "ouroboros-interview-plugin-fallback"
+  project_type: greenfield
+  design_reference: "INVENTORY hi-fi.html prototype + redesign spec v1.0 (sections 0-25)"
+  tech_stack:
+    frontend: "Next.js (App Router)"
+    database: "Convex"
+    auth: "Kinde"
+    maps: "Mapbox GL JS (react-map-gl)"
+    hosting: "Vercel"
+    language: "TypeScript"
+  feature_flags:
+    - FF_INV_REDESIGN
+    - FF_AUDIT_HASH_CHAIN
+    - FF_MAP_MISSION
