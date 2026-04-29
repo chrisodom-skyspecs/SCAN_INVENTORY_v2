@@ -1,0 +1,127 @@
+/**
+ * ThemeToggle.module.css — INVENTORY dashboard light/dark mode toggle button
+ *
+ * A 36×36px square icon button styled to match the NotificationBell button
+ * dimensions in the INVENTORY top bar.
+ *
+ * States:
+ *   Default    — icon at --ink-secondary opacity, transparent background
+ *   Hover      — background fills to --surface-hover
+ *   Pressed    — same hover fill (momentary)
+ *   Active     — data-dark="true" when dark mode is on (no additional fill needed)
+ *   Focus      — 2px --border-focus outline
+ *
+ * Design tokens only — no hex literals.
+ * WCAG AA contrast: --ink-secondary on --surface-raised ≥ 4.5:1 in both themes.
+ *
+ * The dark mode visual change (sun vs moon icon) is handled entirely in the
+ * component TSX — no CSS dark-mode overrides are needed beyond the token cascade.
+ * The .theme-dark block in base.css §3 re-maps all token values automatically.
+ */
+
+/* ── Toggle button ────────────────────────────────────────────────────────── */
+
+/**
+ * .toggle — the outer <button> element.
+ *
+ * 36×36px square touch target — matches NotificationBell button dimensions.
+ * Centered icon via inline-flex.
+ * Transparent background + border by default; fills on hover.
+ *
+ * Border-radius: 0.5rem (8px) — matches DensityToggle and search input.
+ */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 2.25rem;    /* 36px */
+  height: 2.25rem;   /* 36px */
+  padding: 0;
+  flex-shrink: 0;
+
+  /* Button reset */
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;    /* 8px */
+  cursor: pointer;
+
+  /* Icon color — secondary ink; active states inherit via currentColor */
+  color: var(--ink-secondary);
+
+  /* Smooth hover/active transitions */
+  transition:
+    background var(--shell-nav-transition, 220ms ease),
+    border-color var(--shell-nav-transition, 220ms ease),
+    color var(--shell-nav-transition, 220ms ease);
+}
+
+/* ── Hover ────────────────────────────────────────────────────────────────── */
+
+.toggle:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-default);
+  color: var(--ink-primary);
+}
+
+/* ── Active / pressed (momentary) ────────────────────────────────────────── */
+
+.toggle:active {
+  background: var(--surface-active);
+}
+
+/* ── Dark mode active — subtle brand tint on icon when dark mode is on ────── */
+
+/**
+ * When dark mode is active (data-dark="true"), tint the icon with brand ink
+ * so users know dark mode is the currently active state.
+ * This is a subtle reinforcement — the icon itself (sun) already communicates
+ * the current state visually.
+ */
+.toggle[data-dark="true"] {
+  color: var(--ink-brand);
+}
+
+.toggle[data-dark="true"]:hover {
+  color: var(--ink-brand);
+  background: var(--surface-hover);
+}
+
+/* ── Focus visible ────────────────────────────────────────────────────────── */
+
+.toggle:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* ── Icon ─────────────────────────────────────────────────────────────────── */
+
+/**
+ * .icon — 16×16 SVG (sun or moon).
+ *
+ * flex-shrink: 0 prevents compression at narrow widths.
+ * color is inherited from .toggle so hover/active states tint the SVG
+ * automatically via currentColor.
+ *
+ * The icon is purely decorative — aria-hidden="true" is set on the SVG.
+ * The accessible name comes from the button's aria-label.
+ */
+.icon {
+  width: 1rem;    /* 16px */
+  height: 1rem;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────── */
+
+/**
+ * The icon swap (sun ↔ moon) involves no animation — only a React re-render.
+ * The hover background transition is suppressed when prefers-reduced-motion
+ * is active to comply with the motion reduction preference.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .toggle {
+    transition: none;
+  }
+}

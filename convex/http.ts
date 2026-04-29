@@ -21,6 +21,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { authSyncHandler } from "./auth";
 
 // ─── CORS helper ─────────────────────────────────────────────────────────────
 
@@ -220,6 +221,30 @@ http.route({
   path: "/api/health",
   method: "GET",
   handler: healthHandler,
+});
+
+// ─── Auth sync ────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/auth/sync
+ *
+ * Validates a Kinde JWT (RS256 via JWKS) and upserts the verified user
+ * record into the Convex `users` table.  Called by both the INVENTORY
+ * dashboard and SCAN mobile app after a successful Kinde login.
+ *
+ * See convex/auth.ts for full implementation and response contract.
+ */
+http.route({
+  path: "/api/auth/sync",
+  method: "POST",
+  handler: authSyncHandler,
+});
+
+// CORS preflight for /api/auth/sync
+http.route({
+  path: "/api/auth/sync",
+  method: "OPTIONS",
+  handler: authSyncHandler,
 });
 
 export default http;

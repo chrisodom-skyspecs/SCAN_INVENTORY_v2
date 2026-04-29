@@ -92,15 +92,15 @@ import {
   useId,
 } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
-import { api } from "../../../../../convex/_generated/api";
 import {
   useGenerateDamagePhotoUploadUrl,
   useSubmitDamagePhoto,
 } from "../../../../hooks/use-damage-reports";
 import { StatusPill } from "../../../../components/StatusPill";
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { useScanCaseDetail, useScanChecklist } from "../../../../hooks/use-scan-queries";
 import type { DamagePhotoAnnotation } from "../../../../hooks/use-damage-reports";
+import { useKindeUser } from "../../../../hooks/use-kinde-user";
 import { trackEvent, generateUUID } from "../../../../lib/telemetry.lib";
 import { TelemetryEventName } from "../../../../types/telemetry.types";
 import styles from "./page.module.css";
@@ -123,16 +123,6 @@ type Severity = "minor" | "moderate" | "severe";
 /** Pending annotation — awaiting a tap on the photo preview to place the pin */
 interface PendingAnnotation {
   label: string;
-}
-
-// ─── User identity helper ─────────────────────────────────────────────────────
-
-/**
- * Returns the current user's ID and display name.
- * Replace with useKindeAuth() when full auth integration is wired.
- */
-function useCurrentUser(): { id: string; name: string } {
-  return { id: "scan-user", name: "Field Technician" };
 }
 
 // ─── Severity config ──────────────────────────────────────────────────────────
@@ -420,20 +410,21 @@ export function ScanDamageReportClient({
 
   /**
    * Subscribe to the case document so we can display the label and status.
-   * This subscription also re-evaluates automatically after `submitDamagePhoto`
-   * touches `cases.updatedAt`.
+   * useScanCaseDetail delegates to useCaseById via the SCAN query layer.
+   * Re-evaluates automatically after `submitDamagePhoto` touches `cases.updatedAt`.
    */
-  const caseDoc = useQuery(api.cases.getCaseById, { caseId: caseId as Id<"cases"> });
+  const caseDoc = useScanCaseDetail(caseId);
 
   /**
    * Subscribe to manifest items so the technician can link the photo to a
    * specific packing list item via the item selector.
+   * useScanChecklist delegates to useChecklistByCase via the SCAN query layer.
    *
    * After `submitDamagePhoto` patches a manifest item's status to "damaged",
    * this subscription re-evaluates and the checklist view on other tabs
    * automatically shows the updated state.
    */
-  const manifestItems = useQuery(api.checklists.getChecklistByCase, { caseId: caseId as Id<"cases"> });
+  const manifestItems = useScanChecklist(caseId);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -459,7 +450,7 @@ export function ScanDamageReportClient({
   const submitDamagePhoto = useSubmitDamagePhoto();
 
   // ── User identity ─────────────────────────────────────────────────────────
-  const user = useCurrentUser();
+  const user = useKindeUser();
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [photoFile, setPhotoFile]         = useState<File | null>(null);

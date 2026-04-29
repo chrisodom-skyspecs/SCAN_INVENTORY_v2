@@ -33,15 +33,20 @@
  * Query functions
  * ───────────────
  * Case-scoped (by caseId):
- *   getCustodyRecordsByCase   — all handoffs for one case, most recent first
- *   getLatestCustodyRecord    — single most recent handoff for a case
- *   getCustodyChain           — full chronological chain for audit trail
+ *   getCustodyRecordsByCase          — all handoffs for one case, most recent first
+ *   getCustodyRecordsByCaseInRange   — case-scoped handoffs within a date window
+ *   getLatestCustodyRecord           — single most recent handoff for a case
+ *   getCustodyChain                  — full chronological chain for audit trail
  *
  * Custodian identity-scoped (by userId):
- *   getCustodyRecordsByCustodian    — all records where toUserId = userId
- *   getCustodyRecordsByTransferrer  — all records where fromUserId = userId
- *   getCustodyRecordsByParticipant  — all records where userId is from OR to
- *   getCustodianIdentitySummary     — current caseIds held + stats for a user
+ *   getCustodyRecordsByCustodian        — all records where toUserId = userId
+ *   getCustodyRecordsByCustodianInRange — same, within a transferredAt window
+ *   getCustodyRecordsByTransferrer      — all records where fromUserId = userId
+ *   getCustodyRecordsByTransferrerInRange — same, within a transferredAt window
+ *   getCustodyRecordsByReporter         — alias of by-transferrer (Sub-AC 4 contract)
+ *   getCustodyRecordsByReporterInRange  — by-reporter, within a transferredAt window
+ *   getCustodyRecordsByParticipant      — records where userId is from OR to
+ *   getCustodianIdentitySummary         — current caseIds held + stats for a user
  *
  * Fleet-wide:
  *   listAllCustodyTransfers   — all handoffs, optional date-range filter
@@ -71,8 +76,9 @@
  *   const history = useQuery(api.custody.getCustodyRecordsByParticipant, { userId });
  */
 
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
 import { v } from "convex/values";
+import type { Auth, UserIdentity } from "convex/server";
 import {
   projectCustodyRecord,
   sortRecordsDescending,
@@ -83,6 +89,23 @@ import {
   computeCustodianIdentitySummary,
 } from "./custodyHelpers";
 
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+
+/**
+ * Asserts that the calling client has a verified Kinde JWT.
+ * Throws [AUTH_REQUIRED] for unauthenticated requests.
+ */
+async function requireAuth(ctx: { auth: Auth }): Promise<UserIdentity> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error(
+      "[AUTH_REQUIRED] Unauthenticated. Provide a valid Kinde access token. " +
+      "Ensure the client is wrapped in ConvexProviderWithAuth and the user is signed in."
+    );
+  }
+  return identity;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 // Re-export types from the helpers module so callers only need one import path.
@@ -91,6 +114,10 @@ export type {
   CustodyTransferSummary,
   CustodianIdentitySummary,
 } from "./custodyHelpers";
+
+// Re-export HandoffCustodyResult from custodyHandoffs so existing imports from
+// "custody" continue to work without modification.
+export type { HandoffCustodyResult } from "./custodyHandoffs";
 
 // ─── getCustodyRecordsByCase ──────────────────────────────────────────────────
 
@@ -118,6 +145,7 @@ export type {
 export const getCustodyRecordsByCase = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
     const rows = await ctx.db
       .query("custodyRecords")
       .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
@@ -152,12 +180,17 @@ export const getCustodyRecordsByCase = query({
 export const getLatestCustodyRecord = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord | null> => {
-    const rows = await ctx.db
+    await requireAuth(ctx);
+    // Use the by_case_transferred_at compound index with desc ordering to fetch
+    // only the single most-recent row — O(log n + 1) instead of O(log n + |records|)
+    // + in-memory sort. Significant improvement for cases with many historical handoffs.
+    const row = await ctx.db
       .query("custodyRecords")
-      .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
-      .collect();
+      .withIndex("by_case_transferred_at", (q) => q.eq("caseId", args.caseId))
+      .order("desc")
+      .first();
 
-    return pickLatestRecord(rows.map(projectCustodyRecord));
+    return row ? projectCustodyRecord(row) : null;
   },
 });
 
@@ -185,12 +218,16 @@ export const getLatestCustodyRecord = query({
 export const getCustodyChain = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
+    // Use the by_case_transferred_at index with asc order to retrieve the chain
+    // already sorted chronologically — no in-memory sort needed.
     const rows = await ctx.db
       .query("custodyRecords")
-      .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
+      .withIndex("by_case_transferred_at", (q) => q.eq("caseId", args.caseId))
+      .order("asc")
       .collect();
 
-    return sortRecordsAscending(rows.map(projectCustodyRecord));
+    return rows.map(projectCustodyRecord);
   },
 });
 
@@ -235,6 +272,7 @@ export const listAllCustodyTransfers = query({
     until: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
     const allRows = await ctx.db.query("custodyRecords").collect();
     const projected = allRows.map(projectCustodyRecord);
     const filtered  = applyDateRangeFilter(projected, args.since, args.until);
@@ -272,6 +310,7 @@ export const getCustodyTransferSummary = query({
     until: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyTransferSummary> => {
+    await requireAuth(ctx);
     const allRows  = await ctx.db.query("custodyRecords").collect();
     const projected = allRows.map(projectCustodyRecord);
     const filtered  = applyDateRangeFilter(projected, args.since, args.until);
@@ -319,6 +358,7 @@ export const getCustodyRecordsByCustodian = query({
     userId: v.string(),
   },
   handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
     const rows = await ctx.db
       .query("custodyRecords")
       .withIndex("by_to_user", (q) => q.eq("toUserId", args.userId))
@@ -360,6 +400,7 @@ export const getCustodyRecordsByTransferrer = query({
     userId: v.string(),
   },
   handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
     const rows = await ctx.db
       .query("custodyRecords")
       .withIndex("by_from_user", (q) => q.eq("fromUserId", args.userId))
@@ -406,6 +447,7 @@ export const getCustodyRecordsByParticipant = query({
     userId: v.string(),
   },
   handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
     // Two separate index scans — Convex does not support OR on indexes.
     const [toRows, fromRows] = await Promise.all([
       ctx.db
@@ -475,6 +517,7 @@ export const getCustodianIdentitySummary = query({
     userId: v.string(),
   },
   handler: async (ctx, args): Promise<import("./custodyHelpers").CustodianIdentitySummary> => {
+    await requireAuth(ctx);
     // Collect all records where the user appears as sender or receiver.
     const [toRows, fromRows] = await Promise.all([
       ctx.db
@@ -503,295 +546,303 @@ export const getCustodianIdentitySummary = query({
   },
 });
 
-// ─── handoffCustody — mutation ────────────────────────────────────────────────
+// ─── getCustodyRecordsByCaseInRange ──────────────────────────────────────────
 
 /**
- * Return value of the handoffCustody mutation.
- * Exported so client-side hooks can expose a typed result to SCAN app components.
+ * Subscribe to all custody records for a case within a `transferredAt` window.
+ *
+ * Returns the handoff records for the supplied case whose `transferredAt`
+ * timestamp falls inside the inclusive `[fromTimestamp, toTimestamp]` window
+ * (epoch ms), sorted by `transferredAt` descending (most recent within the
+ * window first).
+ *
+ * Use cases:
+ *   • T5 audit panel — narrowing the custody chain to a time slice
+ *   • Compliance exports — "all handoffs for CASE-007 during the deployment"
+ *   • Operations review — "who held this case during last week?"
+ *
+ * Index path: `custodyRecords.by_case_transferred_at` — Convex evaluates both
+ * the equality predicate (`caseId`) and the range bounds (`transferredAt`) in
+ * the index for an O(log n + |range|) seek.
+ *
+ * Both `fromTimestamp` and `toTimestamp` are inclusive.  Pass `0` for
+ * `fromTimestamp` and a far-future epoch for `toTimestamp` to retrieve all
+ * handoffs for the case without date filtering — though
+ * `getCustodyRecordsByCase` is more idiomatic for that use case.
+ *
+ * Returns an empty array when:
+ *   • No handoffs exist within the window for the case.
+ *   • The caseId is invalid.
+ *   • fromTimestamp > toTimestamp (empty range guard).
+ *
+ * Convex re-runs this query and pushes the diff to all subscribers within
+ * ~100–300 ms whenever a new handoff falls into the subscribed window,
+ * satisfying the ≤ 2-second real-time fidelity requirement.
+ *
+ * Client usage:
+ *   const records = useQuery(api.custody.getCustodyRecordsByCaseInRange, {
+ *     caseId,
+ *     fromTimestamp: shiftStart,
+ *     toTimestamp:   shiftEnd,
+ *   });
  */
-export interface HandoffCustodyResult {
-  /** Convex document ID of the newly created custodyRecords row. */
-  custodyRecordId: string;
-  /** The case that was handed off. */
-  caseId: string;
-  /** Kinde user ID of the outgoing holder. */
-  fromUserId: string;
-  /** Kinde user ID of the incoming holder. */
-  toUserId: string;
-  /** Epoch ms when the handoff was recorded. */
-  handoffAt: number;
-  /** Convex document ID of the custody_handoff audit event. */
-  eventId: string;
-}
-
-/**
- * Record a custody handoff between two Kinde users for a specific case.
- *
- * This is the primary mutation triggered by the SCAN mobile app custody
- * transfer workflow.  After both parties confirm the handoff on the SCAN app,
- * this mutation is called to make the transfer permanent.
- *
- * What this mutation writes (and why it matters for the dashboard):
- * ┌──────────────────────────────┬─────────────────────────────────────────────┐
- * │ Table / field written        │ Dashboard effect                            │
- * ├──────────────────────────────┼─────────────────────────────────────────────┤
- * │ custodyRecords (new row)     │ useCustodyRecordsByCase / useLatestCustody  │
- * │                              │ hooks re-evaluate → T2 panel updates live  │
- * │ cases.assigneeId             │ M2 (assigneeId filter) re-evaluates;        │
- * │                              │ M1/M3 assigneeId filter updates             │
- * │ cases.assigneeName           │ M2 case pin tooltip shows new custodian     │
- * │ cases.lat / .lng             │ All modes withinBounds() — only when        │
- * │                              │ location is provided                        │
- * │ cases.locationName           │ Map pin location label (when provided)      │
- * │ cases.updatedAt              │ M1 by_updated sort index; "N min ago" UI    │
- * │ events "custody_handoff"     │ T5 immutable audit timeline milestone        │
- * │                              │ getCaseAssignmentLayout (T2) re-evaluates  │
- * └──────────────────────────────┴─────────────────────────────────────────────┘
- *
- * Real-time fidelity:
- *   Convex re-evaluates all subscribed queries that read the touched rows
- *   within ~100–300 ms — including:
- *     • getCustodyRecordsByCase / getLatestCustodyRecord  (T2 sidebar)
- *     • getCaseAssignmentLayout                           (T2 layout)
- *     • listCases / getCaseStatus                        (M1–M5 map pins)
- *     • getM2MissionMode                                 (M2 assignment map)
- *   This satisfies the ≤ 2-second real-time fidelity requirement between the
- *   SCAN app handoff action and the INVENTORY dashboard visibility.
- *
- * M2 triggering mechanism:
- *   The M2 assembler (assembleM2) builds its case pin list from cases table rows
- *   and uses cases.assigneeName for pin tooltips.  Patching cases.assigneeId,
- *   cases.assigneeName, and cases.updatedAt causes Convex to invalidate all
- *   subscriptions reading from cases — including getM2MissionMode — and push
- *   the updated response to connected dashboard clients.
- *
- * T2 triggering mechanism:
- *   getCaseAssignmentLayout reads both cases and custodyRecords.  Inserting a
- *   new custodyRecords row AND patching cases triggers both dependencies, so
- *   the T2 panel receives a live update within the Convex reactive window.
- *
- * @param caseId           Convex document ID of the case being transferred.
- * @param fromUserId       Kinde user ID of the outgoing custody holder.
- * @param fromUserName     Display name of the outgoing holder (for UI display).
- * @param toUserId         Kinde user ID of the incoming custody holder.
- * @param toUserName       Display name of the incoming holder.
- * @param handoffAt        Epoch ms when the handoff occurred (provided by the
- *                         SCAN app at confirmation time).  Written as
- *                         custodyRecords.transferredAt and events.timestamp.
- * @param lat              Optional GPS latitude of the handoff location.
- *                         Written to cases.lat for map mode withinBounds() checks.
- * @param lng              Optional GPS longitude of the handoff location.
- * @param locationName     Human-readable location label (e.g. "Site Alpha Gate").
- *                         Written to cases.locationName for map pin tooltips.
- * @param notes            Optional free-text notes entered by the technician at
- *                         handoff time.  Written to custodyRecords.notes.
- * @param signatureStorageId  Optional Convex file storage ID for a captured
- *                         signature image from the SCAN app signing pad.
- *
- * @throws When the case is not found.
- *
- * Client usage (SCAN app custody transfer confirmation screen):
- *   const handoff = useHandoffCustody();
- *
- *   try {
- *     const result = await handoff({
- *       caseId:        resolvedCase._id,
- *       fromUserId:    currentUser.id,
- *       fromUserName:  currentUser.fullName,
- *       toUserId:      recipientUser.id,
- *       toUserName:    recipientUser.fullName,
- *       handoffAt:     Date.now(),
- *       lat:           position.coords.latitude,
- *       lng:           position.coords.longitude,
- *       locationName:  "Site Alpha — Turbine Row 3",
- *       notes:         "All items verified, case intact",
- *     });
- *     // result.custodyRecordId → new custodyRecords row
- *     // result.eventId         → new events row (custody_handoff)
- *   } catch (err) {
- *     // "Case X not found."
- *   }
- */
-export const handoffCustody = mutation({
+export const getCustodyRecordsByCaseInRange = query({
   args: {
-    /**
-     * Convex ID of the case being transferred between users.
-     * The case's assigneeId and assigneeName are updated to the new custodian
-     * so M2 (Assignment Map Mode) map pins reflect the change immediately.
-     */
-    caseId: v.id("cases"),
-
-    /**
-     * Kinde user ID of the person relinquishing custody.
-     * Written to custodyRecords.fromUserId and the audit event payload.
-     */
-    fromUserId: v.string(),
-
-    /**
-     * Display name of the outgoing custody holder.
-     * Written to custodyRecords.fromUserName for dashboard display.
-     */
-    fromUserName: v.string(),
-
-    /**
-     * Kinde user ID of the person receiving custody.
-     * Written to custodyRecords.toUserId AND cases.assigneeId so the M2
-     * assignment map and T2 layout query reflect the new custodian live.
-     */
-    toUserId: v.string(),
-
-    /**
-     * Display name of the incoming custody holder.
-     * Written to custodyRecords.toUserName AND cases.assigneeName so M2
-     * case pin tooltips and the T2 panel "Currently held by" field update.
-     */
-    toUserName: v.string(),
-
-    /**
-     * Epoch ms timestamp of the handoff.
-     * Written to:
-     *   • custodyRecords.transferredAt  — indexed for audit chain ordering
-     *   • events.timestamp              — immutable audit trail timestamp
-     *   • cases.updatedAt               — M1 by_updated sort index
-     */
-    handoffAt: v.number(),
-
-    /**
-     * Optional GPS latitude of the handoff location.
-     * Written to cases.lat — used by all map modes' withinBounds() check.
-     * Only written when provided; preserves last known position otherwise.
-     */
-    lat: v.optional(v.number()),
-
-    /**
-     * Optional GPS longitude of the handoff location.
-     * Written to cases.lng — used by all map modes' withinBounds() check.
-     */
-    lng: v.optional(v.number()),
-
-    /**
-     * Human-readable location label (e.g. "Site Alpha Gate 3").
-     * Written to cases.locationName for map pin tooltips and T2 display.
-     */
-    locationName: v.optional(v.string()),
-
-    /**
-     * Optional free-text notes entered by the field technician at handoff.
-     * Written to custodyRecords.notes for display in the T2/T5 panels.
-     */
-    notes: v.optional(v.string()),
-
-    /**
-     * Optional Convex file storage ID for a signature captured in the SCAN
-     * app signing pad.  Written to custodyRecords.signatureStorageId.
-     * Resolve to a download URL client-side via the useStorageURL hook.
-     */
-    signatureStorageId: v.optional(v.string()),
+    caseId:        v.id("cases"),
+    /** Inclusive lower bound on `transferredAt` (epoch ms). */
+    fromTimestamp: v.number(),
+    /** Inclusive upper bound on `transferredAt` (epoch ms). */
+    toTimestamp:   v.number(),
   },
+  handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
 
-  handler: async (ctx, args): Promise<HandoffCustodyResult> => {
-    const now = args.handoffAt;
+    // Guard: empty range — return immediately without a DB read.
+    if (args.fromTimestamp > args.toTimestamp) return [];
 
-    // ── Verify the case exists ────────────────────────────────────────────────
-    const caseDoc = await ctx.db.get(args.caseId);
-    if (!caseDoc) {
-      throw new Error(`Case ${args.caseId} not found.`);
-    }
+    const rows = await ctx.db
+      .query("custodyRecords")
+      .withIndex("by_case_transferred_at", (q) => q.eq("caseId", args.caseId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("transferredAt"), args.fromTimestamp),
+          q.lte(q.field("transferredAt"), args.toTimestamp),
+        )
+      )
+      .order("desc")
+      .collect();
 
-    // ── Insert custody record ─────────────────────────────────────────────────
-    // This is the primary write that satisfies the AC data contract:
-    //   caseId, fromUserId, toUserId, handoffAt (→ transferredAt), location
-    //
-    // Inserting a new row invalidates all subscribed queries that read from
-    // custodyRecords (getCustodyRecordsByCase, getLatestCustodyRecord,
-    // getCustodyChain, listAllCustodyTransfers) — pushing live updates to the
-    // T2 dashboard panel and SCAN app confirmation screen.
-    const custodyRecordId = await ctx.db.insert("custodyRecords", {
-      caseId:             args.caseId,
-      fromUserId:         args.fromUserId,
-      fromUserName:       args.fromUserName,
-      toUserId:           args.toUserId,
-      toUserName:         args.toUserName,
-      transferredAt:      now,                    // handoffAt maps to transferredAt
-      notes:              args.notes,
-      signatureStorageId: args.signatureStorageId,
-    });
-
-    // ── Patch the case with the new custodian ─────────────────────────────────
-    // Writing assigneeId / assigneeName is what triggers M2 (Assignment Map Mode)
-    // and M1/M3 assigneeId filter re-evaluation:
-    //
-    //   cases.assigneeId   → M2 assembleM2 reads assigneeName on case pins;
-    //                        M1/M3 assigneeId filter ("show my cases" view)
-    //   cases.assigneeName → M2 mission group case list; M1/M3 pin tooltips
-    //   cases.updatedAt    → M1 by_updated sort index; "N min ago" freshness
-    //
-    // Location fields are patched conditionally — only overwrite when the SCAN
-    // app provided a GPS fix, preserving the last known position otherwise.
-    const casePatch: Record<string, unknown> = {
-      assigneeId:   args.toUserId,
-      assigneeName: args.toUserName,
-      updatedAt:    now,
-    };
-
-    if (args.lat          !== undefined) casePatch.lat          = args.lat;
-    if (args.lng          !== undefined) casePatch.lng          = args.lng;
-    if (args.locationName !== undefined) casePatch.locationName = args.locationName;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await ctx.db.patch(args.caseId, casePatch as any);
-
-    // ── Append immutable audit event ──────────────────────────────────────────
-    // The events table is append-only.  custody_handoff events are read by:
-    //   • T5 hash-chain audit panel — getCaseAuditEvents / getCustodyChain
-    //   • getCaseAssignmentLayout   — T2 layout "recent events" section
-    //
-    // The data payload mirrors the custodyRecords fields so the T5 panel can
-    // reconstruct the handoff without joining custodyRecords.
-    const eventId = await ctx.db.insert("events", {
-      caseId:    args.caseId,
-      eventType: "custody_handoff",
-      userId:    args.fromUserId,
-      userName:  args.fromUserName,
-      timestamp: now,
-      data: {
-        custodyRecordId: custodyRecordId.toString(),
-        fromUserId:      args.fromUserId,
-        fromUserName:    args.fromUserName,
-        toUserId:        args.toUserId,
-        toUserName:      args.toUserName,
-        handoffAt:       now,
-        lat:             args.lat,
-        lng:             args.lng,
-        locationName:    args.locationName,
-        notes:           args.notes,
-        signatureStorageId: args.signatureStorageId,
-      },
-    });
-
-    // ── In-app notification for the incoming custodian ────────────────────────
-    // Per constraints: in-app notifications only (no push, no email).
-    // The recipient (toUserId) sees a notification in their dashboard inbox
-    // alerting them that they now have custody of the case.
-    await ctx.db.insert("notifications", {
-      userId:    args.toUserId,
-      type:      "custody_handoff",
-      title:     `Custody transferred: ${caseDoc.label}`,
-      message:   `${args.fromUserName} transferred custody of case "${caseDoc.label}" to you` +
-                 (args.locationName ? ` at ${args.locationName}` : "") +
-                 (args.notes ? `. Note: ${args.notes}` : "."),
-      caseId:    args.caseId,
-      read:      false,
-      createdAt: now,
-    });
-
-    return {
-      custodyRecordId: custodyRecordId.toString(),
-      caseId:          args.caseId,
-      fromUserId:      args.fromUserId,
-      toUserId:        args.toUserId,
-      handoffAt:       now,
-      eventId:         eventId.toString(),
-    };
+    return rows.map(projectCustodyRecord);
   },
 });
+
+// ─── getCustodyRecordsByCustodianInRange ──────────────────────────────────────
+
+/**
+ * Subscribe to custody records where a user is the recipient (`toUserId`)
+ * within a `transferredAt` window.
+ *
+ * Returns the union of `by_to_user` index hits for the supplied Kinde user ID
+ * whose `transferredAt` falls inside the inclusive `[fromTimestamp,
+ * toTimestamp]` window, sorted by `transferredAt` descending.
+ *
+ * Use cases:
+ *   • SCAN app "My Cases received this week"
+ *   • Admin productivity dashboards — per-recipient throughput
+ *   • Compliance — "all handoffs Alice received during the deployment"
+ *
+ * Index path: `custodyRecords.by_to_user` — equality on `toUserId`.  The range
+ * predicate is applied via `.filter()` after the index seek; for typical fleet
+ * volumes (hundreds of records per user) this remains O(log n + |results|)
+ * with negligible filter overhead.
+ *
+ * Returns an empty array when:
+ *   • The user has not received any handoffs within the window.
+ *   • fromTimestamp > toTimestamp.
+ *
+ * Client usage:
+ *   const recent = useQuery(api.custody.getCustodyRecordsByCustodianInRange, {
+ *     userId: kindeUser.id,
+ *     fromTimestamp: weekStart,
+ *     toTimestamp:   weekEnd,
+ *   });
+ */
+export const getCustodyRecordsByCustodianInRange = query({
+  args: {
+    /** Kinde user ID matched against `custodyRecords.toUserId`. */
+    userId:        v.string(),
+    /** Inclusive lower bound on `transferredAt` (epoch ms). */
+    fromTimestamp: v.number(),
+    /** Inclusive upper bound on `transferredAt` (epoch ms). */
+    toTimestamp:   v.number(),
+  },
+  handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
+
+    if (args.fromTimestamp > args.toTimestamp) return [];
+
+    const rows = await ctx.db
+      .query("custodyRecords")
+      .withIndex("by_to_user", (q) => q.eq("toUserId", args.userId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("transferredAt"), args.fromTimestamp),
+          q.lte(q.field("transferredAt"), args.toTimestamp),
+        )
+      )
+      .collect();
+
+    return sortRecordsDescending(rows.map(projectCustodyRecord));
+  },
+});
+
+// ─── getCustodyRecordsByTransferrerInRange ────────────────────────────────────
+
+/**
+ * Subscribe to custody records where a user is the transferrer (`fromUserId`)
+ * within a `transferredAt` window.
+ *
+ * Returns rows from the `by_from_user` index for the supplied Kinde user ID
+ * whose `transferredAt` is inside the inclusive `[fromTimestamp, toTimestamp]`
+ * window, sorted by `transferredAt` descending.
+ *
+ * In the SCAN→INVENTORY data model, the "reporter" of a custody handoff is
+ * the technician who initiates the transfer (i.e., the outgoing holder).
+ * `getCustodyRecordsByTransferrerInRange` is the date-scoped "by reporter"
+ * query for custody events.
+ *
+ * Use cases:
+ *   • SCAN app — "Cases I handed off this week"
+ *   • Admin dashboards — per-transferrer throughput
+ *   • Compliance — "all handoffs initiated by Alice during the deployment"
+ *
+ * Index path: `custodyRecords.by_from_user`.
+ *
+ * Returns an empty array when:
+ *   • The user has not initiated any handoffs within the window.
+ *   • fromTimestamp > toTimestamp.
+ *
+ * Client usage:
+ *   const recent = useQuery(api.custody.getCustodyRecordsByTransferrerInRange, {
+ *     userId: kindeUser.id,
+ *     fromTimestamp: dayStart,
+ *     toTimestamp:   dayEnd,
+ *   });
+ */
+export const getCustodyRecordsByTransferrerInRange = query({
+  args: {
+    /** Kinde user ID matched against `custodyRecords.fromUserId`. */
+    userId:        v.string(),
+    /** Inclusive lower bound on `transferredAt` (epoch ms). */
+    fromTimestamp: v.number(),
+    /** Inclusive upper bound on `transferredAt` (epoch ms). */
+    toTimestamp:   v.number(),
+  },
+  handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
+
+    if (args.fromTimestamp > args.toTimestamp) return [];
+
+    const rows = await ctx.db
+      .query("custodyRecords")
+      .withIndex("by_from_user", (q) => q.eq("fromUserId", args.userId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("transferredAt"), args.fromTimestamp),
+          q.lte(q.field("transferredAt"), args.toTimestamp),
+        )
+      )
+      .collect();
+
+    return sortRecordsDescending(rows.map(projectCustodyRecord));
+  },
+});
+
+// ─── getCustodyRecordsByReporter ──────────────────────────────────────────────
+
+/**
+ * Subscribe to all custody records "reported" by a specific user.
+ *
+ * In the SCAN→INVENTORY data contract a custody handoff is "reported" by the
+ * technician who initiates the transfer — i.e., the outgoing holder
+ * (`fromUserId`).  This query is a clearer-named alias for
+ * `getCustodyRecordsByTransferrer` so dashboard / SCAN code reading the
+ * Sub-AC 4 contract can reference it directly:
+ *
+ *   "query functions for custody events ... by reporter"
+ *                                              ↑
+ *                          getCustodyRecordsByReporter
+ *
+ * Returns every record where `fromUserId = reporterId`, sorted by
+ * `transferredAt` descending.  Uses the `by_from_user` index — O(log n +
+ * |results|).
+ *
+ * Returns an empty array when the user has never initiated a handoff.
+ *
+ * Client usage:
+ *   const reports = useQuery(api.custody.getCustodyRecordsByReporter, {
+ *     reporterId: kindeUser.id,
+ *   });
+ */
+export const getCustodyRecordsByReporter = query({
+  args: {
+    /**
+     * Kinde user ID of the technician who reported (initiated) the handoff.
+     * Matched against `custodyRecords.fromUserId`.
+     */
+    reporterId: v.string(),
+  },
+  handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
+
+    const rows = await ctx.db
+      .query("custodyRecords")
+      .withIndex("by_from_user", (q) => q.eq("fromUserId", args.reporterId))
+      .collect();
+
+    return sortRecordsDescending(rows.map(projectCustodyRecord));
+  },
+});
+
+// ─── getCustodyRecordsByReporterInRange ───────────────────────────────────────
+
+/**
+ * Subscribe to custody handoffs "reported" by a specific user within a window.
+ *
+ * Date-scoped variant of `getCustodyRecordsByReporter`.  Returns records where
+ * `fromUserId = reporterId` and `transferredAt` falls inside the inclusive
+ * `[fromTimestamp, toTimestamp]` window, sorted by `transferredAt` descending.
+ *
+ * This is the reporter-specific equivalent of `listAllCustodyTransfers` and
+ * the SCAN-app-friendly form of "show me my handoffs in this period".
+ *
+ * Returns an empty array when:
+ *   • The reporter has no handoffs in the window.
+ *   • fromTimestamp > toTimestamp.
+ *
+ * Client usage:
+ *   const today = useQuery(api.custody.getCustodyRecordsByReporterInRange, {
+ *     reporterId:    kindeUser.id,
+ *     fromTimestamp: startOfDay,
+ *     toTimestamp:   endOfDay,
+ *   });
+ */
+export const getCustodyRecordsByReporterInRange = query({
+  args: {
+    reporterId:    v.string(),
+    /** Inclusive lower bound on `transferredAt` (epoch ms). */
+    fromTimestamp: v.number(),
+    /** Inclusive upper bound on `transferredAt` (epoch ms). */
+    toTimestamp:   v.number(),
+  },
+  handler: async (ctx, args): Promise<import("./custodyHelpers").CustodyRecord[]> => {
+    await requireAuth(ctx);
+
+    if (args.fromTimestamp > args.toTimestamp) return [];
+
+    const rows = await ctx.db
+      .query("custodyRecords")
+      .withIndex("by_from_user", (q) => q.eq("fromUserId", args.reporterId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("transferredAt"), args.fromTimestamp),
+          q.lte(q.field("transferredAt"), args.toTimestamp),
+        )
+      )
+      .collect();
+
+    return sortRecordsDescending(rows.map(projectCustodyRecord));
+  },
+});
+
+// ─── handoffCustody — mutation (canonical: convex/custodyHandoffs.ts) ─────────
+//
+// The handoffCustody mutation has been moved to convex/custodyHandoffs.ts, which
+// is the canonical home for all custody handoff write operations.  The mutation
+// is exposed in the Convex API at api.custodyHandoffs.handoffCustody.
+//
+// For backward compatibility:
+//   • HandoffCustodyResult is re-exported above from "./custodyHandoffs"
+//   • Client hooks in use-scan-mutations.ts reference api.custodyHandoffs.handoffCustody
+//
+// See convex/custodyHandoffs.ts for the full implementation and documentation.

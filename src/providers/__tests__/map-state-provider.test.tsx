@@ -1,20 +1,23 @@
 /**
  * @vitest-environment jsdom
  *
- * Integration tests for MapStateProvider — URL sync behaviours.
+ * Integration tests for MapStateProvider -- URL sync behaviours.
  *
  * Strategy
- * ────────
+ * --------
  * Next.js App Router hooks (useSearchParams, useRouter, usePathname) are
  * mocked at the module level so tests run in jsdom without a real Next.js
  * server.  This lets us verify:
  *
- *   1. Hydration — initial state decoded from URL params.
- *   2. setUrlState — router.replace/push called with correct URL.
- *   3. setEphemeral — state updates without touching the URL.
- *   4. resetUrlState — navigates to bare pathname.
- *   5. Selector hooks — each hook returns the correct field.
- *   6. Error boundary — useMapState throws when used outside provider.
+ *   1. Hydration -- initial state decoded from URL params.
+ *   2. setUrlState -- history.replaceState/pushState called with correct URL.
+ *   3. setEphemeral -- state updates without touching the URL.
+ *   4. resetUrlState -- navigates to bare pathname.
+ *   5. Selector hooks -- each hook returns the correct field.
+ *   6. Error boundary -- useMapState throws when used outside provider.
+ *
+ * Sub-AC 3 (AC 110103): setUrlState calls window.history.replaceState
+ * (no navigation side-effects) instead of router.replace.
  */
 
 import React from "react";
@@ -23,15 +26,12 @@ import {
   act,
   type RenderHookOptions,
 } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// ─── Mock next/navigation ─────────────────────────────────────────────────────
+// ---- Mock next/navigation ---------------------------------------------------
 
-const mockReplace = vi.fn();
-const mockPush = vi.fn();
 const mockPathname = vi.fn(() => "/inventory");
 
-// searchParams are backed by a URLSearchParams instance we can swap out
 let _searchParamsString = "";
 const mockSearchParams = {
   get(key: string): string | null {
@@ -43,12 +43,12 @@ const mockSearchParams = {
 };
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: mockReplace, push: mockPush }),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   usePathname: () => mockPathname(),
   useSearchParams: () => mockSearchParams,
 }));
 
-// ─── Imports (after mock) ─────────────────────────────────────────────────────
+// ---- Imports (after mock) ---------------------------------------------------
 
 import {
   MapStateProvider,
@@ -67,7 +67,7 @@ import {
 } from "../map-state-provider";
 import { MAP_URL_STATE_DEFAULTS } from "@/types/map";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ---- Helpers ----------------------------------------------------------------
 
 function wrapper({ children }: { children: React.ReactNode }) {
   return <MapStateProvider>{children}</MapStateProvider>;
@@ -80,17 +80,38 @@ function renderWithProvider<T>(
   return renderHook(hook, { wrapper, ...options });
 }
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
+/** Extract url (3rd arg) from a replaceState / pushState spy call. */
+function getSpyUrl(spy: ReturnType<typeof vi.spyOn>, callIndex = 0): string {
+  const call = spy.mock.calls[callIndex] as [unknown, unknown, string];
+  return call[2];
+}
+
+// ---- Spies on window.history (Sub-AC 3) ------------------------------------
+
+let replaceStateSpy: ReturnType<typeof vi.spyOn>;
+let pushStateSpy: ReturnType<typeof vi.spyOn>;
+
+// ---- Setup -----------------------------------------------------------------
 
 beforeEach(() => {
   _searchParamsString = "";
-  mockReplace.mockClear();
-  mockPush.mockClear();
+  // Reset pathname mock
+  mockPathname.mockReturnValue("/inventory");
+  // Set clean URL before spy so this setup call is NOT recorded.
+  window.history.replaceState(null, "", "/inventory");
+  replaceStateSpy = vi.spyOn(window.history, "replaceState");
+  pushStateSpy = vi.spyOn(window.history, "pushState");
 });
 
-// ─── 1. Hydration from URL ────────────────────────────────────────────────────
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
-describe("MapStateProvider — hydration from URL", () => {
+// ============================================================================
+// 1. Hydration from URL
+// ============================================================================
+
+describe("MapStateProvider -- hydration from URL", () => {
   it("hydrates with defaults when URL has no params", () => {
     _searchParamsString = "";
     const { result } = renderWithProvider(() => useMapState());
@@ -157,31 +178,33 @@ describe("MapStateProvider — hydration from URL", () => {
   });
 });
 
-// ─── 2. setUrlState — pushes to URL ──────────────────────────────────────────
+// ============================================================================
+// 2. setUrlState -- Sub-AC 3: calls history.replaceState (not router.replace)
+// ============================================================================
 
-describe("MapStateProvider — setUrlState pushes to URL", () => {
-  it("calls router.replace with encoded URL (default behaviour)", () => {
+describe("MapStateProvider -- setUrlState writes to history (Sub-AC 3)", () => {
+  it("calls history.replaceState with encoded URL (default behaviour)", () => {
     const { result } = renderWithProvider(() => useMapState());
 
     act(() => {
       result.current.setUrlState({ view: "M2" });
     });
 
-    expect(mockReplace).toHaveBeenCalledOnce();
-    const [url] = mockReplace.mock.calls[0] as [string];
+    expect(replaceStateSpy).toHaveBeenCalledOnce();
+    const url = getSpyUrl(replaceStateSpy);
     expect(url).toContain("view=M2");
     expect(url).toContain("/inventory");
   });
 
-  it("calls router.push when replace=false", () => {
+  it("calls history.pushState when replace=false", () => {
     const { result } = renderWithProvider(() => useMapState());
 
     act(() => {
       result.current.setUrlState({ view: "M3" }, { replace: false });
     });
 
-    expect(mockPush).toHaveBeenCalledOnce();
-    expect(mockReplace).not.toHaveBeenCalled();
+    expect(pushStateSpy).toHaveBeenCalledOnce();
+    expect(replaceStateSpy).not.toHaveBeenCalled();
   });
 
   it("uses a custom pathname when provided in options", () => {
@@ -191,7 +214,7 @@ describe("MapStateProvider — setUrlState pushes to URL", () => {
       result.current.setUrlState({ view: "M4" }, { pathname: "/custom" });
     });
 
-    const [url] = mockReplace.mock.calls[0] as [string];
+    const url = getSpyUrl(replaceStateSpy);
     expect(url).toContain("/custom");
   });
 
@@ -206,7 +229,7 @@ describe("MapStateProvider — setUrlState pushes to URL", () => {
       });
     });
 
-    const [url] = mockReplace.mock.calls[0] as [string];
+    const url = getSpyUrl(replaceStateSpy);
     expect(url).toContain("view=M3");
     expect(url).toContain("case=case-x");
     expect(url).toContain("window=T2");
@@ -216,28 +239,24 @@ describe("MapStateProvider — setUrlState pushes to URL", () => {
     const { result } = renderWithProvider(() => useMapState());
 
     act(() => {
-      // Only non-default view; window should be omitted (it's already T1)
       result.current.setUrlState({ view: "M2" });
     });
 
-    const [url] = mockReplace.mock.calls[0] as [string];
+    const url = getSpyUrl(replaceStateSpy);
     expect(url).not.toContain("window=");
     expect(url).not.toContain("case=");
   });
 
   it("produces a bare pathname (no ?) when all params are defaults", () => {
-    // Set URL to a non-default state first
     _searchParamsString = "view=M3";
 
     const { result } = renderWithProvider(() => useMapState());
 
     act(() => {
-      // Resetting back to M1 (default) should produce clean URL
       result.current.setUrlState({ view: "M1" });
     });
 
-    const [url] = mockReplace.mock.calls[0] as [string];
-    // Should be just the pathname with no query string
+    const url = getSpyUrl(replaceStateSpy);
     expect(url).toBe("/inventory");
   });
 
@@ -247,20 +266,21 @@ describe("MapStateProvider — setUrlState pushes to URL", () => {
     const { result } = renderWithProvider(() => useMapState());
 
     act(() => {
-      // Only changing window; view and case should be preserved
       result.current.setUrlState({ window: "T3" });
     });
 
-    const [url] = mockReplace.mock.calls[0] as [string];
+    const url = getSpyUrl(replaceStateSpy);
     expect(url).toContain("view=M3");
     expect(url).toContain("case=existing");
     expect(url).toContain("window=T3");
   });
 });
 
-// ─── 3. setEphemeral — no URL side-effects ───────────────────────────────────
+// ============================================================================
+// 3. setEphemeral -- no URL side-effects
+// ============================================================================
 
-describe("MapStateProvider — setEphemeral", () => {
+describe("MapStateProvider -- setEphemeral", () => {
   it("updates ephemeral state without touching the URL", () => {
     const { result } = renderWithProvider(() => useMapState());
 
@@ -269,8 +289,9 @@ describe("MapStateProvider — setEphemeral", () => {
     });
 
     expect(result.current.state.ephemeral.isMapLoading).toBe(true);
-    expect(mockReplace).not.toHaveBeenCalled();
-    expect(mockPush).not.toHaveBeenCalled();
+    // Sub-AC 3: ephemeral changes must NOT write to history
+    expect(replaceStateSpy).not.toHaveBeenCalled();
+    expect(pushStateSpy).not.toHaveBeenCalled();
   });
 
   it("does not overwrite URL state", () => {
@@ -300,33 +321,39 @@ describe("MapStateProvider — setEphemeral", () => {
   });
 });
 
-// ─── 4. resetUrlState ────────────────────────────────────────────────────────
+// ============================================================================
+// 4. resetUrlState
+// ============================================================================
 
-describe("MapStateProvider — resetUrlState", () => {
-  it("navigates to bare pathname", () => {
+describe("MapStateProvider -- resetUrlState", () => {
+  it("navigates to bare pathname via history.replaceState", () => {
     const { result } = renderWithProvider(() => useMapState());
 
     act(() => {
       result.current.resetUrlState();
     });
 
-    expect(mockReplace).toHaveBeenCalledOnce();
-    expect(mockReplace.mock.calls[0][0]).toBe("/inventory");
+    expect(replaceStateSpy).toHaveBeenCalledOnce();
+    const url = getSpyUrl(replaceStateSpy);
+    expect(url).toBe("/inventory");
   });
 
-  it("calls router.push when replace=false", () => {
+  it("calls history.pushState when replace=false", () => {
     const { result } = renderWithProvider(() => useMapState());
 
     act(() => {
       result.current.resetUrlState({ replace: false });
     });
 
-    expect(mockPush).toHaveBeenCalledOnce();
-    expect(mockPush.mock.calls[0][0]).toBe("/inventory");
+    expect(pushStateSpy).toHaveBeenCalledOnce();
+    const url = getSpyUrl(pushStateSpy);
+    expect(url).toBe("/inventory");
   });
 });
 
-// ─── 5. Selector hooks ────────────────────────────────────────────────────────
+// ============================================================================
+// 5. Selector hooks
+// ============================================================================
 
 describe("Selector hooks", () => {
   beforeEach(() => {
@@ -378,7 +405,6 @@ describe("Selector hooks", () => {
     const { result, rerender } = renderWithProvider(() => useSetMapUrlState());
     const ref1 = result.current;
     rerender();
-    // The function reference should be stable across re-renders with no state change
     expect(result.current).toBe(ref1);
   });
 
@@ -399,11 +425,12 @@ describe("Selector hooks", () => {
   });
 });
 
-// ─── 6. Error boundary ────────────────────────────────────────────────────────
+// ============================================================================
+// 6. Error boundary
+// ============================================================================
 
-describe("useMapState — outside provider", () => {
+describe("useMapState -- outside provider", () => {
   it("throws a descriptive error", () => {
-    // Suppress React's error logging during this test
     const consoleSpy = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});

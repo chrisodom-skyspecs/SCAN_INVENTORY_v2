@@ -2,34 +2,76 @@
  * T1Overview — Case Summary Panel
  *
  * The primary landing view for a selected case in the INVENTORY dashboard.
- * Displays:
- *   - Case label and current lifecycle status
- *   - Location (last known) and assignee
- *   - Notes
- *   - Compact FedEx tracking badge — conditionally rendered when a shipment
- *     with a tracking number exists for the case.  Links to T4 for full detail.
- *   - Checklist progress summary (progress bar + counts)
- *   - Last updated timestamp
+ * Renders inside T1Shell (50/50 CSS grid) with content split across two
+ * equal panels:
+ *
+ *   Left panel  — interactive Mapbox GL JS mini-map (T1MapPanel):
+ *     - React-map-gl Map centred on the case's last-known lat/lng
+ *     - Status-colored CSS pin marker at the case location (data-status)
+ *     - Location name / coordinate overlay badge
+ *     - Responsive fallback placeholders (loading, no-coords, no-token)
+ *
+ *   Right panel — case identity and operational state:
+ *     - Case label, QR code, and current lifecycle status pill
+ *     - Key metadata: location, assignee, timestamps
+ *     - Custody chain summary (real-time via useLatestCustodyRecord)
+ *     - Compact FedEx tracking badge (conditional — shown when tracking exists)
+ *     - Checklist progress summary (progress bar + counts)
+ *     - Damage summary (conditional — shown when items are marked damaged)
+ *     - Notes
+ *
+ * Map integration (Sub-AC 2):
+ *   - T1MapPanel uses react-map-gl (Mapbox GL JS) to render an interactive map.
+ *   - The <Marker> is positioned at the case's lat/lng with a CSS pin whose
+ *     color is driven by the case status via data-status attribute tokens.
+ *   - mapboxToken is read from NEXT_PUBLIC_MAPBOX_TOKEN; when absent, a
+ *     styled placeholder with coordinate text is shown instead.
+ *   - The map subscribes to getCaseById independently so the pin position
+ *     updates in real time via Convex (≤ 2-second fidelity).
  *
  * FedEx tracking integration (Sub-AC 3b):
  *   - Subscribes to `api.shipping.listShipmentsByCase` via `useFedExTracking`.
  *   - The tracking section is ONLY rendered when `hasTracking` is true.
  *   - Shows the carrier, tracking number, status badge, and ETA inline.
+ *
+ * T1Shell integration:
+ *   T1Overview uses T1Shell as its layout container with `leftPanelHasMap={true}`.
+ *   This removes the standard padding from the left panel so T1MapPanel can fill
+ *   it edge-to-edge (position: absolute; inset: 0).  T1Shell is a 50/50 CSS
+ *   grid — each panel takes 1fr (exactly half the available width).  The shell
+ *   stacks to a single column at ≤ 48rem viewport width for narrow contexts.
+ *   T1Overview is lazy-loaded by CaseDetailPanel when `window === "T1"` — the
+ *   shell is therefore automatically part of the T1–T5 router/switcher.
  */
 
 "use client";
 
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { StatusPill } from "../StatusPill";
 import { useFedExTracking } from "../../hooks/use-fedex-tracking";
-import { useChecklistSummary } from "../../hooks/use-checklist";
+import { useChecklistSummary } from "../../queries/checklist";
 import { useDamageReportSummary } from "../../hooks/use-damage-reports";
 import { TrackingStatus } from "../TrackingStatus";
 import CustodySection from "./CustodySection";
+import T1Shell from "./T1Shell";
+import { T1MapPanel } from "./T1MapPanel";
+import { T1TimelinePanel } from "./T1TimelinePanel";
+import { InlineStatusEditor } from "./InlineStatusEditor";
+import { InlineHolderEditor } from "./InlineHolderEditor";
+import { LabelManagementPanel } from "../LabelManagementPanel";
+import { useCurrentUser } from "../../hooks/use-current-user";
+import { OPERATIONS } from "../../../convex/rbac";
 import styles from "./T1Overview.module.css";
 import shared from "./shared.module.css";
 import type { CaseStatus } from "../../../convex/cases";
+
+// ─── Mapbox token ────────────────────────────────────────────────────────────
+//
+// Read from the NEXT_PUBLIC_MAPBOX_TOKEN environment variable.
+// When absent, T1MapPanel renders a styled placeholder with coordinate text.
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -50,8 +92,6 @@ function formatDate(epochMs: number): string {
     minute: "2-digit",
   });
 }
-
-// Note: TrackingBanner replaced by shared <TrackingStatus variant="compact" />
 
 // ─── Checklist progress mini-bar ─────────────────────────────────────────────
 
@@ -168,11 +208,16 @@ export default function T1Overview({
   onNavigateToShipping,
 }: T1OverviewProps) {
   // Subscribe to full case document
-  const caseDoc = useQuery(api.cases.getCaseById, { caseId });
+  const caseDoc = useQuery(api.cases.getCaseById, { caseId: caseId as Id<"cases"> });
+
+  // Permission check — only admin/technician can manage QR labels.
+  // Called unconditionally (hook rules) before any early returns.
+  const { can } = useCurrentUser();
+  const canManageLabels = can(OPERATIONS.QR_CODE_GENERATE);
 
   // FedEx tracking integration — reactive subscription via useFedExTracking.
   // Destructure all values needed by the controlled TrackingStatus below,
-  // so we avoid a second Convex subscription inside the child component.
+  // so we avoid a second Convex subscription for the same caseId.
   const {
     latestShipment,
     hasTracking,
@@ -183,19 +228,21 @@ export default function T1Overview({
     refreshTracking,
   } = useFedExTracking(caseId);
 
-  // Loading state
+  // ── Loading state ─────────────────────────────────────────────────────────
+  // Rendered before T1Shell — the body has padding: 0 for T1, so we use
+  // the loadingWrapper class to fill the height and center the spinner.
   if (caseDoc === undefined) {
     return (
-      <div className={shared.emptyState} aria-busy="true" aria-label="Loading case">
+      <div className={styles.loadingWrapper} aria-busy="true" aria-label="Loading case">
         <div className={shared.spinner} />
       </div>
     );
   }
 
-  // Not found
+  // ── Not found ─────────────────────────────────────────────────────────────
   if (caseDoc === null) {
     return (
-      <div className={shared.emptyState} role="alert">
+      <div className={styles.loadingWrapper} role="alert">
         <p className={shared.emptyStateTitle}>Case not found</p>
         <p className={shared.emptyStateText}>
           This case may have been deleted or the ID is invalid.
@@ -204,9 +251,43 @@ export default function T1Overview({
     );
   }
 
-  return (
-    <article className={styles.overview} data-testid="t1-overview">
+  // ── Left panel content — interactive mini-map (Sub-AC 2) ─────────────────
+  //
+  // T1MapPanel renders a react-map-gl (Mapbox GL JS) map centred on the
+  // case's last-known lat/lng with a status-colored CSS pin marker.
+  //
+  // The mapboxToken comes from NEXT_PUBLIC_MAPBOX_TOKEN (process.env).
+  // When absent, T1MapPanel shows a styled coordinate-text placeholder.
+  //
+  // T1MapPanel subscribes to getCaseById independently so the pin position
+  // updates in real time via the Convex subscription (≤ 2-second fidelity).
+  //
+  // T1Shell is rendered with leftPanelHasMap={true}, which applies the
+  // panelLeftMap CSS class to remove padding and clip overflow — enabling
+  // the map canvas (position: absolute; inset: 0) to fill the cell fully.
+  const leftPanel = (
+    <T1MapPanel
+      caseId={caseId}
+      mapboxToken={MAPBOX_TOKEN}
+    />
+  );
+
+  // ── Right panel content — case identity + operational state ───────────────
+  //
+  // The right panel combines what was previously the "left" (identity info)
+  // and "right" (operational state) sub-panels into a single scrollable column.
+  // This re-arrangement accommodates the map occupying the full left 50%.
+  const rightPanel = (
+    <article data-testid="t1-overview-right">
       {/* ── Case header ──────────────────────────────────────────── */}
+      {/*
+        InlineStatusEditor replaces the static StatusPill to provide a
+        click-to-edit dropdown for the case lifecycle status.  Operators
+        can click the pencil icon (or navigate via keyboard) to open the
+        dropdown, select a new status, and Save.  The Convex mutation is
+        called with an optimistic update so the pill reflects the change
+        immediately while the server confirms in the background.
+      */}
       <div className={shared.caseHeader}>
         <div>
           <h2 className={shared.caseLabel}>{caseDoc.label}</h2>
@@ -214,7 +295,10 @@ export default function T1Overview({
             <p className={shared.caseLabelSub}>QR: {caseDoc.qrCode}</p>
           )}
         </div>
-        <StatusPill kind={caseDoc.status as CaseStatus} filled />
+        <InlineStatusEditor
+          caseId={caseId}
+          currentStatus={caseDoc.status as CaseStatus}
+        />
       </div>
 
       {/* ── Key metadata grid ─────────────────────────────────────── */}
@@ -226,12 +310,15 @@ export default function T1Overview({
           </div>
         )}
 
-        {caseDoc.assigneeName && (
-          <div className={shared.metaItem}>
-            <dt className={shared.metaLabel}>Assigned to</dt>
-            <dd className={shared.metaValue}>{caseDoc.assigneeName}</dd>
-          </div>
-        )}
+        <div className={shared.metaItem}>
+          <dt className={shared.metaLabel}>Assigned to</dt>
+          <dd className={shared.metaValue}>
+            <InlineHolderEditor
+              caseId={caseId}
+              currentHolder={caseDoc.assigneeName}
+            />
+          </dd>
+        </div>
 
         <div className={shared.metaItem}>
           <dt className={shared.metaLabel}>Last updated</dt>
@@ -293,6 +380,18 @@ export default function T1Overview({
         </>
       )}
 
+      {/* ── Checklist progress ────────────────────────────────────── */}
+      <hr className={shared.divider} />
+      <ChecklistProgress caseId={caseId} />
+
+      {/* ── Damage summary — real-time via useDamageReportSummary ─── */}
+      {/*
+        Subscribes to getDamageReportSummary; Convex pushes updates within
+        ~100–300 ms of any SCAN app damage submission.  Section is hidden
+        when no items are currently marked damaged.
+      */}
+      <DamageSummarySection caseId={caseId} />
+
       {/* ── Notes ─────────────────────────────────────────────────── */}
       {caseDoc.notes && (
         <>
@@ -306,18 +405,63 @@ export default function T1Overview({
         </>
       )}
 
-      <hr className={shared.divider} />
-
-      {/* ── Checklist progress ────────────────────────────────────── */}
-      <ChecklistProgress caseId={caseId} />
-
-      {/* ── Damage summary — real-time via useDamageReportSummary ─── */}
       {/*
-        Subscribes to getDamageReportSummary; Convex pushes updates within
-        ~100–300 ms of any SCAN app damage submission.  Section is hidden
-        when no items are currently marked damaged.
-      */}
-      <DamageSummarySection caseId={caseId} />
+       * ── T1 Timeline Panel — scrollable vertical event timeline ───────
+       *
+       * Sub-AC 3: Positioned in the right 50% of the T1 grid.
+       * T1TimelinePanel subscribes to getCaseEvents via Convex and
+       * maps each event to a TimelineEvent component.  Shows newest-first
+       * so the most recent activity is immediately visible.
+       *
+       * Real-time fidelity: Convex re-evaluates and pushes the updated
+       * event list within ~100–300 ms of any SCAN app mutation, satisfying
+       * the ≤ 2-second real-time SLA between field action and dashboard.
+       *
+       * States:
+       *   loading — renders skeleton shimmer rows (3 placeholder items)
+       *   empty   — renders "No events yet" placeholder with clock icon
+       *   loaded  — renders events via TimelineEvent components
+       */}
+      <hr className={shared.divider} />
+      <T1TimelinePanel caseId={caseId} />
+
+      {/*
+       * ── QR Label Management — operator-permission-gated ──────────────
+       *
+       * Sub-AC 2c: LabelManagementPanel is mounted in the appropriate slot
+       * of the T1 Summary layout. Rendered only when the current user holds
+       * the `qrCode:generate` permission (admin or technician role).
+       * Pilots — who scan QR codes but do not generate them — will not see
+       * this panel.
+       *
+       * Passes caseLabel and hasExistingQrCode so the panel header and
+       * generate-flow UI can be contextualised to this specific case.
+       */}
+      {canManageLabels && (
+        <>
+          <hr className={shared.divider} />
+          <LabelManagementPanel
+            caseId={caseId}
+            caseLabel={caseDoc.label}
+            hasExistingQrCode={!!caseDoc.qrCode}
+          />
+        </>
+      )}
     </article>
+  );
+
+  // ── Render: 50/50 T1Shell with map left (T1MapPanel) and info right ───────
+  //
+  // T1Shell renders a CSS grid with grid-template-columns: 1fr 1fr.
+  // `leftPanelHasMap={true}` removes padding from the left panel so
+  // T1MapPanel's absolutely-positioned canvas fills the cell edge-to-edge.
+  // The shell integrates into CaseDetailPanel's T1–T5 router/switcher
+  // via T1Overview's lazy import.
+  return (
+    <T1Shell
+      leftPanel={leftPanel}
+      rightPanel={rightPanel}
+      leftPanelHasMap={true}
+    />
   );
 }

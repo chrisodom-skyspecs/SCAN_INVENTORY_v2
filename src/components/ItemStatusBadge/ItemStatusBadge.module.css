@@ -1,0 +1,267 @@
+/**
+ * ItemStatusBadge.module.css
+ *
+ * Status indicator primitives for manifest item inspection states.
+ *
+ * Four states with distinct visual identities:
+ *   verified  — success signal (green checkmark)
+ *   flagged   — warning signal (amber flag)
+ *   missing   — error signal   (red x-circle)
+ *   unchecked — neutral signal (gray circle)
+ *
+ * Rules:
+ *   - No hex literals — CSS custom properties only
+ *   - Inter Tight for labels
+ *   - IBM Plex Mono for count values
+ *   - WCAG AA contrast maintained via semantic signal tokens
+ *   - Reduced motion: no transitions that animate color/transform
+ */
+
+/* ── Base badge ────────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  user-select: none;
+  /* Transition only opacity — no color transitions that could mask state changes */
+  transition: opacity 0.1s ease;
+}
+
+/* ── Badge sizes ───────────────────────────────────────────────────────────── */
+
+.badgeSm {
+  padding: 0.0625rem 0.375rem;
+  font-size: 0.625rem;       /* 10px */
+  gap: 0.1875rem;
+}
+
+.badgeMd {
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;      /* 11px */
+  gap: 0.25rem;
+}
+
+.badgeLg {
+  padding: 0.1875rem 0.625rem;
+  font-size: 0.8125rem;      /* 13px */
+  gap: 0.3125rem;
+}
+
+/* ── Badge label ───────────────────────────────────────────────────────────── */
+
+.badgeLabel {
+  /* Inherits font-family and size from parent .badge */
+  line-height: 1.35;
+}
+
+/* ── Badge count (IBM Plex Mono for data values) ──────────────────────────── */
+
+.badgeCount {
+  font-family: "IBM Plex Mono", "Menlo", "Courier New", monospace;
+  font-weight: 700;
+  letter-spacing: 0;
+  /* Slightly larger relative to the badge label for quick scanning */
+  font-size: 1em;
+  min-width: 1em;
+  text-align: right;
+}
+
+/* ── Icon sizing ───────────────────────────────────────────────────────────── */
+
+.icon {
+  /* Size is controlled by the badge size via em units + explicit overrides */
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Badge-embedded icons scale with badge size via the parent's font-size */
+.badgeSm .icon {
+  width: 0.6875rem;   /* 11px */
+  height: 0.6875rem;
+}
+
+.badgeMd .icon {
+  width: 0.875rem;    /* 14px */
+  height: 0.875rem;
+}
+
+.badgeLg .icon {
+  width: 1rem;        /* 16px */
+  height: 1rem;
+}
+
+/* ── Icon wrapper (for ItemStatusIcon standalone) ─────────────────────────── */
+
+.iconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.iconSm .icon {
+  width: 0.875rem;    /* 14px */
+  height: 0.875rem;
+}
+
+.iconMd .icon {
+  width: 1.125rem;    /* 18px */
+  height: 1.125rem;
+}
+
+.iconLg .icon {
+  width: 1.5rem;      /* 24px */
+  height: 1.5rem;
+}
+
+/* ── InspectionStatusBar ───────────────────────────────────────────────────── */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATUS COLORS — SUBTLE VARIANTS (default, tinted background)
+
+   Each state maps to a distinct semantic signal:
+     verified  → success (green)  — item confirmed present and undamaged
+     flagged   → warning (amber)  — damage documented, needs follow-up
+     missing   → error   (red)    — item absent, highest urgency
+     unchecked → neutral (gray)   — pending review, no urgency
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Verified — success / green ────────────────────────────────────────────── */
+
+.statusVerified {
+  color: var(--signal-success-text-subtle);
+  background-color: var(--signal-success-fill-subtle);
+  border-color: var(--signal-success-border);
+}
+
+/* ── Flagged — warning / amber ─────────────────────────────────────────────── */
+/*
+ * Uses warning (amber) rather than error (red) to distinguish flagged (damage
+ * documented, follow-up needed) from missing (absent, most critical).
+ * This creates a clear visual hierarchy: missing > flagged > unchecked.
+ */
+
+.statusFlagged {
+  color: var(--signal-warning-text-subtle);
+  background-color: var(--signal-warning-fill-subtle);
+  border-color: var(--signal-warning-border);
+}
+
+/* ── Missing — error / red ─────────────────────────────────────────────────── */
+/*
+ * Uses error (red) for maximum urgency — a missing item is the highest
+ * severity state and should draw the eye immediately.
+ */
+
+.statusMissing {
+  color: var(--signal-error-text-subtle);
+  background-color: var(--signal-error-fill-subtle);
+  border-color: var(--signal-error-border);
+}
+
+/* ── Unchecked — neutral / gray ────────────────────────────────────────────── */
+
+.statusUnchecked {
+  color: var(--signal-neutral-text-subtle);
+  background-color: var(--signal-neutral-fill-subtle);
+  border-color: var(--signal-neutral-border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATUS COLORS — FILLED VARIANTS (solid background, inverse text)
+
+   Used for high-emphasis display (e.g., count badges on map pins,
+   "complete inspection" success screens, mobile alert callouts).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.statusVerifiedFilled {
+  color: var(--signal-success-text);
+  background-color: var(--signal-success-fill);
+  border-color: transparent;
+}
+
+.statusFlaggedFilled {
+  color: var(--signal-warning-text);
+  background-color: var(--signal-warning-fill);
+  border-color: transparent;
+}
+
+.statusMissingFilled {
+  color: var(--signal-error-text);
+  background-color: var(--signal-error-fill);
+  border-color: transparent;
+}
+
+.statusUncheckedFilled {
+  color: var(--signal-neutral-text);
+  background-color: var(--signal-neutral-fill);
+  border-color: transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ICON COLOR OVERRIDES — standalone ItemStatusIcon
+   Colors follow the subtle variant palette so icons are readable on light
+   and dark surfaces without the badge background.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.iconWrap.statusVerified  { color: var(--signal-success-text-subtle); }
+.iconWrap.statusFlagged   { color: var(--signal-warning-text-subtle); }
+.iconWrap.statusMissing   { color: var(--signal-error-text-subtle);   }
+.iconWrap.statusUnchecked { color: var(--signal-neutral-text-subtle); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRINT STYLES
+   Flatten to high-contrast black/white — no color ink dependency.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media print {
+  .badge {
+    background-color: transparent !important;
+    border-color: currentColor !important;
+    color: inherit !important;
+  }
+
+  .badgeCount {
+    font-weight: 700;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION
+   Remove transition so status changes don't animate in reduced motion mode.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .badge {
+    transition: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DENSITY ADAPTERS
+   Compact density shrinks the badge to save vertical space in data tables.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-density="compact"] .badgeMd {
+  padding: 0.0625rem 0.3125rem;
+  font-size: 0.625rem;     /* 10px — step down from 11px */
+}
+
+[data-density="compact"] .badgeMd .icon {
+  width: 0.75rem;          /* 12px */
+  height: 0.75rem;
+}

@@ -1,0 +1,424 @@
+/**
+ * AuditLedgerFilterPanel.module.css
+ *
+ * Filter panel for the T5 Audit Ledger — date range, actor, action, case ID.
+ *
+ * Design-system rules:
+ *   - No hex literals — CSS custom properties only.
+ *   - Inter Tight for all UI labels and control text.
+ *   - IBM Plex Mono for the Case ID search input (data entry).
+ *   - Dark-mode overrides via :global(.theme-dark) selectors.
+ *   - WCAG AA contrast via design-token cascade.
+ *   - Responsive: horizontal layout on wide panels, stacked on narrow viewports.
+ */
+
+/* ── Panel root ───────────────────────────────────────────────────────────── */
+
+.filterPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.375rem;
+  /* Subtle bottom separation from the ledger table below */
+  margin-bottom: 0.75rem;
+}
+
+/* ── Fieldset — date range section ───────────────────────────────────────── */
+
+.fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.fieldsetLegend {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  /* Float legend outside the flow so it acts as a row label */
+  float: left;
+  padding: 0;
+  margin: 0 0.625rem 0 0;
+  line-height: 1.75rem; /* vertically align with inputs */
+}
+
+/* Date range row — legend + two date inputs side by side */
+.dateRangeRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  /* Clear the float from .fieldsetLegend */
+  clear: left;
+  padding-top: 0.1875rem;
+}
+
+/* Separator glyph between From / To inputs */
+.dateRangeSeparator {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-disabled);
+  flex-shrink: 0;
+  line-height: 1.75rem;
+  margin-top: 1.25rem; /* offset to align with the input (below the label) */
+}
+
+/* ── Controls row — actor dropdown, action dropdown, case ID search ───────── */
+
+.controlsRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Field group — label + control pair ──────────────────────────────────── */
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+  /* Default width: auto-size to content / available space */
+  flex: 0 1 auto;
+}
+
+/* The search field group should expand to fill remaining horizontal space */
+.fieldGroupSearch {
+  flex: 1 1 10rem;
+  min-width: 9rem;
+}
+
+/* ── Field label ──────────────────────────────────────────────────────────── */
+
+.fieldLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  /* Prevent label from wrapping */
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+/* ── Date input ───────────────────────────────────────────────────────────── */
+
+.dateInput {
+  display: block;
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.25rem;
+  background-color: var(--surface-raised);
+  color: var(--ink-primary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 400;
+  outline: none;
+  /* Prevent date inputs from being too narrow */
+  min-width: 8.5rem;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+  /* Normalize browser date-picker accent */
+  accent-color: var(--surface-brand);
+}
+
+.dateInput:hover {
+  border-color: var(--border-strong);
+}
+
+.dateInput:focus-visible {
+  border-color: var(--surface-brand);
+  box-shadow: var(--elevation-focus);
+}
+
+.dateInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--surface-sunken);
+}
+
+/* Placeholder text color (empty date input) — use ::-webkit-datetime-edit */
+.dateInput::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+/* ── Select (dropdown) wrapper — position: relative for chevron icon ─────── */
+
+.selectWrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.select {
+  display: block;
+  height: 1.75rem;
+  padding: 0 1.625rem 0 0.5rem; /* right padding for chevron */
+  border: 1px solid var(--border-default);
+  border-radius: 0.25rem;
+  background-color: var(--surface-raised);
+  color: var(--ink-primary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  cursor: pointer;
+  outline: none;
+  /* Remove native arrow */
+  appearance: none;
+  -webkit-appearance: none;
+  /* Minimum readable width */
+  min-width: 8rem;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+}
+
+.select:hover {
+  border-color: var(--border-strong);
+}
+
+.select:focus-visible {
+  border-color: var(--surface-brand);
+  box-shadow: var(--elevation-focus);
+}
+
+.select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--surface-sunken);
+}
+
+/* Chevron icon — absolutely positioned in top-right of select */
+.selectChevron {
+  position: absolute;
+  right: 0.4375rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--ink-tertiary);
+  display: flex;
+  align-items: center;
+}
+
+/* ── Search input wrapper ─────────────────────────────────────────────────── */
+
+.searchWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--ink-tertiary);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.searchInput {
+  display: block;
+  width: 100%;
+  height: 1.75rem;
+  /* Left padding accommodates search icon; right accommodates clear button */
+  padding: 0 1.625rem 0 1.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.25rem;
+  background-color: var(--surface-raised);
+  color: var(--ink-primary);
+  /* IBM Plex Mono — Case ID is a machine-generated string */
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  outline: none;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+  /* Remove browser search decorations */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.searchInput::placeholder {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ink-disabled);
+  letter-spacing: 0;
+}
+
+.searchInput:hover {
+  border-color: var(--border-strong);
+}
+
+.searchInput:focus-visible {
+  border-color: var(--surface-brand);
+  box-shadow: var(--elevation-focus);
+}
+
+.searchInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--surface-sunken);
+}
+
+/* Remove browser's built-in search clear "×" button */
+.searchInput::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* Inline clear button inside search field */
+.searchClear {
+  position: absolute;
+  right: 0.375rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-tertiary);
+  border-radius: 0.1875rem;
+  transition: color 0.1s ease, background-color 0.1s ease;
+}
+
+.searchClear:hover {
+  color: var(--ink-primary);
+  background-color: var(--surface-hover);
+}
+
+.searchClear:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+/* ── Actions row — active filter badge + clear-all button ─────────────────── */
+
+.actionsRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.1875rem;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 0.125rem;
+}
+
+/* Active-filter count badge */
+.activeBadge {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--signal-info-text-subtle);
+  background-color: var(--signal-info-fill-subtle);
+  border: 1px solid var(--signal-info-border);
+  border-radius: 9999px;
+  padding: 0.0625rem 0.4375rem;
+  white-space: nowrap;
+}
+
+/* Clear-all button */
+.clearBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  background: none;
+  border: 1px solid var(--border-default);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  transition: border-color 0.1s ease, color 0.1s ease,
+    background-color 0.1s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.clearBtn:hover {
+  border-color: var(--border-strong);
+  color: var(--ink-primary);
+  background-color: var(--surface-hover);
+}
+
+.clearBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied when html.theme-dark is active.
+   ============================================================ */
+
+/* Panel root — bump border for visibility on dark surfaces */
+:global(.theme-dark) .filterPanel {
+  border-color: var(--border-default);
+}
+
+/* Date inputs — brighter border on dark backgrounds */
+:global(.theme-dark) .dateInput {
+  border-color: var(--border-default);
+}
+
+:global(.theme-dark) .dateInput:hover {
+  border-color: var(--border-strong);
+}
+
+/* Select controls — brighter border on dark backgrounds */
+:global(.theme-dark) .select {
+  border-color: var(--border-default);
+}
+
+:global(.theme-dark) .select:hover {
+  border-color: var(--border-strong);
+}
+
+/* Search input — brighter border on dark backgrounds */
+:global(.theme-dark) .searchInput {
+  border-color: var(--border-default);
+}
+
+:global(.theme-dark) .searchInput:hover {
+  border-color: var(--border-strong);
+}
+
+/* Actions row separator — default border for dark-mode visibility */
+:global(.theme-dark) .actionsRow {
+  border-top-color: var(--border-default);
+}
+
+/* Clear button border in dark mode */
+:global(.theme-dark) .clearBtn {
+  border-color: var(--border-default);
+}
+
+:global(.theme-dark) .clearBtn:hover {
+  border-color: var(--border-strong);
+}
+
+/* Calendar picker icon — brighter in dark mode */
+:global(.theme-dark) .dateInput::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}

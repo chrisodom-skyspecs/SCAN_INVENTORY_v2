@@ -9,7 +9,7 @@
  *
  * What happens on handoff
  * ────────────────────────
- * The ScanHandoffClient calls `api.custody.handoffCustody` via
+ * The ScanHandoffClient calls `api.custodyHandoffs.handoffCustody` via
  * `useHandoffCustody()`.  That mutation writes to:
  *
  *   custodyRecords (new row)    → invalidates all custody subscriptions

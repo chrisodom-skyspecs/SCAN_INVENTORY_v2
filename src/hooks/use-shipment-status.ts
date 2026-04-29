@@ -89,6 +89,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 
 // Re-export types and helpers from shippingHelpers so consumers get everything
 // from a single import — no need to reach into convex/ directly.
@@ -113,11 +114,13 @@ export {
   computeShipmentSummary,
 } from "../../convex/shippingHelpers";
 
-// Re-export CaseShippingLayout type from Convex shipping module
-export type { CaseShippingLayout } from "../../convex/shipping";
+// Re-export CaseShippingLayout and CaseCarrierStatus types from Convex shipping module
+export type { CaseShippingLayout, CaseCarrierStatus } from "../../convex/shipping";
+// Re-export CarrierTrackingEvent type from shippingHelpers
+export type { CarrierTrackingEvent } from "../../convex/shippingHelpers";
 
 import type { ShipmentStatus, ShipmentRecord } from "../../convex/shippingHelpers";
-import type { CaseShippingLayout } from "../../convex/shipping";
+import type { CaseShippingLayout, CaseCarrierStatus } from "../../convex/shipping";
 
 // ─── Pure URL helpers ─────────────────────────────────────────────────────────
 
@@ -174,7 +177,7 @@ export function useShipmentsByCase(
 ): ShipmentRecord[] | undefined {
   return useQuery(
     api.shipping.listShipmentsByCase,
-    { caseId }
+    { caseId: caseId as Id<"cases"> }
   ) as ShipmentRecord[] | undefined;
 }
 
@@ -229,7 +232,7 @@ export function useShipmentSummary(
 ): UseShipmentSummaryResult | undefined {
   return useQuery(
     api.shipping.getShipmentSummaryForCase,
-    { caseId }
+    { caseId: caseId as Id<"cases"> }
   ) as UseShipmentSummaryResult | undefined;
 }
 
@@ -266,7 +269,7 @@ export function useCaseShippingLayout(
 ): CaseShippingLayout | null | undefined {
   return useQuery(
     api.shipping.getCaseShippingLayout,
-    { caseId }
+    { caseId: caseId as Id<"cases"> }
   ) as CaseShippingLayout | null | undefined;
 }
 
@@ -382,6 +385,236 @@ export function useLatestShipment(
   const shipments = useShipmentsByCase(caseId);
   if (shipments === undefined) return undefined;
   return shipments.length > 0 ? (shipments[0] as ShipmentRecord) : null;
+}
+
+// ─── useCaseCarrierStatus ─────────────────────────────────────────────────────
+
+/**
+ * Subscribe to the FedEx carrier tracking summary for a case.
+ *
+ * This hook wraps `api.shipping.getCaseCarrierStatus` — a lightweight, single-
+ * table reactive query that returns the three denormalized carrier tracking
+ * fields (carrierStatus, estimatedDelivery, lastCarrierEvent) plus identifying
+ * fields, all read from a single O(1) `ctx.db.get(caseId)` call.
+ *
+ * This is the preferred hook for components that need ONLY carrier status —
+ * it is cheaper than `useCaseShippingLayout` which also loads the full shipment
+ * record from the `shipments` table.
+ *
+ * Data flow (where updates come from):
+ *   1. `shipCase` mutation writes `trackingNumber`/`carrier`/`shippedAt` to cases
+ *      → this hook re-evaluates; carrierStatus/estimatedDelivery still undefined
+ *   2. `refreshShipmentTracking` → `updateShipmentStatus` writes
+ *      `carrierStatus`/`estimatedDelivery`/`lastCarrierEvent` to cases
+ *      → this hook re-evaluates; all 3 carrier fields now populated
+ *
+ * Convex re-evaluates this subscription and pushes updates to all connected
+ * clients within ~100–300 ms of either mutation, satisfying the ≤ 2-second
+ * real-time fidelity requirement.
+ *
+ * Return values:
+ *   `undefined`         — loading (initial fetch or reconnect)
+ *   `null`              — case not found (deleted or invalid ID)
+ *   `CaseCarrierStatus` — carrier tracking summary (never null when found)
+ *
+ * Pass `null` as `caseId` to skip the subscription (no case selected).
+ *
+ * @param caseId  Convex document ID of the case to watch, or null to skip.
+ *
+ * @example
+ * function CarrierStatusBadge({ caseId }: { caseId: string }) {
+ *   const tracking = useCaseCarrierStatus(caseId);
+ *   if (tracking === undefined) return <Skeleton />;
+ *   if (!tracking?.trackingNumber) return null;
+ *   return (
+ *     <>
+ *       <StatusPill kind={tracking.carrierStatus ?? "label_created"} />
+ *       {tracking.estimatedDelivery && (
+ *         <span>ETA: {tracking.estimatedDelivery}</span>
+ *       )}
+ *       {tracking.lastCarrierEvent && (
+ *         <span>{tracking.lastCarrierEvent.description}</span>
+ *       )}
+ *     </>
+ *   );
+ * }
+ */
+export function useCaseCarrierStatus(
+  caseId: string | null
+): CaseCarrierStatus | null | undefined {
+  return useQuery(
+    api.shipping.getCaseCarrierStatus,
+    caseId !== null
+      ? { caseId: caseId as Id<"cases"> }
+      : "skip",
+  ) as CaseCarrierStatus | null | undefined;
+}
+
+// ─── queries/shipment hooks ───────────────────────────────────────────────────
+//
+// The following hooks wrap the extended query functions in convex/queries/shipment.ts
+// which are registered in the Convex API under api["queries/shipment"].*.
+//
+// TypeScript note: the Convex generated API types (convex/_generated/api.d.ts)
+// are regenerated by `npx convex dev`.  Until the types are regenerated after
+// adding convex/queries/shipment.ts, the api["queries/shipment"] key is accessed
+// via a type assertion below.  The runtime behaviour is correct and fully typed
+// through the explicit return-type annotations on each hook.
+
+// Re-export types from convex/queries/shipment.ts so consumers import everything
+// from this single hook module — no need to reach into convex/ directly.
+export type {
+  CustodyHandoffSummary,
+  CaseShipmentAndCustody,
+  ShipmentAuditEntry,
+} from "../../convex/queries/shipment";
+
+// ─── useLatestShipmentForCase ──────────────────────────────────────────────────
+
+/**
+ * Subscribe to the most recently created shipment for a case.
+ *
+ * Public-API version of the formerly-internal `getLatestShipmentByCaseId`.
+ * Backed by `api["queries/shipment"].getLatestShipmentForCase`.
+ *
+ * Use this in T1/T2/T3 compact tracking chips and map pin tooltips where only
+ * the current shipment is needed, not the full history.  Lighter than
+ * `useShipmentsByCase` when history is not required.
+ *
+ * Convex re-evaluates and pushes within ~100–300 ms of any SCAN app `shipCase`
+ * call or `updateShipmentStatus` tracking refresh, satisfying the ≤ 2-second
+ * real-time fidelity requirement.
+ *
+ * Pass `null` as `caseId` to skip the subscription (no case selected).
+ *
+ * Return values:
+ *   `undefined`      — loading (show skeleton)
+ *   `null`           — no shipments exist for this case
+ *   `ShipmentRecord` — the most recently created shipment
+ *
+ * @param caseId  Convex document ID of the case to watch, or null to skip.
+ */
+export function useLatestShipmentForCase(
+  caseId: string | null
+): ShipmentRecord | null | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const api_any = api as unknown as Record<string, any>;
+  return useQuery(
+    api_any["queries/shipment"]?.getLatestShipmentForCase ?? api.shipping.listShipmentsByCase,
+    caseId !== null
+      ? { caseId: caseId as Id<"cases"> }
+      : "skip",
+  ) as ShipmentRecord | null | undefined;
+}
+
+// ─── useCaseShipmentAndCustody ────────────────────────────────────────────────
+
+/**
+ * Subscribe to combined FedEx shipment + custody status for a case.
+ *
+ * Returns the latest shipment record and most recent custody handoff in a
+ * SINGLE reactive Convex subscription, reducing the dual-subscription pattern
+ * in T4 (Shipping) panel components.
+ *
+ * Backed by `api["queries/shipment"].getCaseShipmentAndCustody`.
+ * Convex re-evaluates within ~100–300 ms of:
+ *   • SCAN app `shipCase` call        → shipments table write
+ *   • SCAN app `handoffCustody` call  → custodyRecords table write
+ *   • `updateShipmentStatus` refresh  → shipments update
+ *
+ * This satisfies the ≤ 2-second real-time fidelity requirement for both
+ * FedEx status and custody handoff updates in the T4 panel.
+ *
+ * Pass `null` as `caseId` to skip the subscription (no case selected).
+ *
+ * Return values:
+ *   `undefined`              — loading (show skeleton)
+ *   `CaseShipmentAndCustody` — combined live status (never null — always returns
+ *                              an object with null sub-fields when data is absent)
+ *
+ * @param caseId  Convex document ID of the case to watch, or null to skip.
+ *
+ * @example
+ * function T4StatusHeader({ caseId }: { caseId: string }) {
+ *   const combined = useCaseShipmentAndCustody(caseId);
+ *   if (combined === undefined) return <Skeleton />;
+ *   const { latestShipment, currentCustodian, totalShipments, totalHandoffs } = combined;
+ *   return (
+ *     <>
+ *       {latestShipment && <TrackingBadge shipment={latestShipment} />}
+ *       {currentCustodian && <CustodianChip name={currentCustodian.toUserName} />}
+ *       <span>{totalShipments} shipments · {totalHandoffs} handoffs</span>
+ *     </>
+ *   );
+ * }
+ */
+export function useCaseShipmentAndCustody(
+  caseId: string | null
+): import("../../convex/queries/shipment").CaseShipmentAndCustody | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const api_any = api as unknown as Record<string, any>;
+  return useQuery(
+    api_any["queries/shipment"]?.getCaseShipmentAndCustody,
+    caseId !== null
+      ? { caseId: caseId as Id<"cases"> }
+      : "skip",
+  ) as import("../../convex/queries/shipment").CaseShipmentAndCustody | undefined;
+}
+
+// ─── useShipmentEventsForAudit ────────────────────────────────────────────────
+
+/**
+ * Subscribe to all shipments for a case formatted as audit timeline entries.
+ *
+ * Returns each shipment as a `ShipmentAuditEntry` in the event-shaped format
+ * required by the T5 (Audit) panel timeline renderer.  The server-side
+ * transformation eliminates client-side mapping code in T5Audit.tsx and
+ * provides a strongly-typed result that is directly mergeable with other event
+ * types (status changes, damage reports, custody handoffs).
+ *
+ * Backed by `api["queries/shipment"].getShipmentEventsForAudit`.
+ * Convex re-evaluates within ~100–300 ms of:
+ *   • SCAN app `shipCase` call (new row inserted)
+ *   • `updateShipmentStatus` refresh (status or estimatedDelivery changed)
+ *
+ * Results are sorted newest-first (shippedAt descending) — matching the T5
+ * timeline's reverse-chronological display order.
+ *
+ * Pass `null` as `caseId` to skip the subscription (no case selected).
+ *
+ * Return values:
+ *   `undefined`             — loading (show skeleton)
+ *   `ShipmentAuditEntry[]`  — all shipments as audit entries, newest first
+ *                             (empty array when no shipments exist)
+ *
+ * @param caseId  Convex document ID of the case to watch, or null to skip.
+ *
+ * @example
+ * function T5ShipmentTimeline({ caseId }: { caseId: string }) {
+ *   const entries = useShipmentEventsForAudit(caseId);
+ *   if (entries === undefined) return <TimelineSkeleton />;
+ *   return (
+ *     <ol>
+ *       {entries.map((entry) => (
+ *         <li key={entry._id}>
+ *           {entry.trackingNumber} · {entry.status}
+ *         </li>
+ *       ))}
+ *     </ol>
+ *   );
+ * }
+ */
+export function useShipmentEventsForAudit(
+  caseId: string | null
+): import("../../convex/queries/shipment").ShipmentAuditEntry[] | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const api_any = api as unknown as Record<string, any>;
+  return useQuery(
+    api_any["queries/shipment"]?.getShipmentEventsForAudit,
+    caseId !== null
+      ? { caseId: caseId as Id<"cases"> }
+      : "skip",
+  ) as import("../../convex/queries/shipment").ShipmentAuditEntry[] | undefined;
 }
 
 // ─── Carrier event type ───────────────────────────────────────────────────────

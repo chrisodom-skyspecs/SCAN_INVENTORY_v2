@@ -1,0 +1,910 @@
+/**
+ * RecallModal.module.css
+ *
+ * Styles for the multi-step case recall modal dialog and its step content.
+ *
+ * Rendering strategy:
+ *   - Native <dialog> element with showModal() for top-layer placement,
+ *     browser-managed focus trap, and ::backdrop dimming.
+ *   - Rendered via ReactDOM.createPortal into document.body.
+ *
+ * Design tokens:
+ *   All colors reference CSS custom properties from styles/tokens/base.css.
+ *   No hex, hsl, or rgb literals in this file.
+ *
+ * Typography:
+ *   "Inter Tight" — UI text (titles, labels, buttons)
+ *   "IBM Plex Mono" — data fields (case ID, timestamps)
+ *
+ * Accessibility:
+ *   WCAG AA contrast maintained for all text/background combinations
+ *   in both light and dark themes via the semantic token system.
+ */
+
+/* ── Dialog — native top-layer element ──────────────────────────────── */
+
+.dialog {
+  /* Reset browser dialog defaults */
+  border: none;
+  padding: 0;
+  margin: auto;
+
+  /* Visual shell */
+  background: var(--surface-overlay);
+  border-radius: 0.75rem;
+  box-shadow: var(--elevation-4);
+  color: var(--ink-primary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+
+  /* Responsive sizing */
+  width: min(92vw, 42rem);
+  max-height: min(92vh, 54rem);
+
+  /* Flex layout: each step fills the dialog column */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Backdrop dimming via scrim-overlay token */
+.dialog::backdrop {
+  background-color: var(--scrim-overlay);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog::backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* ── Step root containers ────────────────────────────────────────────── */
+
+/**
+ * Step 1 and Step 2 placeholder each take the full dialog column.
+ * Using display:contents so the header/body/footer flex children
+ * directly participate in the dialog's column flow.
+ */
+.step1 {
+  display: contents;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 0.875rem;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+}
+
+.title {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink-primary);
+  margin: 0;
+}
+
+.subtitle {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+/* ── Close button ────────────────────────────────────────────────────── */
+
+.closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.closeButton:hover {
+  background-color: var(--surface-hover);
+  color: var(--ink-primary);
+  border-color: var(--border-default);
+}
+
+.closeButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.closeButton:active {
+  background-color: var(--surface-active);
+}
+
+.closeIcon {
+  width: 1rem;
+  height: 1rem;
+  display: block;
+}
+
+/* × character fallback for step-2 placeholder close button */
+.closeX {
+  font-size: 1.125rem;
+  line-height: 1;
+  display: block;
+}
+
+/* ── Warning banner ──────────────────────────────────────────────────── */
+
+.warningBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0.875rem 1.5rem 0;
+  padding: 0.75rem 1rem;
+  background-color: var(--signal-warning-fill-subtle);
+  border: 1px solid var(--signal-warning-border);
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+}
+
+.warningIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--signal-warning-text-subtle);
+  flex-shrink: 0;
+  margin-top: 0.0625rem; /* optical vertical centering against first text line */
+}
+
+.warningContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.warningTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--signal-warning-text-subtle);
+  margin: 0;
+}
+
+.warningBody {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--signal-warning-text-subtle);
+  margin: 0;
+}
+
+.warningCaseLabel {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ── Case summary section ────────────────────────────────────────────── */
+
+.summarySection {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem 1.5rem 0;
+}
+
+.summaryHeading {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0 0 0.75rem;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.75rem 1rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background-color: var(--surface-sunken);
+}
+
+.summaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.summaryLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.summaryValue {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--ink-primary);
+}
+
+.summaryValueMono {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-primary);
+}
+
+.summaryValueEmpty {
+  color: var(--ink-disabled);
+  font-style: italic;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  margin-top: 0.875rem;
+}
+
+/* ── Cancel button ───────────────────────────────────────────────────── */
+
+.cancelButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5625rem 1.125rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.cancelButton:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--ink-primary);
+}
+
+.cancelButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.cancelButton:active:not(:disabled) {
+  background-color: var(--surface-active);
+}
+
+.cancelButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Confirm Recall button — destructive CTA ─────────────────────────── */
+
+.confirmButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5625rem 1.25rem;
+  border: none;
+  border-radius: 0.375rem;
+  background-color: var(--surface-critical);
+  color: var(--ink-on-critical);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.confirmButton:hover:not(:disabled) {
+  background-color: var(--_r-600, var(--surface-critical));
+  /* Fallback: increase perceived darkness via opacity when ramp token unavailable */
+  filter: brightness(0.88);
+}
+
+.confirmButton:focus-visible {
+  outline: none;
+  /* Critical focus ring uses error border token for signal consistency */
+  box-shadow:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--border-critical);
+}
+
+.confirmButton:active:not(:disabled) {
+  filter: brightness(0.78);
+}
+
+.confirmButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.confirmIcon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+}
+
+/* ── Confirm spinner (loading state) ─────────────────────────────────── */
+
+.confirmSpinner {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid var(--ink-on-critical);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: recallSpinnerRotate 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes recallSpinnerRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirmSpinner {
+    animation: none;
+    opacity: 0.6;
+    border-top-color: var(--ink-on-critical);
+  }
+}
+
+/* ── Step 2 placeholder (legacy — kept for backward compat) ─────────── */
+
+.step2Placeholder {
+  display: contents;
+}
+
+/* ── Step 2 root (Reroute) ───────────────────────────────────────────── */
+
+/**
+ * .step2 mirrors .step1 — display:contents lets header/form/footer flex
+ * children participate directly in the dialog's column flow.
+ */
+.step2 {
+  display: contents;
+}
+
+/* ── Step 2 form body ────────────────────────────────────────────────── */
+
+.step2Body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem 1.5rem 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Legacy placeholder body text — no longer shown when step2 is real */
+.step2BodyText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-tertiary);
+  text-align: center;
+  margin: 0;
+}
+
+/* ── Subtitle row (step indicator) ──────────────────────────────────── */
+
+.subtitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.subtitleMono {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--ink-tertiary);
+}
+
+.stepBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.375rem;
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.25rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+}
+
+/* ── Method selection fieldset ───────────────────────────────────────── */
+
+.methodFieldset {
+  /* Reset fieldset browser defaults */
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.methodFieldset:disabled .methodOptionLabel {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.methodGroupLabel {
+  display: block;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin-bottom: 0.625rem;
+  /* <legend> sits inside fieldset flow */
+  float: left;
+  width: 100%;
+}
+
+.methodOptionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  /* clear the float from legend */
+  clear: both;
+}
+
+/* ── Individual radio card ───────────────────────────────────────────── */
+
+.methodOption {
+  position: relative;
+  border-radius: 0.5rem;
+  border: 1.5px solid var(--border-default);
+  background-color: var(--surface-raised);
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.methodOption:hover:not(.methodOptionDisabled) {
+  border-color: var(--border-strong);
+  background-color: var(--surface-hover);
+}
+
+.methodOptionSelected {
+  border-color: var(--accent-brand);
+  background-color: var(--surface-brand-subtle, var(--surface-sunken));
+  box-shadow: 0 0 0 1px var(--accent-brand);
+}
+
+.methodOptionSelected:hover {
+  border-color: var(--accent-brand);
+}
+
+.methodOptionDisabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ── Hidden radio input ──────────────────────────────────────────────── */
+
+.methodRadioInput {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Show focus ring on card when its radio is focused */
+.methodRadioInput:focus-visible + .methodOptionLabel {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  border-radius: 0.4375rem;
+}
+
+/* ── Card label (the visual interactive surface) ────────────────────── */
+
+.methodOptionLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
+  cursor: pointer;
+  border-radius: 0.4375rem;
+  width: 100%;
+  user-select: none;
+}
+
+/* ── Icon wrapper ────────────────────────────────────────────────────── */
+
+.methodOptionIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.4375rem;
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  color: var(--ink-secondary);
+  flex-shrink: 0;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.methodOptionSelected .methodOptionIconWrap {
+  background-color: var(--accent-brand-subtle, var(--surface-sunken));
+  color: var(--accent-brand);
+  border-color: var(--accent-brand-border, var(--border-subtle));
+}
+
+.methodIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+  display: block;
+}
+
+/* ── Card text content ───────────────────────────────────────────────── */
+
+.methodOptionContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.methodOptionTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink-primary);
+}
+
+.methodOptionDesc {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--ink-secondary);
+}
+
+/* ── Check indicator ─────────────────────────────────────────────────── */
+
+.methodOptionCheck {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-default);
+  background-color: var(--surface-base);
+  flex-shrink: 0;
+  transition:
+    background-color 0.1s ease,
+    border-color 0.1s ease;
+}
+
+.methodOptionCheckSelected {
+  background-color: var(--accent-brand);
+  border-color: var(--accent-brand);
+  color: var(--ink-on-brand, var(--_n-0));
+}
+
+.checkIcon {
+  width: 0.625rem;
+  height: 0.625rem;
+  display: block;
+}
+
+/* ── Notes section ───────────────────────────────────────────────────── */
+
+.notesSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.notesLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.notesOptional {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 0.6875rem;
+  color: var(--ink-disabled);
+}
+
+.notesTextarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 4.5rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  background-color: var(--surface-base);
+  color: var(--ink-primary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.55;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+  box-sizing: border-box;
+}
+
+.notesTextarea::placeholder {
+  color: var(--ink-placeholder, var(--ink-disabled));
+}
+
+.notesTextarea:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.notesTextarea:focus {
+  outline: none;
+  border-color: var(--accent-brand);
+  box-shadow: 0 0 0 3px var(--accent-brand-ring, rgba(0, 0, 0, 0.08));
+}
+
+.notesTextarea:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  resize: none;
+}
+
+.notesCount {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.625rem;
+  font-weight: 400;
+  color: var(--ink-tertiary);
+  margin: 0;
+  text-align: right;
+}
+
+/* ── Back button ─────────────────────────────────────────────────────── */
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5625rem 1rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.backButton:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--ink-primary);
+}
+
+.backButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.backButton:active:not(:disabled) {
+  background-color: var(--surface-active);
+}
+
+.backButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.backIcon {
+  width: 1rem;
+  height: 1rem;
+  display: block;
+  flex-shrink: 0;
+}
+
+/* ── Submit Recall button — primary CTA ──────────────────────────────── */
+
+.submitButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5625rem 1.25rem;
+  border: none;
+  border-radius: 0.375rem;
+  background-color: var(--accent-brand);
+  color: var(--ink-on-brand, var(--_n-0));
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.submitButton:hover:not(:disabled) {
+  filter: brightness(0.9);
+}
+
+.submitButton:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--accent-brand);
+}
+
+.submitButton:active:not(:disabled) {
+  filter: brightness(0.82);
+}
+
+.submitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Submit spinner ──────────────────────────────────────────────────── */
+
+.submitSpinner {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid var(--ink-on-brand, var(--_n-0));
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: recallSpinnerRotate 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .submitSpinner {
+    animation: none;
+    opacity: 0.6;
+    border-top-color: var(--ink-on-brand, var(--_n-0));
+  }
+}
+
+/* ── Screen-reader only utility ──────────────────────────────────────── */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ── Responsive overrides ────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .dialog {
+    width: 100vw;
+    max-height: 100dvh;
+    border-radius: 0.75rem 0.75rem 0 0;
+    margin-top: auto;
+    margin-bottom: 0;
+  }
+
+  .header {
+    padding: 1rem 1.25rem 0.75rem;
+  }
+
+  .warningBanner {
+    margin: 0.75rem 1.25rem 0;
+  }
+
+  .summarySection {
+    padding: 0.875rem 1.25rem 0;
+  }
+
+  .summaryGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0.75rem 1.25rem;
+    gap: 0.5rem;
+  }
+
+  .cancelButton,
+  .confirmButton {
+    justify-content: center;
+    width: 100%;
+  }
+}

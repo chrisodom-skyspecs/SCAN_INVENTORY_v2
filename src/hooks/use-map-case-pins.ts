@@ -56,13 +56,21 @@ import type { M1Response } from "../../convex/maps";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
-/** Case lifecycle statuses. Mirrors the schema's caseStatus union. */
+/**
+ * Case lifecycle statuses. Mirrors the schema's caseStatus union.
+ *
+ * Re-exported from the canonical definition in src/types/case-status.ts
+ * for convenience — import CaseStatus from either location.
+ */
 export type CaseStatus =
+  | "hangar"
   | "assembled"
+  | "transit_out"
   | "deployed"
-  | "in_field"
-  | "shipping"
-  | "returned";
+  | "flagged"
+  | "transit_in"
+  | "received"
+  | "archived";
 
 /**
  * A map-pin-ready case record.

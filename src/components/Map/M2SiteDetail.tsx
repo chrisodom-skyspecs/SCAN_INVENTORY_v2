@@ -1,23 +1,48 @@
 /**
- * M2SiteDetail — Active Deployments map mode
+ * M2SiteDetail — Mission Mode map view
  *
- * Shows deployed and in-field cases on a map, providing an Active Deployments
- * view for operations staff.
+ * Shows cases organised by mission on a map, providing a Mission Mode
+ * view for operations staff.  Each case record carries its missionId so
+ * the map can render mission-group clusters and individual case pins.
  * URL params wired via useMapParams:
  *   • view  → mode tab click calls setView(mode)
- *   • org   → org dropdown calls setOrg(id) / setOrg(null)
+ *   • org   → org dropdown calls setOrg(id) / setOrg(null)  (maps to missionId filter)
  *   • kit   → kit dropdown calls setKit(id) / setKit(null)
  *   • at    → time picker calls setAt(date) / setAt(null)
  *
  * The `at` param enables time-scrubbing: navigating back to a past
- * timestamp shows a historical snapshot of activity density.
+ * timestamp shows a historical snapshot of mission activity.
  *
- * Data source: useMapCasePins (Convex real-time subscription).
- *   Subscribes to api.mapData.getM1MapData filtered to status:
- *   ["deployed", "in_field"] — the Active Deployments subset.
- *   Convex re-evaluates within ~100–300 ms of any SCAN app mutation that
- *   transitions a case into or out of the active deployment statuses,
- *   satisfying the ≤ 2-second real-time fidelity requirement.
+ * Data source: useCaseMapData({ mode: "M2" }) — Convex real-time M2 subscription.
+ *   Subscribes to api.mapData.getM2MapData, which returns cases grouped by
+ *   mission (flattened to a CaseMapRecord[] for map rendering).  Each record
+ *   includes the missionId, custody state, and all core case fields.
+ *
+ *   Reactive to:
+ *     • scan.scanCheckIn       → case status changes in mission groups
+ *     • Any mission mutation   → mission metadata, re-grouping of cases
+ *     • custody.transferCustody → custodian info on per-mission case pins
+ *   Convex re-evaluates within ~100–300 ms, satisfying the ≤ 2-second real-time
+ *   fidelity requirement.
+ *
+ * Stop data integration (Sub-AC 3)
+ * ──────────────────────────────────
+ * When the user selects a case pin (in fallback mode: click; in Mapbox mode:
+ * the map dispatches a case selection event), the component subscribes to the
+ * case's journey stops via useM2JourneyStopsBatch and passes the stop data to:
+ *
+ *   • JourneyPathLine  — path line renderer connecting geo-referenced stops.
+ *                        Receives a PathStop[] derived from batch subscription.
+ *   • StopMarker       — numbered circle badge overlays at each geo stop.
+ *                        Receives individual stop props from batch subscription.
+ *   • JourneyStopLayer — fallback HTML list (no-map mode), renders stop timeline
+ *                        when fallbackMode=true for the selected caseId.
+ *
+ * Real-time fidelity:
+ *   useM2JourneyStopsBatch subscribes to api["queries/journeyStops"].getM2JourneyStopsBatch.
+ *   When a SCAN mutation appends a new event, Convex re-evaluates the subscription
+ *   within ~100–300 ms.  The new stop marker and path update appear on the dashboard
+ *   within the ≤ 2-second real-time fidelity window.
  *
  * Design tokens: all colors via var(--map-m2-*) and var(--surface-*).
  * No hex literals; WCAG AA compliant.
@@ -25,19 +50,40 @@
 
 "use client";
 
-import { type ChangeEvent, useId } from "react";
+import { type ChangeEvent, useId, useState, useMemo, useCallback } from "react";
 import { useMapParams } from "@/hooks/use-map-params";
-import { useMapCasePins, type CaseStatus } from "@/hooks/use-map-case-pins";
+import { useCaseMapData } from "@/hooks/use-case-map-data";
+import { useM2JourneyStopsBatch } from "@/hooks/use-m2-journey-stops";
+import type { JourneyStop } from "@/hooks/use-m2-journey-stops";
 import { MAP_VIEW_VALUES, type MapView } from "@/types/map";
+import { useIsDark } from "@/providers/theme-provider";
+import { JourneyPathLine } from "./JourneyPathLine";
+import type { PathStop } from "./JourneyPathLine";
+import { StopMarker } from "./StopMarker";
+import { JourneyStopLayer } from "./JourneyStopLayer";
+import { ReplayScrubber } from "./ReplayScrubber";
+import { M2StopSidebar } from "./M2StopSidebar";
 import styles from "./M2SiteDetail.module.css";
 
-// ── Active Deployments status filter ─────────────────────────────────────────
-//
-// M2 shows only cases that are currently deployed or actively in the field.
-// Typed explicitly as CaseStatus[] so it's assignable to useMapCasePins args
-// without an unsafe cast.  Defined at module scope for stable array identity —
-// same reference across renders avoids redundant Convex re-subscriptions.
-const ACTIVE_DEPLOYMENT_STATUSES: CaseStatus[] = ["deployed", "in_field"];
+// ─── Mapbox style URLs ────────────────────────────────────────────────────────
+
+/**
+ * M2 uses the "outdoors" base style — shows terrain and topography suitable
+ * for activity-density heat overlays.  Switches between light and dark variants
+ * based on the active theme so the map chrome matches the UI shell.
+ */
+const MAPBOX_STYLE_LIGHT = "mapbox://styles/mapbox/outdoors-v12";
+const MAPBOX_STYLE_DARK  = "mapbox://styles/mapbox/dark-v11";
+
+// ─── Stable Mapbox GL source / layer IDs ─────────────────────────────────────
+
+/**
+ * Scoped source and layer IDs for the M2 journey path line.
+ * These are distinct from JourneyStopLayer's IDs ("inventory-journey-path-source")
+ * so both can coexist on the same Mapbox map without ID collisions.
+ */
+const M2_JOURNEY_PATH_SOURCE_ID = "m2-journey-path-source";
+const M2_JOURNEY_PATH_LAYER_ID  = "m2-journey-path-layer";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -93,11 +139,22 @@ export interface M2SiteDetailProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
- * M2 — Active Deployments
+ * M2 — Mission Mode
  *
- * Renders an active-deployments map panel with filter + time controls.
- * Subscribes to live case pin data via useMapCasePins filtered to
- * ["deployed", "in_field"] statuses.
+ * Renders a mission-mode map panel with filter + time controls.
+ * Subscribes to live case data via useCaseMapData({ mode: "M2" }) which
+ * queries api.mapData.getM2MapData — cases grouped by mission and flattened
+ * to a CaseMapRecord array for map rendering.
+ *
+ * Stop data integration:
+ *   useM2JourneyStopsBatch subscribes to journey stops for all visible case
+ *   pins simultaneously.  When a case pin is selected (selectedCaseId), the
+ *   component derives:
+ *     • pathStops  → passed to JourneyPathLine (path line renderer)
+ *     • geoStops   → each stop passed to StopMarker (marker components)
+ *   In fallback mode (no mapboxToken), the selected case's journey timeline is
+ *   rendered via JourneyStopLayer with fallbackMode=true.
+ *
  * All filter changes write to the URL via useMapParams.
  */
 export function M2SiteDetail({
@@ -109,28 +166,149 @@ export function M2SiteDetail({
 }: M2SiteDetailProps) {
   const { view, org, kit, at, setView, setOrg, setKit, setAt } = useMapParams();
 
-  // ── Live active-deployment pin subscription (Convex real-time) ────
+  // ── Dark mode — Mapbox style switching ───────────────────────────────────────
   //
-  // Filtered to ["deployed", "in_field"] — the M2 "Active Deployments" view.
-  // `org` maps to a Convex mission document ID for per-mission scoping.
+  // useIsDark() reads the ThemeContext.  When isDark is true, the "dark-v11"
+  // Mapbox style is used so heat overlays render against a dark base map that
+  // matches the overall dark UI theme.
+  const isDark   = useIsDark();
+  const mapStyle = isDark ? MAPBOX_STYLE_DARK : MAPBOX_STYLE_LIGHT;
+
+  // ── Live M2 Mission Mode subscription via useCaseMapData ──────────
   //
-  // The stable `ACTIVE_DEPLOYMENT_STATUSES` constant is defined at module
-  // scope to prevent re-subscription on every render (array identity stable).
+  // useCaseMapData({ mode: "M2" }) subscribes to api.mapData.getM2MapData,
+  // returning all cases grouped by mission and flattened into CaseMapRecord[].
+  // Each record includes missionId, custody state, and all core case fields.
+  //
+  // `org` maps to a Convex mission document ID for per-mission scoping:
+  //   • non-null org → filters to cases for that specific mission
+  //   • null org     → all missions + unassigned cases (global fleet view)
   //
   // Convex re-evaluates within ~100–300 ms when:
-  //   • scan.scanCheckIn transitions a case to "in_field" / "deployed"
-  //   • shipping.shipCase transitions a case OUT of "deployed" to "shipping"
-  //   • Any custody transfer changes the assigneeId on a deployed case
-  const { pins, isLoading, summary } = useMapCasePins({
-    status: ACTIVE_DEPLOYMENT_STATUSES,
+  //   • scan.scanCheckIn transitions a case to in_field / deployed
+  //   • Any mission mutation updates mission metadata or re-groups cases
+  //   • custody.transferCustody updates the custodian on a mission case
+  const { records: pins, isLoading, summary } = useCaseMapData({
+    mode: "M2",
     missionId: org ?? undefined,
   });
 
-  const orgSelectId  = useId();
-  const kitSelectId  = useId();
-  const timePickerId = useId();
+  // ── Selected case + stop state ──────────────────────────────────────────────
+  //
+  // selectedCaseId — which case pin the user has clicked to view journey stops.
+  //   null = no case selected (no journey overlay shown).
+  //   Set via handlePinClick in the fallback pin list, or via the data attribute
+  //   on the map container in Mapbox mode (external integrations can write to it).
+  //
+  // selectedStopIndex — which stop badge in the selected journey is highlighted.
+  //   null = no stop selected (all stops shown without selection ring).
+  //   Set via handleStopClick when the user clicks a StopMarker badge.
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [selectedStopIndex, setSelectedStopIndex] = useState<number | null>(null);
+
+  // ── Batch journey stop subscription (Sub-AC 1 data layer) ──────────────────
+  //
+  // Extract case IDs from the visible pin set to build the subscription key.
+  // The batch hook returns a single Convex subscription for all cases in one
+  // round-trip, rather than N separate subscriptions.
+  //
+  // Skip pattern: pass null when there are no visible pins (empty list) so
+  // Convex does not establish a subscription for an empty array.
+  const visibleCaseIds = useMemo(
+    () => pins.map((p) => p.caseId),
+    [pins]
+  );
+
+  const batchJourneys = useM2JourneyStopsBatch(
+    visibleCaseIds.length > 0 ? visibleCaseIds : null
+  );
+
+  // ── Derive selected case journey ────────────────────────────────────────────
+  //
+  // Find the journey for the currently-selected case from the batch subscription
+  // result.  Returns:
+  //   undefined — batchJourneys is still loading (initial fetch)
+  //   null      — selectedCaseId not found in batchJourneys (case cleared)
+  //   M2CaseJourney — journey data ready, stops available
+  //
+  // Note: batchJourneys itself is undefined while loading, so selectedJourney
+  // will also be undefined during the initial load phase.
+  const selectedJourney = useMemo(() => {
+    if (!selectedCaseId || !batchJourneys) return undefined;
+    return batchJourneys.find((j) => j.caseId === selectedCaseId) ?? null;
+  }, [selectedCaseId, batchJourneys]);
+
+  // ── Derive geo-referenced stops ─────────────────────────────────────────────
+  //
+  // Filter to stops that have valid WGS84 coordinates.  These stops can be:
+  //   1. Rendered as numbered StopMarker badges (HTML DOM overlays)
+  //   2. Connected by the JourneyPathLine (Mapbox GL line layer)
+  //
+  // Stops without coordinates (e.g., admin events, hangar check-ins) are
+  // excluded here but still appear in the JourneyStopLayer fallback timeline.
+  const geoStops = useMemo((): JourneyStop[] => {
+    if (!selectedJourney) return [];
+    return selectedJourney.stops.filter(
+      (s) =>
+        s.hasCoordinates &&
+        s.location.lat !== undefined &&
+        s.location.lng !== undefined
+    );
+  }, [selectedJourney]);
+
+  // ── Active stop index filtering (Sub-AC 3) ──────────────────────────────────
+  //
+  // visibleGeoStops — geo-referenced stops filtered by the active stop index.
+  //   When selectedStopIndex is null: all geo-referenced stops are visible.
+  //   When selectedStopIndex is N:    only stops with stopIndex ≤ N are shown.
+  //
+  // This powers the "replay cursor" UX: clicking stop #3 hides stops 4+ from
+  // the map so the user sees the journey path only up to that point in time.
+  // Real-time updates happen synchronously because data is already in memory —
+  // clicking a stop badge triggers setSelectedStopIndex → React re-renders →
+  // useMemo recomputes visibleGeoStops → map updates within one frame.
+  const visibleGeoStops = useMemo((): JourneyStop[] => {
+    if (selectedStopIndex === null) return geoStops;
+    return geoStops.filter((s) => s.stopIndex <= selectedStopIndex);
+  }, [geoStops, selectedStopIndex]);
+
+  // ── Derive path stops for JourneyPathLine ───────────────────────────────────
+  //
+  // visiblePathStops — flat coordinate pairs derived from visibleGeoStops.
+  // When selectedStopIndex is null, all path stops are included (full journey
+  // path rendered).  When selectedStopIndex is N, the path line is truncated
+  // at stop N — JourneyPathLine only connects stops 1..N.
+  //
+  // PathStop is the flat coordinate type that JourneyPathLine accepts.
+  // We extract lat/lng from each geo-referenced stop so JourneyPathLine
+  // does not need to know about the M2CaseJourney shape.
+  const visiblePathStops = useMemo((): PathStop[] =>
+    visibleGeoStops.map((s) => ({
+      stopIndex: s.stopIndex,
+      lat: s.location.lat!,
+      lng: s.location.lng!,
+    })),
+    [visibleGeoStops]
+  );
+
+  // ── Total stop count for the selected case ──────────────────────────────────
+  const selectedStopCount = selectedJourney?.stopCount ?? 0;
 
   // ── Handlers ──────────────────────────────────────────────────────
+  //
+  // handlePinClick: called when a case pin is clicked in the fallback list.
+  //   Toggles selection — clicking the already-selected case deselects it.
+  //   Clears selectedStopIndex when switching to a new case.
+  const handlePinClick = useCallback((caseId: string) => {
+    setSelectedCaseId((prev) => (prev === caseId ? null : caseId));
+    setSelectedStopIndex(null);
+  }, []);
+
+  // handleStopClick: called when a StopMarker badge is clicked.
+  //   Toggles selection — clicking the already-selected stop deselects it.
+  const handleStopClick = useCallback((stopIndex: number) => {
+    setSelectedStopIndex((prev) => (prev === stopIndex ? null : stopIndex));
+  }, []);
 
   function handleViewChange(next: MapView) {
     if (next !== view) {
@@ -158,9 +336,19 @@ export function M2SiteDetail({
   }
 
   // ── Derived counts ─────────────────────────────────────────────────
-  const deployedCount = summary?.byStatus?.["deployed"] ?? 0;
-  const inFieldCount  = summary?.byStatus?.["in_field"]  ?? 0;
-  const activeTotal   = deployedCount + inFieldCount;
+  //
+  // M2 records are cases from mission groups + unassigned cases.
+  // summary.byStatus for M2 contains mission statuses (e.g., "active",
+  // "completed"), not case lifecycle statuses.  We compute deployed/flagged
+  // counts directly from the records array for the active deployments badge.
+  const deployedCount = pins.filter((p) => p.status === "deployed").length;
+  const flaggedCount  = pins.filter((p) => p.status === "flagged").length;
+  const activeTotal   = deployedCount + flaggedCount;
+
+  // IDs for form elements
+  const orgSelectId  = useId();
+  const kitSelectId  = useId();
+  const timePickerId = useId();
 
   // ── Render ────────────────────────────────────────────────────────
 
@@ -282,7 +470,7 @@ export function M2SiteDetail({
               aria-label={
                 isLoading
                   ? "Loading deployment data…"
-                  : `${activeTotal} active deployment${activeTotal !== 1 ? "s" : ""} (${deployedCount} deployed, ${inFieldCount} in field)`
+                  : `${activeTotal} active deployment${activeTotal !== 1 ? "s" : ""} (${deployedCount} deployed, ${flaggedCount} flagged)`
               }
             >
               {isLoading ? (
@@ -300,19 +488,205 @@ export function M2SiteDetail({
         </div>
       </header>
 
+      {/* ── Replay scrubber bar ── */}
+      {/*
+       * ReplayScrubber renders play/pause, step-forward, step-back, speed
+       * selector (0.5×/1×/2×/4×), and a range slider.
+       *
+       * The `at` URL param drives the timeline position:
+       *   • at = null   → live mode (no time filter, showing current state)
+       *   • at = Date   → snapshot / replay mode (historical activity density)
+       *
+       * onAtChange is wired to useMapParams.setAt so position changes are
+       * reflected in the URL (deep-link safe, back-navigation safe).
+       *
+       * minAt / maxAt from the component props clamp step + slider range.
+       * When not provided, the slider is disabled (no range to navigate).
+       */}
+      <ReplayScrubber
+        at={at}
+        minAt={minAt}
+        maxAt={maxAt}
+        onAtChange={setAt}
+        className={styles.scrubberBar}
+      />
+
       {/* ── Map canvas ── */}
-      <main className={styles.mapCanvas} aria-label="Active deployments map">
+      <main className={styles.mapCanvas} aria-label="Mission mode map">
         {mapboxToken ? (
-          /* Map rendered by react-map-gl; active deployment pin data exposed
-             via data attributes for the Mapbox layer integration to consume. */
-          <div
-            id="m2-map-container"
-            className={styles.mapContainer}
-            data-mapbox-token={mapboxToken}
-            data-pin-count={pins.length}
-            data-loading={isLoading ? "true" : undefined}
-          />
+          /*
+           * Map container — Mapbox GL JS integration point.
+           *
+           * Data attributes expose the configuration and live state so that
+           * external Mapbox GL integrations can read them without prop-drilling:
+           *   data-mapbox-token    — Mapbox access token
+           *   data-mapbox-style    — active style URL (theme-aware)
+           *   data-theme           — "light" or "dark"
+           *   data-pin-count       — number of visible case pins
+           *   data-loading         — "true" while Convex subscription is loading
+           *   data-selected-case   — caseId of the currently-selected pin
+           *   data-stop-count      — number of journey stops for selected case
+           *   data-batch-journey-count — number of batch journeys loaded
+           *
+           * Stop overlay children (Sub-AC 3 wiring):
+           *
+           *   JourneyPathLine — path line renderer
+           *     Receives pathStops[] derived from useM2JourneyStopsBatch.
+           *     Renders a Mapbox GL LineString from the selected case's
+           *     geo-referenced stops. Scoped source/layer IDs (m2-journey-*)
+           *     ensure no conflicts with other map layers.
+           *     Returns null when fewer than 2 geo-referenced stops exist.
+           *
+           *   StopMarker — numbered HTML DOM badge overlays
+           *     One StopMarker per geo-referenced stop in the selected journey.
+           *     Each receives its stop data (stopIndex, lat, lng, eventType,
+           *     locationName, actorName) from the batch subscription result.
+           *     Clicking a marker badge updates selectedStopIndex.
+           */
+          <>
+            <div
+              id="m2-map-container"
+              className={styles.mapContainer}
+              data-mapbox-token={mapboxToken}
+              data-mapbox-style={mapStyle}
+              data-theme={isDark ? "dark" : "light"}
+              data-pin-count={pins.length}
+              data-loading={isLoading ? "true" : undefined}
+              data-selected-case={selectedCaseId ?? undefined}
+              data-stop-count={selectedStopCount}
+              data-batch-journey-count={batchJourneys?.length ?? 0}
+              data-active-stop-index={
+                selectedStopIndex !== null
+                  ? String(selectedStopIndex)
+                  : undefined
+              }
+            >
+              {/*
+               * JourneyPathLine — path line renderer (Sub-AC 3)
+               *
+               * Connects geo-referenced journey stops with a Mapbox GL LineString.
+               * visiblePathStops is derived from visibleGeoStops, which is
+               * filtered by selectedStopIndex:
+               *   useM2JourneyStopsBatch(visibleCaseIds)
+               *     → batchJourneys → selectedJourney → geoStops
+               *     → visibleGeoStops (filtered by activeStopIndex)
+               *     → visiblePathStops
+               *
+               * When selectedStopIndex is null, all path stops are included
+               * (full journey path).  When set to N, only stops 1..N are passed,
+               * truncating the path line at the active cursor position.
+               *
+               * JourneyPathLine returns null automatically when:
+               *   • visiblePathStops is empty (no case selected, or index=0)
+               *   • fewer than 2 geo-referenced stops are visible
+               *
+               * Uses scoped source/layer IDs to avoid Mapbox GL source conflicts
+               * with other layers (e.g., history trails, turbine sites).
+               */}
+              <JourneyPathLine
+                stops={visiblePathStops}
+                sourceId={M2_JOURNEY_PATH_SOURCE_ID}
+                layerId={M2_JOURNEY_PATH_LAYER_ID}
+              />
+
+              {/*
+               * StopMarker badges — only visible stops (Sub-AC 3)
+               *
+               * visibleGeoStops is derived from geoStops filtered by
+               * selectedStopIndex:
+               *   batchJourneys → selectedJourney → geoStops
+               *   → visibleGeoStops (filtered by activeStopIndex)
+               *
+               * When selectedStopIndex is null, all geo-referenced stops are
+               * rendered.  When set to N, only stops with stopIndex ≤ N are
+               * rendered — stops beyond the active cursor are hidden.
+               *
+               * isLast reflects the last stop in visibleGeoStops (the stop at
+               * the active cursor), not the last stop in the full journey.
+               * This ensures the "latest stop" blue badge always appears at the
+               * current cursor position rather than at the journey's final stop.
+               *
+               * Each marker:
+               *   • Displays the 1-based stop sequence number
+               *   • Uses isFirst/isLast props to color-code endpoints (green/blue)
+               *   • Responds to click with handleStopClick → selectedStopIndex
+               *   • Shows a selection ring when isSelected=true
+               *
+               * Only rendered when selectedJourney is resolved (not undefined/null).
+               * Empty visibleGeoStops renders nothing (no markers visible yet).
+               */}
+              {selectedJourney != null &&
+                visibleGeoStops.map((stop, i) => (
+                  <StopMarker
+                    key={stop.eventId}
+                    stopIndex={stop.stopIndex}
+                    longitude={stop.location.lng!}
+                    latitude={stop.location.lat!}
+                    isFirst={i === 0}
+                    isLast={i === visibleGeoStops.length - 1}
+                    isSelected={selectedStopIndex === stop.stopIndex}
+                    eventType={stop.eventType}
+                    locationName={stop.location.locationName}
+                    actorName={stop.actorName}
+                    onClick={handleStopClick}
+                  />
+                ))}
+            </div>
+
+            {/*
+             * M2StopSidebar — StopCard list overlay (Sub-AC 2)
+             *
+             * Rendered as an absolute-positioned overlay on the right side of
+             * the map canvas when a case is selected (selectedJourney != null).
+             *
+             * Data flow:
+             *   selectedJourney.stops → all stops to display as StopCards
+             *   at (URL param)        → replay cursor → active stop highlight
+             *   selectedStopIndex     → explicit stop selection (aria-pressed)
+             *   handleStopClick       → updates selectedStopIndex → map filters
+             *   setSelectedCaseId(null) → dismissed via × close button
+             *
+             * The sidebar uses position:absolute within .mapCanvas
+             * (position:relative; overflow:hidden), anchored to the right edge.
+             * On narrow screens it becomes a bottom drawer (see M2StopSidebar.module.css).
+             *
+             * Real-time fidelity:
+             *   batchJourneys updates via Convex WebSocket subscription within
+             *   ~100–300 ms when SCAN mutations append new events.  The sidebar
+             *   re-renders automatically when selectedJourney.stops changes,
+             *   satisfying the ≤ 2-second real-time fidelity requirement.
+             */}
+            {selectedJourney != null && (
+              <M2StopSidebar
+                stops={selectedJourney.stops}
+                caseLabel={selectedJourney.caseLabel}
+                stopCount={selectedJourney.stopCount}
+                at={at}
+                selectedStopIndex={selectedStopIndex}
+                onStopClick={handleStopClick}
+                onClose={() => setSelectedCaseId(null)}
+                className={styles.stopSidebar}
+                data-testid="m2-stop-sidebar"
+              />
+            )}
+          </>
         ) : (
+          /*
+           * Fallback — no Mapbox token
+           *
+           * Renders an accessible HTML interface showing live data from the
+           * Convex subscriptions without a map background.
+           *
+           * Pin list items are interactive buttons:
+           *   • Click (or Enter/Space keydown) → toggles selectedCaseId
+           *   • aria-pressed reflects current selection state
+           *   • Selected item highlighted via styles.pinListItemSelected
+           *
+           * When a case is selected, the journey timeline is rendered below
+           * the pin list via JourneyStopLayer in fallbackMode=true.
+           * The JourneyStopLayer fallback renders an accessible ordered list of
+           * journey stops with event type, timestamp, actor, and location.
+           */
           <div
             className={styles.mapPlaceholder}
             role="img"
@@ -320,7 +694,7 @@ export function M2SiteDetail({
           >
             {isLoading ? (
               <p className={styles.mapPlaceholderText}>
-                Loading deployment data…
+                Loading mission data…
               </p>
             ) : (
               <>
@@ -331,18 +705,47 @@ export function M2SiteDetail({
                   </code>
                 </p>
                 {pins.length > 0 && (
-                  /* Active deployment list — live data from Convex subscription */
+                  /*
+                   * Mission case list — live data from useCaseMapData M2 subscription.
+                   * Each item is keyboard-accessible and clickable for journey selection.
+                   * aria-pressed communicates selection state to screen readers.
+                   */
                   <ul
                     className={styles.pinList}
-                    aria-label={`${pins.length} active deployment${pins.length !== 1 ? "s" : ""}`}
+                    aria-label={`${pins.length} case${pins.length !== 1 ? "s" : ""} across missions`}
                     data-testid="m2-pin-list"
                   >
                     {pins.slice(0, 20).map((pin) => (
                       <li
                         key={pin.caseId}
-                        className={styles.pinListItem}
+                        className={[
+                          styles.pinListItem,
+                          pin.caseId === selectedCaseId
+                            ? styles.pinListItemSelected
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
                         data-status={pin.status}
                         data-case-id={pin.caseId}
+                        data-selected={
+                          pin.caseId === selectedCaseId ? "true" : undefined
+                        }
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={pin.caseId === selectedCaseId}
+                        aria-label={`${pin.label} — ${pin.status}${
+                          pin.caseId === selectedCaseId
+                            ? " (selected — showing journey)"
+                            : ""
+                        }`}
+                        onClick={() => handlePinClick(pin.caseId)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handlePinClick(pin.caseId);
+                          }
+                        }}
                       >
                         <span
                           className={styles.pinDot}
@@ -361,6 +764,21 @@ export function M2SiteDetail({
                             {pin.locationName}
                           </span>
                         )}
+                        {/* Journey stop count badge — shown when journey data loaded */}
+                        {batchJourneys !== undefined && (() => {
+                          const j = batchJourneys.find(
+                            (jj) => jj.caseId === pin.caseId
+                          );
+                          return j && j.stopCount > 0 ? (
+                            <span
+                              className={styles.pinStopCount}
+                              aria-label={`${j.stopCount} journey stop${j.stopCount !== 1 ? "s" : ""}`}
+                              title={`${j.stopCount} journey stop${j.stopCount !== 1 ? "s" : ""}`}
+                            >
+                              {j.stopCount}
+                            </span>
+                          ) : null;
+                        })()}
                       </li>
                     ))}
                     {pins.length > 20 && (
@@ -369,6 +787,37 @@ export function M2SiteDetail({
                       </li>
                     )}
                   </ul>
+                )}
+
+                {/*
+                 * Journey stop timeline — rendered below the pin list when a
+                 * case is selected.
+                 *
+                 * JourneyStopLayer in fallbackMode=true renders an accessible
+                 * ordered list of journey stops with:
+                 *   • Stop index badge
+                 *   • Event type label (e.g. "Status Change")
+                 *   • Timestamp + actor name
+                 *   • Location name or coordinates
+                 *
+                 * The caseId prop establishes a Convex subscription via
+                 * useJourneyStopLayer → useM2JourneyStops, providing real-time
+                 * updates as new stops are appended.
+                 *
+                 * showLegend=false — legend is omitted in fallback mode since
+                 * the color legend describes map symbols that are not visible.
+                 */}
+                {selectedCaseId && (
+                  <div
+                    className={styles.journeyPanel}
+                    data-testid="m2-journey-panel"
+                  >
+                    <JourneyStopLayer
+                      caseId={selectedCaseId}
+                      fallbackMode
+                      showLegend={false}
+                    />
+                  </div>
                 )}
               </>
             )}
@@ -382,13 +831,16 @@ export function M2SiteDetail({
         aria-live="polite"
         aria-atomic="true"
       >
-        {`Active deployments. View: ${MAP_MODE_LABELS[view]}.`}
+        {`Mission mode. View: ${MAP_MODE_LABELS[view]}.`}
         {isLoading
-          ? " Loading deployment data."
-          : ` ${activeTotal} active deployment${activeTotal !== 1 ? "s" : ""}.`}
+          ? " Loading mission data."
+          : ` ${pins.length} case${pins.length !== 1 ? "s" : ""} across missions (${activeTotal} actively deployed or flagged).`}
         {org ? ` Organisation filter active.` : ""}
         {kit ? ` Kit filter active.` : ""}
         {at ? ` Showing snapshot at ${at.toLocaleString()}.` : " Live view."}
+        {selectedCaseId
+          ? ` Case journey selected: ${selectedStopCount} stop${selectedStopCount !== 1 ? "s" : ""}.`
+          : ""}
       </output>
     </div>
   );

@@ -189,6 +189,55 @@
   margin: 0;
 }
 
+/* ── FedEx tracking link in shipped event detail ─────────────────── */
+
+.trackingLink {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.75rem;
+  color: var(--ink-brand);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-brand);
+}
+
+.trackingLink:hover {
+  border-bottom-style: solid;
+  opacity: 0.8;
+}
+
+.trackingLink:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  border-radius: 0.125rem;
+}
+
+/* ── Pagination controls (load more / exhausted indicator) ───────── */
+
+.loadMoreRow {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 0 0.25rem;
+}
+
+.loadMoreBtn {
+  /* Inherits from shared.ctaButton + shared.ctaButtonSecondary.
+     Override font-size to match compact ledger footer typography. */
+  font-size: 0.75rem;
+  padding: 0.375rem 0.875rem;
+}
+
+.exhaustedRow {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0 0.25rem;
+}
+
+.exhaustedText {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  color: var(--ink-disabled);
+  letter-spacing: 0.02em;
+}
+
 /* ── Feature flag gate ────────────────────────────────────────────── */
 
 .ffCode {
@@ -198,4 +247,429 @@
   padding: 0.0625rem 0.3125rem;
   border-radius: 0.1875rem;
   color: var(--ink-brand);
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   ============================================================ */
+
+/*
+ * Timeline connector line — use border-strong in dark mode for crisp
+ * vertical thread between events on the dark surface.
+ */
+:global(.theme-dark) .eventLine {
+  background-color: var(--border-strong);
+}
+
+/*
+ * Event dot halo ring — surface-raised in dark mode (--_n-900) provides
+ * the separation ring between the dot fill and the connector line.
+ * No override needed beyond the base token.
+ */
+
+/*
+ * Audit badge — signal-info tokens remap automatically; border remains
+ * visible in dark mode.  No override needed.
+ */
+
+/*
+ * Hash value chip — sunken background is very dark in dark mode (--_n-975);
+ * add a subtle border so the chip shape is readable.
+ */
+:global(.theme-dark) .hash {
+  border: 1px solid var(--border-subtle);
+}
+
+/*
+ * Checklist snapshot dividers — bump to border-default for visibility.
+ */
+:global(.theme-dark) .checklistSnapshotItem {
+  border-bottom-color: var(--border-default);
+}
+
+/*
+ * Feature-flag code chip — sunken bg in dark mode; consistent with .hash.
+ */
+:global(.theme-dark) .ffCode {
+  border: 1px solid var(--border-subtle);
+}
+
+/*
+ * Tracking link — brand border is already remapped; opacity hover still works.
+ */
+
+/* ============================================================
+   PRINT BUTTON + TOOLBAR
+   ============================================================ */
+
+/**
+ * Container for the right-side controls in the Audit Ledger section header
+ * (badge + print button). Overrides the flex layout so they align inline.
+ */
+.auditLedgerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/**
+ * Print toolbar button — compact secondary button style.
+ * Deliberately lighter than the primary CTA to avoid visual competition with
+ * the Hash Chain badge.
+ */
+.printBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 0.3125rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  background-color: var(--surface-raised);
+  color: var(--ink-secondary);
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease;
+  user-select: none;
+}
+
+.printBtn:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--ink-primary);
+}
+
+.printBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.printBtn:active {
+  background-color: var(--surface-sunken);
+}
+
+/** SVG printer icon inside the print button */
+.printBtnIcon {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* ── Dark-mode print button overrides ───────────────────────────────────── */
+
+:global(.theme-dark) .printBtn {
+  background-color: var(--surface-overlay);
+  border-color: var(--border-default);
+  color: var(--ink-secondary);
+}
+
+:global(.theme-dark) .printBtn:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--ink-primary);
+}
+
+/* ============================================================
+   EXPORT CSV BUTTON
+   Sub-AC 160202: Download current audit rows as a CSV file.
+   Mirrors .printBtn but with a brand-accented border to
+   visually distinguish the export action from print.
+   ============================================================ */
+
+/**
+ * Export CSV toolbar button — compact secondary action.
+ * Uses --ink-brand / --border-brand accent to distinguish it
+ * from the neutral Print button without drawing undue attention.
+ */
+.exportCsvBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 0.3125rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  border: 1px solid var(--border-brand);
+  background-color: var(--surface-raised);
+  color: var(--ink-brand);
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease, opacity 0.15s ease;
+  user-select: none;
+}
+
+.exportCsvBtn:hover {
+  background-color: var(--surface-brand-subtle, var(--surface-hover));
+  border-color: var(--ink-brand);
+  color: var(--ink-brand);
+  opacity: 0.9;
+}
+
+.exportCsvBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.exportCsvBtn:active {
+  background-color: var(--surface-sunken);
+  opacity: 1;
+}
+
+/** SVG download icon inside the export button */
+.exportCsvBtnIcon {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* ── Dark-mode export CSV button overrides ───────────────────────────────── */
+
+:global(.theme-dark) .exportCsvBtn {
+  background-color: var(--surface-overlay);
+  border-color: var(--border-brand);
+  color: var(--ink-brand);
+}
+
+:global(.theme-dark) .exportCsvBtn:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--ink-brand);
+  color: var(--ink-brand);
+}
+
+/* ============================================================
+   PRINT-ONLY HEADER
+   Hidden on screen; visible only in @media print.
+   Shows report metadata: title, case ID, and generation time.
+   ============================================================ */
+
+.printOnly {
+  display: none;
+}
+
+.printHeader {
+  /* Inherits display:block from .printOnly override in @media print */
+  border-bottom: 2px solid var(--border-default);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.printHeaderTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin: 0 0 0.25rem;
+}
+
+.printHeaderMeta {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+.printHeaderNote {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  color: var(--ink-tertiary);
+  margin: 0.25rem 0 0;
+  font-style: italic;
+}
+
+/* ============================================================
+   HASH-CHAIN VERIFICATION FOOTER
+   Rendered at the bottom of T5Audit when FF_AUDIT_HASH_CHAIN is on.
+   Shows the client-side integrity check result (valid / broken / empty).
+   ============================================================ */
+
+/**
+ * Outer wrapper — full-width footer strip with a top border separating
+ * it from the CustodySection above.
+ */
+.hashChainFooter {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/**
+ * Inner flex row — icon + text content, horizontally aligned.
+ */
+.hashChainFooterInner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+}
+
+/**
+ * 14px icon container — keeps the SVG aligned with the first text line.
+ */
+.hashChainFooterIcon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  margin-top: 0.0625rem;
+}
+
+/** Valid state icon — green success shield. */
+.hashChainFooterIconValid {
+  color: var(--signal-success-text-subtle);
+}
+
+/** Broken state icon — amber warning triangle. */
+.hashChainFooterIconBroken {
+  color: var(--signal-warning-text-subtle);
+}
+
+/** Loading / checking / empty state icon — neutral muted colour. */
+.hashChainFooterIconNeutral {
+  color: var(--ink-disabled);
+}
+
+/**
+ * Text content column — title + subtitle lines.
+ */
+.hashChainFooterBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  flex: 1;
+  min-width: 0;
+}
+
+/**
+ * Primary label line — e.g. "Chain Verified" or "Chain Integrity Failure".
+ */
+.hashChainFooterTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin: 0;
+}
+
+/** Valid state title — green accent to match success signal. */
+.hashChainFooterTitleValid {
+  color: var(--signal-success-text-subtle);
+}
+
+/** Broken state title — amber accent to match warning signal. */
+.hashChainFooterTitleBroken {
+  color: var(--signal-warning-text-subtle);
+}
+
+/**
+ * Secondary subtitle line — entry count, error detail, or status note.
+ */
+.hashChainFooterSubtitle {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+
+/**
+ * Inline code chip within the subtitle — e.g. the failure reason code.
+ */
+.hashChainFooterCode {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  background-color: var(--surface-sunken);
+  padding: 0.0625rem 0.25rem;
+  border-radius: 0.1875rem;
+  color: var(--ink-brand);
+}
+
+/* ── Dark-mode overrides ─────────────────────────────────────────────── */
+
+:global(.theme-dark) .hashChainFooter {
+  border-top-color: var(--border-default);
+}
+
+:global(.theme-dark) .hashChainFooterCode {
+  border: 1px solid var(--border-subtle);
+}
+
+/* ── Print — suppress the footer (chain status is in the print header) ─ */
+@media print {
+  .hashChainFooter {
+    display: none !important;
+  }
+}
+
+/* ============================================================
+   PRINT STYLES — @media print
+   Hides interactive chrome; shows only printable content.
+   ============================================================ */
+
+@media print {
+  /* Reveal the print-only header */
+  .printOnly {
+    display: block;
+  }
+
+  /* Hide interactive elements that have no value on paper */
+  .printHide {
+    display: none !important;
+  }
+
+  /* Hide the print button itself in print output */
+  .printBtn {
+    display: none !important;
+  }
+
+  /* Hide the export CSV button in print output */
+  .exportCsvBtn {
+    display: none !important;
+  }
+
+  /* Hide audit badge (redundant — covered by the print header note) */
+  .auditBadge {
+    display: none;
+  }
+
+  /* Hide pagination controls — load-more button + exhausted indicator */
+  .loadMoreRow {
+    display: none !important;
+  }
+
+  .exhaustedRow {
+    display: none !important;
+  }
+
+  /* Collapse outer audit container gaps so sections sit tightly */
+  .audit {
+    gap: 0;
+  }
+
+  /* Remove connector lines from the legacy timeline for cleaner print */
+  .eventLine {
+    display: none;
+  }
+
+  /* Reduce event item padding in print */
+  .eventContent {
+    padding-bottom: 0.5rem;
+  }
+
+  /* Ensure tracking links print visibly (some browsers suppress them) */
+  .trackingLink {
+    color: inherit;
+    border-bottom: none;
+    text-decoration: underline;
+  }
+
+  /* Force hash chip backgrounds to print */
+  .hash {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

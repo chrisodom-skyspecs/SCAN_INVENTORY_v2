@@ -77,6 +77,11 @@ export type {
   M5Cluster,
   M5HeatmapPoint,
   M5TimelineSnapshot,
+  // Unified denormalized payload types (Sub-AC 2)
+  CasesMapPayloadResponse,
+  CaseMapPayload,
+  CaseModeFlags,
+  CaseInspectionSummary,
 } from "../../convex/maps";
 
 // ─── Shared type for viewport bounds ─────────────────────────────────────────
@@ -103,7 +108,7 @@ export interface UseM1MapDataArgs {
   /** Geographic viewport bounds.  Pass null for unbounded global view. */
   bounds?: MapViewportBounds | null;
   /** Filter to one or more case lifecycle statuses. */
-  status?: ("assembled" | "deployed" | "in_field" | "shipping" | "returned")[];
+  status?: ("hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "transit_in" | "received" | "archived")[];
   /** Filter to cases assigned to a specific technician (Kinde user ID). */
   assigneeId?: string;
   /** Filter to cases on a specific mission. */
@@ -150,7 +155,7 @@ export interface UseM2MapDataArgs {
    */
   missionId?: string | null;
   /** Filter cases within mission groups by one or more lifecycle statuses. */
-  status?: ("assembled" | "deployed" | "in_field" | "shipping" | "returned")[];
+  status?: ("hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "transit_in" | "received" | "archived")[];
 }
 
 /**
@@ -326,5 +331,92 @@ export function useM5MapData(args: UseM5MapDataArgs = {}) {
 
   return useQuery(api.mapData.getM5MapData, {
     ...(bounds ? bounds : {}),
+  });
+}
+
+// ─── useCasesMapPayload — Unified denormalized payload hook (Sub-AC 2) ─────────
+
+/**
+ * Args for useCasesMapPayload.
+ * All fields are optional — omit for a global, unfiltered fleet view.
+ */
+export interface UseCasesMapPayloadArgs {
+  /**
+   * Geographic viewport bounds for spatial pre-filtering.
+   * Pass `null` or omit for an unbounded global view.
+   * All four coordinates must be provided together.
+   */
+  bounds?: MapViewportBounds | null;
+  /**
+   * Filter to one or more case lifecycle statuses.
+   * Omit to return cases in all statuses.
+   */
+  status?: (
+    | "hangar"
+    | "assembled"
+    | "transit_out"
+    | "deployed"
+    | "flagged"
+    | "transit_in"
+    | "received"
+    | "archived"
+  )[];
+  /**
+   * Filter to cases assigned to a specific technician (Kinde user ID).
+   * Omit to return cases assigned to any technician (or unassigned).
+   */
+  assigneeId?: string | null;
+  /**
+   * Filter to cases on a specific mission (Convex mission document ID string).
+   * Omit to return cases across all missions.
+   */
+  missionId?: string | null;
+}
+
+/**
+ * Subscribe to the unified, denormalized map payload covering all 5 map modes.
+ *
+ * Returns ALL cases enriched with pre-joined inspection data, custody state,
+ * and pre-computed `modeFlags` booleans.  Clients that need to switch between
+ * M1–M5 without stale data gaps use this single hook instead of maintaining
+ * five separate per-mode subscriptions.
+ *
+ * The `modeFlags` field on each CaseMapPayload entry enables O(1) client-side
+ * mode filtering:
+ *   const fieldCases   = data.cases.filter(c => c.modeFlags.isFieldActive);
+ *   const transitCases = data.cases.filter(c => c.modeFlags.isInTransit);
+ *   const heatPoints   = data.cases.filter(c => c.modeFlags.hasCoordinates);
+ *
+ * Real-time fidelity:
+ *   Convex re-evaluates the underlying getCasesMapPayload query within
+ *   ~100–300 ms whenever any SCAN mutation writes to cases, inspections,
+ *   or custodyRecords — satisfying the ≤ 2-second fidelity requirement.
+ *
+ * Return shape:
+ *   `undefined`              — loading (initial fetch or reconnect)
+ *   `CasesMapPayloadResponse` — live denormalized fleet payload
+ *
+ * @example
+ * // Global fleet view (all cases, all modes)
+ * const payload = useCasesMapPayload();
+ * if (!payload) return <MapSkeleton />;
+ *
+ * // Field mode pins only
+ * const fieldPins = payload.cases.filter(c => c.modeFlags.isFieldActive);
+ *
+ * // Viewport-scoped + deployed/flagged only
+ * const fieldData = useCasesMapPayload({
+ *   bounds: mapBounds,
+ *   status: ["deployed", "flagged"],
+ * });
+ */
+export function useCasesMapPayload(args: UseCasesMapPayloadArgs = {}) {
+  const { bounds, status, assigneeId, missionId } = args;
+
+  return useQuery(api.mapData.getCasesMapPayload, {
+    ...(bounds      ? bounds              : {}),
+    ...(status?.length ? { status }       : {}),
+    ...(assigneeId  ? { assigneeId }      : {}),
+    ...(missionId   ? { missionId }       : {}),
   });
 }

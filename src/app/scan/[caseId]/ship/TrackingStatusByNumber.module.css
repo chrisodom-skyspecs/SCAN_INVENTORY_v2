@@ -1,0 +1,452 @@
+/**
+ * TrackingStatusByNumber.module.css
+ *
+ * Styles for the SCAN app's tracking-number-based status component.
+ * Design tokens only — no hex literals, no hard-coded colour values.
+ * IBM Plex Mono for tracking numbers (data content).
+ * Inter Tight for all other text (UI content).
+ * Touch targets: minimum 44×44px (WCAG 2.5.5).
+ * WCAG AA contrast compliance for both light and dark themes.
+ */
+
+/* ── Root ──────────────────────────────────────────────────────────── */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+}
+
+/* ── Loading state ─────────────────────────────────────────────────── */
+
+.loadingState {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 1rem 0;
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+}
+
+.loadingText {
+  color: var(--ink-secondary);
+}
+
+/* ── Loading spinner ───────────────────────────────────────────────── */
+
+.loadingSpinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border-subtle);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingSpinner {
+    animation: none;
+    border-color: var(--accent-primary);
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error state ───────────────────────────────────────────────────── */
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1rem;
+  background-color: var(--surface-danger-subtle, var(--surface-secondary));
+  border: 1px solid var(--border-danger-subtle, var(--border-subtle));
+  border-radius: var(--radius-md, 0.5rem);
+  text-align: center;
+}
+
+.errorIcon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--status-danger, var(--ink-secondary));
+  flex-shrink: 0;
+}
+
+.errorMessage {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-primary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.retryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;           /* 44px touch target */
+  padding: 0 1.25rem;
+  background-color: var(--surface-primary);
+  color: var(--accent-primary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm, 0.375rem);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.retryButton:hover:not(:disabled) {
+  background-color: var(--accent-primary);
+  color: var(--ink-on-accent, var(--surface-primary));
+}
+
+.retryButton:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent-primary));
+  outline-offset: 2px;
+}
+
+/* ── Data state ────────────────────────────────────────────────────── */
+
+.dataState {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ── Status row: carrier + refresh button ──────────────────────────── */
+/* Note: StatusPill is now in StatusAndLocationSection, not here.       */
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/* ── Sub-AC 2: Status and location display section ─────────────────── */
+/*                                                                       */
+/* Primary visual anchor — renders status badge + last-known location   */
+/* from the Convex action response (api.shipping.trackShipment).        */
+/* Designed for mobile: large touch-friendly, scan-at-a-glance layout.  */
+
+.statusLocationSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  background-color: var(--surface-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 0.5rem);
+}
+
+/* ── Status badge + live indicator row ────────────────────────────── */
+
+.statusLocationHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Live badge — pulses to indicate fresh action data ────────────── */
+
+.statusLocationLiveBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  background-color: var(--signal-success-fill);
+  color: var(--signal-success-text);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 9999px;
+}
+
+.statusLocationLiveBadge::before {
+  content: "";
+  display: inline-block;
+  width: 0.3125rem;
+  height: 0.3125rem;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: statusLocationPulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statusLocationLiveBadge::before {
+    animation: none;
+  }
+}
+
+@keyframes statusLocationPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* ── Human-readable status description ────────────────────────────── */
+
+.statusLocationDesc {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Last-known location row ──────────────────────────────────────── */
+
+.statusLocationRow {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.125rem;
+}
+
+.statusLocationPin {
+  width: 0.75rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: var(--ink-tertiary);
+}
+
+.statusLocationText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.3;
+}
+
+/* On narrower screens, prevent truncation */
+@media (max-width: 360px) {
+  .statusLocationSection {
+    padding: 0.75rem;
+  }
+
+  .statusLocationText {
+    font-size: 0.75rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────── */
+
+.carrierBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1875rem 0.5rem;
+  background-color: var(--surface-secondary);
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: var(--radius-sm, 0.375rem);
+  border: 1px solid var(--border-subtle);
+}
+
+/* ── Refresh button ────────────────────────────────────────────────── */
+
+.refreshButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  min-height: 2.75rem;           /* 44px touch target */
+  padding: 0 0.875rem;
+  background-color: var(--surface-secondary);
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 0.375rem);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  white-space: nowrap;
+}
+
+.refreshButton:hover:not(:disabled) {
+  background-color: var(--surface-hover, var(--surface-secondary));
+  border-color: var(--border-default, var(--border-subtle));
+  color: var(--ink-primary);
+}
+
+.refreshButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.refreshButton:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent-primary));
+  outline-offset: 2px;
+}
+
+.refreshIcon {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* ── Status description ────────────────────────────────────────────── */
+
+.statusDescription {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* ── Details grid ──────────────────────────────────────────────────── */
+
+.detailsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0.875rem;
+  background-color: var(--surface-secondary);
+  border-radius: var(--radius-md, 0.5rem);
+  border: 1px solid var(--border-subtle);
+}
+
+.detailItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.detailLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+
+.detailValue {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-primary);
+  text-align: right;
+  word-break: break-all;
+}
+
+.detailValueMono {
+  font-family: "IBM Plex Mono", "Menlo", "Courier New", monospace;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+}
+
+/* ── Events section ────────────────────────────────────────────────── */
+
+.eventsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.eventsTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* ── Events timeline ───────────────────────────────────────────────── */
+
+.eventsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-left: 2px solid var(--border-subtle);
+  padding-left: 1rem;
+  margin-left: 0.375rem;
+}
+
+.eventItem {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.5rem 0;
+}
+
+/* Timeline node dot */
+.eventDot {
+  position: absolute;
+  left: -1.375rem;
+  top: 0.625rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  background-color: var(--border-subtle);
+  border: 2px solid var(--surface-primary);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.eventItem:first-child .eventDot {
+  background-color: var(--accent-primary);
+}
+
+.eventBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.eventRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.eventDescription {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-primary);
+  font-weight: 500;
+  line-height: 1.3;
+  flex: 1;
+  min-width: 0;
+}
+
+.eventTime {
+  font-family: "IBM Plex Mono", "Menlo", "Courier New", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.eventLocation {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  line-height: 1.3;
+}

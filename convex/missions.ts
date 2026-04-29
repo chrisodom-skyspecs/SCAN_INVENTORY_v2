@@ -29,7 +29,20 @@
  */
 
 import { query } from "./_generated/server";
+import type { Auth, UserIdentity } from "convex/server";
 import { v } from "convex/values";
+
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+
+async function requireAuth(ctx: { auth: Auth }): Promise<UserIdentity> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error(
+      "[AUTH_REQUIRED] Unauthenticated. Provide a valid Kinde access token."
+    );
+  }
+  return identity;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -108,6 +121,7 @@ export const listMissions = query({
     ),
   },
   handler: async (ctx, args): Promise<MissionSummary[]> => {
+    await requireAuth(ctx);
     let rows;
 
     if (args.status !== undefined) {
@@ -162,6 +176,7 @@ export const listMissions = query({
 export const getMissionById = query({
   args: { missionId: v.id("missions") },
   handler: async (ctx, args): Promise<MissionSummary | null> => {
+    await requireAuth(ctx);
     const m = await ctx.db.get(args.missionId);
     if (!m) return null;
 

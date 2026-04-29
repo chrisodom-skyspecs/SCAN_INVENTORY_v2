@@ -103,6 +103,22 @@ vi.mock("../../../../../hooks/use-fedex-tracking", () => ({
   })),
 }));
 
+// ─── Mock Kinde auth (browser client) ────────────────────────────────────────
+// Returns the placeholder "scan-user" identity expected by telemetry assertions.
+
+vi.mock("@kinde-oss/kinde-auth-nextjs", () => ({
+  useKindeBrowserClient: () => ({
+    user: {
+      id:          "scan-user",
+      given_name:  "Field",
+      family_name: "Technician",
+      email:       "field.technician@skyspecs.com",
+    },
+    isAuthenticated: true,
+    isLoading:       false,
+  }),
+}));
+
 // ─── Mock use-scan-mutations ──────────────────────────────────────────────────
 // We delegate to a module-level variable so individual tests can swap the
 // implementation via `mockShipCaseImpl` without re-mocking the module.

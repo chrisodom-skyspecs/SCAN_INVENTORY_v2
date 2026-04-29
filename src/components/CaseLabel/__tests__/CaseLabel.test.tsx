@@ -38,6 +38,7 @@ const FULL_DATA: CaseLabelData = {
   missionName: "Site A Deployment",
   assigneeName: "Jane Doe",
   locationName: "Grand Rapids, MI",
+  createdAt: new Date("2026-01-15T10:30:00Z"),
   notes: "Handle with care",
 };
 
@@ -162,6 +163,34 @@ describe("CaseLabel — optional metadata fields", () => {
   it("hides notes section when not provided", () => {
     render(<CaseLabel data={BASE_DATA} />);
     expect(screen.queryByText("Notes")).toBeNull();
+  });
+
+  it("renders createdAt as YYYY-MM-DD when provided as a Date", () => {
+    render(<CaseLabel data={FULL_DATA} />);
+    expect(screen.getByText("2026-01-15")).toBeTruthy();
+  });
+
+  it("renders createdAt when provided as an ISO string", () => {
+    const data: CaseLabelData = {
+      ...BASE_DATA,
+      createdAt: "2025-06-20T08:00:00Z",
+    };
+    render(<CaseLabel data={data} />);
+    expect(screen.getByText("2025-06-20")).toBeTruthy();
+  });
+
+  it("hides createdAt field when not provided", () => {
+    render(<CaseLabel data={BASE_DATA} />);
+    expect(screen.queryByText("Created")).toBeNull();
+  });
+
+  it("hides createdAt field when value is an invalid date string", () => {
+    const data: CaseLabelData = {
+      ...BASE_DATA,
+      createdAt: "not-a-date",
+    };
+    render(<CaseLabel data={data} />);
+    expect(screen.queryByText("Created")).toBeNull();
   });
 });
 

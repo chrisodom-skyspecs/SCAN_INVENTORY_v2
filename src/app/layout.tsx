@@ -11,6 +11,7 @@
 import type { Metadata, Viewport } from "next";
 import { Providers } from "./providers";
 import "../styles/tokens/base.css";
+import "../styles/tokens/breakpoints.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,6 +19,24 @@ export const metadata: Metadata = {
   description:
     "Track equipment cases through assembly, deployment, field inspection, shipping, and return.",
   manifest: "/manifest.json",
+  // Apple touch icon (iOS "Add to Home Screen")
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "SkySpecs SCAN",
+  },
+  icons: {
+    // Standard favicon
+    icon: [
+      { url: "/icons/icon-192.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-512.svg", sizes: "512x512", type: "image/svg+xml" },
+    ],
+    // Apple touch icon — used when "Add to Home Screen" on iOS
+    apple: [
+      { url: "/icons/icon-180.svg", sizes: "180x180", type: "image/svg+xml" },
+      { url: "/icons/icon-152.svg", sizes: "152x152", type: "image/svg+xml" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {

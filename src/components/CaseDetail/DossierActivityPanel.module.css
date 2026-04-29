@@ -1,0 +1,576 @@
+/**
+ * DossierActivityPanel.module.css
+ *
+ * Styles for the Activity tab content panel in T4DossierShell.
+ *
+ * Design principles:
+ *   • Flat activity-feed layout — NOT a vertical spine timeline
+ *   • Action type chips are the primary visual differentiator
+ *   • User attribution is visually prominent (avatar circle + name)
+ *   • Compact row height suits the tabbed dossier context
+ *
+ * Design-system compliance:
+ *   • Zero hex literals — all colors via CSS custom property tokens
+ *   • Inter Tight for UI labels, names, chip text, description text
+ *   • IBM Plex Mono for timestamps and tracking numbers
+ *   • WCAG AA contrast in both light and dark themes
+ *   • Dark theme via :global(.theme-dark) selectors
+ *
+ * Token families used:
+ *   --surface-*           backgrounds and chip fills
+ *   --ink-*               text hierarchy
+ *   --border-*            dividers between entries
+ *   --layer-transit-*     "field" category chip color (inspection, shipment)
+ *   --signal-error-*      "damage" category chip color
+ *   --elevation-*         focus ring on avatar (future: clickable actor link)
+ */
+
+/* ── Root panel container ──────────────────────────────────────────── */
+
+/**
+ * .panel fills the parent tabpanel flex-column.
+ *
+ * The T4DossierShell .tabPanel already handles overflow-y: auto and
+ * padding: 1.25rem.  This panel does NOT create a second scroll container —
+ * it delegates scrolling to the parent.
+ */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+}
+
+/* ── Panel header ──────────────────────────────────────────────────── */
+
+/**
+ * .panelHeader — sticky header with title, count badge, and sort indicator.
+ *
+ * Sticky offset: top: -1.25rem compensates for the T4DossierShell .tabPanel
+ * padding: 1.25rem, keeping the header flush at the scroll viewport top.
+ * This mirrors the identical calculation in T1TimelinePanel.module.css and
+ * T2Timeline.module.css.
+ *
+ * z-index: 2 keeps the header above entry rows as they scroll beneath.
+ * background-color uses --surface-raised to cleanly occlude scrolled entries.
+ */
+.panelHeader {
+  position: sticky;
+  top: -1.25rem; /* compensate for parent .tabPanel padding: 1.25rem */
+  z-index: 2;
+
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+
+  padding: 0.875rem 0 0.75rem;
+  background-color: var(--surface-raised);
+
+  /* Bottom edge so scrolling entries slide cleanly under the header */
+  box-shadow: 0 1px 0 var(--border-subtle);
+  margin-bottom: 0.75rem;
+}
+
+.panelHeaderLeft {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* ── Panel title ───────────────────────────────────────────────────── */
+
+/**
+ * Section label — small uppercase caps per the design system convention
+ * used across all case detail panel headers.
+ */
+.panelTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;     /* 11px */
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* ── Count badge ───────────────────────────────────────────────────── */
+
+/**
+ * .countBadge — compact numeric chip showing total event count.
+ * IBM Plex Mono for tabular numeric content.
+ * aria-live="polite" (set in TSX) announces new events to screen readers.
+ */
+.countBadge {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;     /* 9px */
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  flex-shrink: 0;
+  line-height: 1.6;
+}
+
+/* ── Panel subtitle ────────────────────────────────────────────────── */
+
+.panelSubtitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;      /* 10px */
+  color: var(--ink-disabled);
+  margin: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Activity feed list ────────────────────────────────────────────── */
+
+/**
+ * .feedList — the <ol> container for activity entries.
+ * list-style: none removes default ordered-list markers —
+ * visual ordering is conveyed by position, not by ordinal numbers.
+ */
+.feedList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Single activity entry ─────────────────────────────────────────── */
+
+/**
+ * .entry — a single row in the activity feed.
+ *
+ * Uses flex-column layout to stack:
+ *   • Row 1: action chip + event label + status pill
+ *   • Row 2: user avatar + name + timestamp
+ *   • Row 3: event description (optional)
+ *
+ * Bottom border on every entry except the last creates the feed divider.
+ * Padding provides internal breathing room.
+ *
+ * The feed uses border-box dividers rather than the spine-thread pattern
+ * used by T1TimelinePanel / T2Timeline — this is intentional to create
+ * a visually distinct "activity feed" aesthetic.
+ */
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;          /* 5px between rows */
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+  list-style: none;
+}
+
+/* Remove bottom border from the last entry */
+.entry[data-is-last="true"] {
+  border-bottom: none;
+}
+
+/* ── Row 1: entry header (action chip + event label + status pill) ─── */
+
+.entryHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;           /* 7px */
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+
+/* ── Action type indicator chip ────────────────────────────────────── */
+
+/**
+ * .actionChip — the primary action-type indicator for each feed entry.
+ *
+ * A compact pill-shaped badge with a short uppercase category label.
+ * Color is controlled via [data-category] attribute selectors below.
+ *
+ * [data-category="brand"]   → status_change, mission_assigned
+ * [data-category="field"]   → inspection_*, item_checked, shipped, delivered
+ * [data-category="damage"]  → damage_reported
+ * [data-category="neutral"] → custody_handoff, template_applied, photo_added, note_added
+ *
+ * Base (default: neutral) — gray chip
+ */
+.actionChip {
+  /* Layout */
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0.125rem 0.375rem;   /* 2px 6px */
+  border-radius: 9999px;
+
+  /* Typography — Inter Tight, narrow uppercase for badge text */
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5rem;             /* 8px — very compact badge */
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.4;
+
+  /* Default (neutral) — gray background */
+  background-color: var(--signal-neutral-fill-subtle);
+  color: var(--signal-neutral-text-subtle);
+  border: 1px solid var(--signal-neutral-border);
+}
+
+/* Brand variant — status_change, mission_assigned */
+.actionChip[data-category="brand"] {
+  background-color: var(--surface-brand-subtle);
+  color: var(--ink-brand);
+  border-color: var(--border-brand);
+}
+
+/* Field variant — inspection_*, item_checked, shipped, delivered */
+.actionChip[data-category="field"] {
+  background-color: var(--layer-transit-subtle);
+  color: var(--layer-transit-color);
+  border-color: var(--layer-transit-border);
+}
+
+/* Damage variant — damage_reported */
+.actionChip[data-category="damage"] {
+  background-color: var(--signal-error-fill-subtle);
+  color: var(--signal-error-text-subtle);
+  border-color: var(--signal-error-border);
+}
+
+/* ── Event type label ──────────────────────────────────────────────── */
+
+/**
+ * .eventLabel — the primary action name ("Status Changed", "Damage Reported").
+ * Inter Tight semibold for legibility at small sizes.
+ * Damage events use error color for immediate visual attention.
+ */
+.eventLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;    /* 13px */
+  font-weight: 600;
+  color: var(--ink-primary);
+  line-height: 1.3;
+  min-width: 0;
+}
+
+/* Damage events: emphasize label in error color */
+.entry[data-event-type="damage_reported"] .eventLabel {
+  color: var(--ink-critical);
+}
+
+/* ── Row 2: entry meta (user avatar + name + separator + timestamp) ── */
+
+.entryMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;          /* 5px */
+  flex-wrap: wrap;
+  row-gap: 0.1875rem;
+}
+
+/* ── User avatar circle ────────────────────────────────────────────── */
+
+/**
+ * .userAvatar — circular badge displaying the user's initials.
+ *
+ * Size: 1.25rem × 1.25rem (20px) — compact but legible at this scale.
+ * Background: --surface-sunken with a subtle border creates depth without
+ * competing with the action chip above.
+ *
+ * The initials font size is intentionally small (0.5625rem / 9px) to fit
+ * 2-letter initials comfortably in the 20px circle.
+ */
+.userAvatar {
+  width: 1.25rem;           /* 20px */
+  height: 1.25rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5rem;        /* 8px — fits "AT" in 20px circle */
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+  line-height: 1;
+  user-select: none;
+}
+
+/* ── User name ─────────────────────────────────────────────────────── */
+
+.userName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;       /* 12px */
+  font-weight: 500;
+  color: var(--ink-secondary);
+  line-height: 1.4;
+  min-width: 0;
+  /* Truncate long names gracefully */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 12rem;
+}
+
+/* ── Meta separator (·) ────────────────────────────────────────────── */
+
+.metaSep {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;     /* 11px */
+  color: var(--ink-disabled);
+  line-height: 1.4;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* ── Timestamp ─────────────────────────────────────────────────────── */
+
+.timestamp {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;     /* 11px */
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Row 3: event description ──────────────────────────────────────── */
+
+/**
+ * .entryDescription — a brief, event-type-specific description line.
+ * Rendered below the meta row for events with meaningful payload data.
+ * Uses Inter Tight at a slightly smaller size to keep it subordinate to
+ * the event label above it.
+ */
+.entryDescription {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;       /* 12px */
+  color: var(--ink-secondary);
+  margin: 0;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  flex-wrap: wrap;
+}
+
+/* ── Description sub-elements ──────────────────────────────────────── */
+
+/* Status "from" value — muted tertiary (old state) */
+.descFrom {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  text-transform: capitalize;
+}
+
+/* Transition arrow (→) — disabled ink, purely decorative */
+.descArrow {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-disabled);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Status "to" value — primary bold (new state) */
+.descTo {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  text-transform: capitalize;
+}
+
+/* Item name in item_checked descriptions */
+.descItemName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+}
+
+/* Item status in item_checked descriptions */
+.descItemStatus {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-secondary);
+  text-transform: capitalize;
+}
+
+/* FedEx tracking number in shipped descriptions — brand-colored mono */
+.descTrackingNumber {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-brand);
+  letter-spacing: 0.01em;
+}
+
+/* Route summary in shipped descriptions ("Origin → Destination") */
+.descRoute {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+}
+
+/* ── Loading skeleton ──────────────────────────────────────────────── */
+
+/**
+ * .skeleton — container for shimmer placeholder rows.
+ * Uses entry-proportional row heights to prevent layout shift.
+ */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.25rem 0;
+}
+
+.skeletonEntry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.skeletonEntry:last-child {
+  border-bottom: none;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+}
+
+/**
+ * Base shimmer block — animated gradient sweep.
+ * Respects prefers-reduced-motion.
+ */
+.skeletonBlock {
+  border-radius: 0.25rem;
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-hover) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 400% 100%;
+  animation: activityShimmer 1.4s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonBlock {
+    animation: none;
+    background: var(--surface-sunken);
+  }
+}
+
+@keyframes activityShimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Skeleton chip — proportional to real .actionChip */
+.skeletonChip {
+  width: 2.75rem;
+  height: 1rem;
+  border-radius: 9999px;
+}
+
+/* Skeleton label — proportional to real .eventLabel */
+.skeletonLabel {
+  width: 7rem;
+  height: 0.8125rem;
+}
+
+/* Skeleton avatar — proportional to real .userAvatar */
+.skeletonAvatar {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+}
+
+/* Skeleton meta line (name + timestamp) */
+.skeletonMeta {
+  width: 9rem;
+  height: 0.75rem;
+}
+
+/* Skeleton description — optional third row */
+.skeletonDesc {
+  width: 12rem;
+  height: 0.75rem;
+  margin-left: 1.6875rem; /* align with content after avatar width + gap */
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied when html.theme-dark is active.
+   The token cascade handles most swaps; these rules address
+   elements needing additional visual polish in the dark palette.
+   ============================================================ */
+
+/* Panel header — strengthen bottom shadow visibility in dark mode */
+:global(.theme-dark) .panelHeader {
+  box-shadow: 0 1px 0 var(--border-default);
+}
+
+/* Count badge — border-subtle is nearly invisible against dark sunken bg */
+:global(.theme-dark) .countBadge {
+  border-color: var(--border-default);
+}
+
+/* Entry dividers — strengthen against dark surface */
+:global(.theme-dark) .entry {
+  border-bottom-color: var(--border-default);
+}
+
+/* User avatar — bump border for shape definition in dark mode */
+:global(.theme-dark) .userAvatar {
+  border-color: var(--border-strong);
+}
+
+/* Skeleton shimmer — use surface-active (brighter) for visible sweep */
+:global(.theme-dark) .skeletonBlock {
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-active) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 400% 100%;
+}
+
+/* Skeleton entry divider — match entry divider strength */
+:global(.theme-dark) .skeletonEntry {
+  border-bottom-color: var(--border-default);
+}
+
+/* Brand chip in dark mode — ink-brand is already adjusted via token remapping */
+:global(.theme-dark) .actionChip[data-category="brand"] {
+  background-color: var(--surface-brand-subtle);
+}
+
+/* Field chip in dark mode — layer-transit tokens remap automatically */
+:global(.theme-dark) .actionChip[data-category="field"] {
+  background-color: var(--layer-transit-subtle);
+}

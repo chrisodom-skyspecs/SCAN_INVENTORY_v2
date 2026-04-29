@@ -1,21 +1,31 @@
 /**
- * M3TransitTracker — Transit Tracker map mode
+ * M3TransitTracker — Field Mode map view
  *
- * Shows in-transit cases with FedEx route overlays.
+ * Shows cases in active field inspection with inspection progress data.
+ * Provides a field operations view for technicians and ops staff, showing
+ * deployed and flagged cases with checklist completion progress.
  * URL params wired via useMapParams:
  *   • view  → mode tab click calls setView(mode)
- *   • org   → org dropdown calls setOrg(id) / setOrg(null)
+ *   • org   → org dropdown calls setOrg(id) / setOrg(null)  (maps to missionId)
  *   • kit   → kit dropdown calls setKit(id) / setKit(null)
  *   • at    → time picker calls setAt(date) / setAt(null)
  *
  * The `at` param enables time-scrubbing: navigating back to a past
- * timestamp shows a historical snapshot of transit positions.
+ * timestamp shows a historical snapshot of field positions and inspection state.
  *
- * Data source: useMapCasePins (Convex real-time subscription).
- *   Subscribes to api.mapData.getM1MapData filtered to status: ["shipping"].
- *   Convex re-evaluates within ~100–300 ms of any SCAN app mutation that
- *   transitions a case into or out of the "shipping" status, satisfying
- *   the ≤ 2-second real-time fidelity requirement.
+ * Data source: useCaseMapData({ mode: "M3" }) — Convex real-time M3 subscription.
+ *   Subscribes to api.mapData.getM3MapData, which returns deployed and flagged
+ *   cases with inspection progress data (checkedItems, totalItems,
+ *   inspectionProgress, damagedItems, missingItems) and custody state.
+ *
+ *   Reactive to:
+ *     • scan.scanCheckIn         → transitions case to deployed, creates inspection
+ *     • scan.updateChecklistItem → updates inspection counters (immediate M3 update)
+ *     • scan.startInspection     → creates new inspection row
+ *     • scan.completeInspection  → inspection status to completed/flagged
+ *     • custody.transferCustody  → updates custodian on field case pins
+ *   Convex re-evaluates within ~100–300 ms, satisfying the ≤ 2-second real-time
+ *   fidelity requirement.
  *
  * Design tokens: all colors via var(--map-m3-*) and var(--surface-*).
  * No hex literals; WCAG AA compliant.
@@ -25,16 +35,20 @@
 
 import { type ChangeEvent, useId } from "react";
 import { useMapParams } from "@/hooks/use-map-params";
-import { useMapCasePins, type CaseStatus } from "@/hooks/use-map-case-pins";
+import { useCaseMapData } from "@/hooks/use-case-map-data";
 import { MAP_VIEW_VALUES, type MapView } from "@/types/map";
+import { useIsDark } from "@/providers/theme-provider";
 import styles from "./M3TransitTracker.module.css";
 
-// ── In-transit status filter ──────────────────────────────────────────────────
-//
-// M3 shows only cases that are currently shipping (in transit via FedEx).
-// Typed explicitly as CaseStatus[] for stable array identity — same reference
-// across renders avoids redundant Convex re-subscriptions.
-const IN_TRANSIT_STATUSES: CaseStatus[] = ["shipping"];
+// ─── Mapbox style URLs ────────────────────────────────────────────────────────
+
+/**
+ * M3 uses the "streets" base style — roads are essential context for
+ * in-transit shipment routes.  Switches between light and dark variants
+ * based on the active theme so shipping routes render with appropriate contrast.
+ */
+const MAPBOX_STYLE_LIGHT = "mapbox://styles/mapbox/streets-v12";
+const MAPBOX_STYLE_DARK  = "mapbox://styles/mapbox/dark-v11";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -89,11 +103,12 @@ export interface M3TransitTrackerProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
- * M3 — Transit Tracker
+ * M3 — Field Mode
  *
- * Renders an in-transit case map with filter + time controls.
- * Subscribes to live case pin data via useMapCasePins filtered to
- * ["shipping"] status — the in-transit subset.
+ * Renders a field-inspection map panel with filter + time controls.
+ * Subscribes to live field-case data via useCaseMapData({ mode: "M3" }),
+ * which queries api.mapData.getM3MapData — deployed and flagged cases with
+ * inspection progress data (checklist completion, damage, missing items).
  * All filter changes write to the URL via useMapParams.
  */
 export function M3TransitTracker({
@@ -105,20 +120,34 @@ export function M3TransitTracker({
 }: M3TransitTrackerProps) {
   const { view, org, kit, at, setView, setOrg, setKit, setAt } = useMapParams();
 
-  // ── Live in-transit pin subscription (Convex real-time) ───────────
+  // ── Dark mode — Mapbox style switching ───────────────────────────────────────
   //
-  // Filtered to ["shipping"] — cases currently moving via FedEx.
+  // useIsDark() reads the ThemeContext.  In dark mode the "dark-v11" Mapbox
+  // style is used so transit routes (orange overlays) render with high contrast
+  // against the dark base map.
+  const isDark   = useIsDark();
+  const mapStyle = isDark ? MAPBOX_STYLE_DARK : MAPBOX_STYLE_LIGHT;
+
+  // ── Live M3 Field Mode subscription via useCaseMapData ────────────
+  //
+  // useCaseMapData({ mode: "M3" }) subscribes to api.mapData.getM3MapData,
+  // returning deployed and flagged cases with full inspection progress data:
+  //   • inspectionProgress  — 0–100 completion percentage
+  //   • checkedItems        — items checked in the packing list
+  //   • totalItems          — total packing list items
+  //   • damagedItems        — items marked as damaged
+  //   • missingItems        — items reported missing
+  //   • currentCustodianId/Name — who physically holds the case
+  //
   // `org` maps to a Convex mission document ID for per-mission scoping.
   //
-  // The stable `IN_TRANSIT_STATUSES` constant is defined at module scope
-  // to prevent re-subscription on every render (array identity stable).
-  //
   // Convex re-evaluates within ~100–300 ms when:
-  //   • shipping.shipCase transitions a case to "shipping"
-  //   • scan.scanCheckIn transitions a case OUT of "shipping"
-  //   • Any custody transfer changes the assigneeId on a shipping case
-  const { pins, isLoading, summary } = useMapCasePins({
-    status: IN_TRANSIT_STATUSES,
+  //   • scan.updateChecklistItem updates inspection counters
+  //   • scan.startInspection creates a new inspection row
+  //   • scan.completeInspection transitions inspection status
+  //   • scan.scanCheckIn transitions a case to deployed
+  const { records: pins, isLoading, summary } = useCaseMapData({
+    mode: "M3",
     missionId: org ?? undefined,
   });
 
@@ -127,7 +156,18 @@ export function M3TransitTracker({
   const timePickerId = useId();
 
   // ── Derived counts ─────────────────────────────────────────────────
-  const inTransitCount = summary?.byStatus?.["shipping"] ?? 0;
+  //
+  // M3 (Field Mode) returns deployed and flagged cases.  summary.byStatus
+  // contains inspection-status breakdowns ("in_progress", "completed",
+  // "flagged", "none"), not case lifecycle statuses.  We compute field case
+  // counts directly from summary.total (total deployed+flagged field cases)
+  // and from the records array for individual status breakdowns.
+  const fieldCaseCount   = summary?.total ?? pins.length;
+  const deployedCount    = pins.filter((p) => p.status === "deployed").length;
+  const flaggedCount     = pins.filter((p) => p.status === "flagged").length;
+  const inProgressCount  = summary?.byStatus?.["in_progress"] ?? 0;
+  // Legacy alias kept for the badge aria-label and SR output below
+  const inTransitCount   = fieldCaseCount;
 
   // ── Handlers ──────────────────────────────────────────────────────
 
@@ -225,10 +265,10 @@ export function M3TransitTracker({
             </select>
           </div>
 
-          {/* Time picker (at) — transit position snapshot */}
+          {/* Time picker (at) — field position snapshot */}
           <div className={styles.filterGroup}>
             <label htmlFor={timePickerId} className={styles.filterLabel}>
-              Transit snapshot
+              Field snapshot
             </label>
             <div className={styles.timePickerRow}>
               <input
@@ -243,14 +283,14 @@ export function M3TransitTracker({
                     : toDatetimeLocalValue(new Date())
                 }
                 onChange={handleAtChange}
-                aria-label="Snapshot timestamp — view historical transit positions"
+                aria-label="Snapshot timestamp — view historical field positions and inspection state"
               />
               {at !== null && (
                 <button
                   type="button"
                   className={styles.clearAtButton}
                   onClick={handleClearAt}
-                  aria-label="Clear time snapshot — return to live transit view"
+                  aria-label="Clear time snapshot — return to live field view"
                 >
                   <span aria-hidden="true">×</span>
                 </button>
@@ -266,26 +306,26 @@ export function M3TransitTracker({
             )}
           </div>
 
-          {/* In-transit summary badge (live — updates via Convex subscription) */}
+          {/* Field case summary badge (live — updates via useCaseMapData M3 subscription) */}
           <div className={styles.filterGroup} aria-live="polite" aria-atomic="true">
-            <span className={styles.filterLabel}>In transit</span>
+            <span className={styles.filterLabel}>In field</span>
             <span
               className={styles.summaryBadge}
               data-loading={isLoading ? "true" : undefined}
               data-pin-count={pins.length}
               aria-label={
                 isLoading
-                  ? "Loading transit data…"
-                  : `${inTransitCount} case${inTransitCount !== 1 ? "s" : ""} in transit`
+                  ? "Loading field data…"
+                  : `${fieldCaseCount} case${fieldCaseCount !== 1 ? "s" : ""} in field (${deployedCount} deployed, ${flaggedCount} flagged, ${inProgressCount} inspecting)`
               }
             >
               {isLoading ? (
                 <span className={styles.summaryLoading} aria-hidden="true" />
               ) : (
                 <span className={styles.summaryCount}>
-                  <span className={styles.summaryNumber}>{inTransitCount}</span>
+                  <span className={styles.summaryNumber}>{fieldCaseCount}</span>
                   <span className={styles.summaryUnit}>
-                    {inTransitCount === 1 ? "case" : "cases"}
+                    {fieldCaseCount === 1 ? "case" : "cases"}
                   </span>
                 </span>
               )}
@@ -295,14 +335,18 @@ export function M3TransitTracker({
       </header>
 
       {/* ── Map canvas ── */}
-      <main className={styles.mapCanvas} aria-label="Transit tracker map">
+      <main className={styles.mapCanvas} aria-label="Field mode map">
         {mapboxToken ? (
-          /* Map rendered by react-map-gl; transit pin data exposed via data
-             attributes for the Mapbox layer integration to consume. */
+          /* Map rendered by react-map-gl; M3 field-mode case pin data exposed via
+             data attributes for the Mapbox layer integration.  Each CaseMapRecord
+             carries inspection progress fields (inspectionProgress, checkedItems,
+             totalItems) for overlay rendering on the field map. */
           <div
             id="m3-map-container"
             className={styles.mapContainer}
             data-mapbox-token={mapboxToken}
+            data-mapbox-style={mapStyle}
+            data-theme={isDark ? "dark" : "light"}
             data-pin-count={pins.length}
             data-loading={isLoading ? "true" : undefined}
           />
@@ -314,7 +358,7 @@ export function M3TransitTracker({
           >
             {isLoading ? (
               <p className={styles.mapPlaceholderText}>
-                Loading transit data…
+                Loading field data…
               </p>
             ) : (
               <>
@@ -325,10 +369,11 @@ export function M3TransitTracker({
                   </code>
                 </p>
                 {pins.length > 0 && (
-                  /* Transit case list — live data from the Convex subscription */
+                  /* Field case list — live data from useCaseMapData M3 subscription.
+                     Each record includes inspection progress for tooltip rendering. */
                   <ul
                     className={styles.pinList}
-                    aria-label={`${pins.length} case${pins.length !== 1 ? "s" : ""} in transit`}
+                    aria-label={`${pins.length} case${pins.length !== 1 ? "s" : ""} in field`}
                     data-testid="m3-pin-list"
                   >
                     {pins.slice(0, 20).map((pin) => (
@@ -337,6 +382,7 @@ export function M3TransitTracker({
                         className={styles.pinListItem}
                         data-status={pin.status}
                         data-case-id={pin.caseId}
+                        data-inspection-progress={pin.inspectionProgress}
                       >
                         <span
                           className={styles.pinDot}
@@ -353,6 +399,15 @@ export function M3TransitTracker({
                         {pin.locationName && (
                           <span className={styles.pinLocation}>
                             {pin.locationName}
+                          </span>
+                        )}
+                        {/* Inspection progress overlay — available on M3 CaseMapRecord */}
+                        {pin.inspectionProgress !== undefined && (
+                          <span
+                            className={styles.pinInspectionProgress}
+                            aria-label={`Inspection: ${pin.inspectionProgress}% complete`}
+                          >
+                            {pin.inspectionProgress}%
                           </span>
                         )}
                       </li>
@@ -376,10 +431,10 @@ export function M3TransitTracker({
         aria-live="polite"
         aria-atomic="true"
       >
-        {`Transit tracker. View: ${MAP_MODE_LABELS[view]}.`}
+        {`Field mode. View: ${MAP_MODE_LABELS[view]}.`}
         {isLoading
-          ? " Loading transit data."
-          : ` ${inTransitCount} case${inTransitCount !== 1 ? "s" : ""} in transit.`}
+          ? " Loading field data."
+          : ` ${fieldCaseCount} case${fieldCaseCount !== 1 ? "s" : ""} in field (${deployedCount} deployed, ${flaggedCount} flagged).`}
         {org ? ` Organisation filter active.` : ""}
         {kit ? ` Kit filter active.` : ""}
         {at ? ` Showing snapshot at ${at.toLocaleString()}.` : " Live view."}

@@ -66,38 +66,18 @@ import {
   useMemo,
 } from "react";
 import Link from "next/link";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { StatusPill } from "../../../../components/StatusPill";
+import { useKindeUser } from "../../../../hooks/use-kinde-user";
+import { useAssociateQRCode } from "../../../../hooks/use-scan-mutations";
+import { useScanCaseDetail } from "../../../../hooks/use-scan-queries";
 import { trackEvent } from "../../../../lib/telemetry.lib";
 import { TelemetryEventName } from "../../../../types/telemetry.types";
 import styles from "./page.module.css";
 
-// ─── BarcodeDetector type shim ────────────────────────────────────────────────
-// The W3C BarcodeDetector API is not yet in the TypeScript DOM lib.
-// We declare a minimal local shim so we can reference it type-safely.
-
-interface BarcodeDetectorResult {
-  rawValue: string;
-  format: string;
-}
-
-interface BarcodeDetectorInstance {
-  detect(
-    image: HTMLVideoElement | HTMLCanvasElement | ImageBitmap
-  ): Promise<BarcodeDetectorResult[]>;
-}
-
-interface BarcodeDetectorConstructor {
-  new (options?: { formats: string[] }): BarcodeDetectorInstance;
-  getSupportedFormats?(): Promise<string[]>;
-}
-
-declare global {
-  interface Window {
-    BarcodeDetector?: BarcodeDetectorConstructor;
-  }
-}
+// BarcodeDetector global types are declared in src/types/barcode-detector.d.ts
 
 // ─── Flow step type ───────────────────────────────────────────────────────────
 
@@ -621,26 +601,28 @@ function ConfirmStep({
   isSubmitting,
   submitError,
 }: ConfirmStepProps) {
-  // Fetch target case by ID (real-time subscription)
-  const caseDoc = useQuery(api.cases.getCaseById, { caseId });
+  // Fetch target case by ID via SCAN query layer (real-time subscription).
+  // useScanCaseDetail delegates to useCaseById which re-evaluates within
+  // ~100–300 ms whenever the cases row changes.
+  const caseDoc = useScanCaseDetail(caseId);
 
-  // Cross-check: is this QR already mapped to another case?
-  const existingCase = useQuery(api.cases.getCaseByQrCode, { qrCode: scannedQR });
+  // Pre-flight QR validation: structured result with conflict metadata.
+  // This is a real-time subscription — Convex re-evaluates if another client
+  // maps the same QR code between capture and this confirmation step.
+  // validateQrCode returns richer conflict metadata than getCaseByQrCode,
+  // so it remains a direct useQuery (not wrapped by the SCAN layer).
+  const qrValidation = useQuery(api.qrCodes.validateQrCode, {
+    qrCode: scannedQR,
+    caseId: caseId as Id<"cases">,
+  });
 
-  // Derive conflict + already-mapped states
+  // Derive conflict + already-mapped states from the typed validation result
   const isLoadingCase = caseDoc === undefined;
-  const isLoadingConflict = existingCase === undefined;
-  const isLoading = isLoadingCase || isLoadingConflict;
+  const isLoadingValidation = qrValidation === undefined;
+  const isLoading = isLoadingCase || isLoadingValidation;
 
-  const isAlreadyMapped =
-    existingCase !== null &&
-    existingCase !== undefined &&
-    existingCase._id === caseId;
-
-  const hasConflict =
-    existingCase !== null &&
-    existingCase !== undefined &&
-    existingCase._id !== caseId;
+  const isAlreadyMapped = qrValidation?.status === "mapped_to_this_case";
+  const hasConflict = qrValidation?.status === "mapped_to_other_case";
 
   return (
     <div className={styles.step} data-testid="confirm-step">
@@ -750,10 +732,10 @@ function ConfirmStep({
 
           {/* State banners */}
           {isAlreadyMapped && <AlreadyMappedBanner />}
-          {hasConflict && existingCase && (
+          {hasConflict && qrValidation?.conflictingCaseLabel && (
             <ConflictBanner
-              existingCaseLabel={existingCase.label}
-              existingCaseId={existingCase._id}
+              existingCaseLabel={qrValidation.conflictingCaseLabel}
+              existingCaseId={qrValidation.conflictingCaseId ?? ""}
             />
           )}
 
@@ -1016,9 +998,19 @@ function ResultStep({
  * after a QR code is actually captured, avoiding unnecessary Convex queries.
  */
 export function AssociateQRClient({ caseId }: AssociateQRClientProps) {
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  const { id: userId, name: userName } = useKindeUser();
+
   // ── Convex ────────────────────────────────────────────────────────────────
-  const caseDoc = useQuery(api.cases.getCaseById, { caseId });
-  const associateMutation = useMutation(api.qrCodes.associateQRCodeToCase);
+  // useScanCaseDetail delegates to useCaseById via the SCAN query layer.
+  // Re-evaluates within ~100–300 ms after associateQRCodeToCase patches
+  // cases.qrCode + cases.updatedAt, so the page header reflects the new QR
+  // state without a reload.
+  const caseDoc = useScanCaseDetail(caseId);
+  // useAssociateQRCode wraps associateQRCodeToCase with an optimistic update
+  // that immediately reflects the new qrCode on getCaseById before the server
+  // confirms the write (rolls back automatically on failure).
+  const associateMutation = useAssociateQRCode();
 
   // ── Flow state ────────────────────────────────────────────────────────────
   const [step, setStep] = useState<FlowStep>("scan");
@@ -1060,6 +1052,8 @@ export function AssociateQRClient({ caseId }: AssociateQRClientProps) {
           : null;
 
       // Telemetry: successful QR scan via camera (spec §23)
+      // timestamp is captured at the moment the QR code is detected so it
+      // accurately reflects the scan event time (not the telemetry flush time).
       trackEvent({
         eventCategory: "user_action",
         eventName: TelemetryEventName.SCAN_ACTION_QR_SCANNED,
@@ -1070,6 +1064,7 @@ export function AssociateQRClient({ caseId }: AssociateQRClientProps) {
         // Truncate to 256 chars per spec to bound payload size.
         qrPayload: qr.slice(0, 256),
         method: "camera",
+        timestamp: Date.now(),
       });
 
       setScannedQR(qr);
@@ -1096,6 +1091,7 @@ export function AssociateQRClient({ caseId }: AssociateQRClientProps) {
 
       if (isPermissionDenied) {
         // Telemetry: camera permission denied (spec §23)
+        // timestamp is captured at the moment the denial is reported.
         trackEvent({
           eventCategory: "error",
           eventName: TelemetryEventName.ERROR_CAMERA_DENIED,
@@ -1105,12 +1101,16 @@ export function AssociateQRClient({ caseId }: AssociateQRClientProps) {
           errorMessage: reason.slice(0, 512),
           recoverable: true,
           permissionName: "camera",
+          timestamp: Date.now(),
         });
       } else {
         // Telemetry: other camera / API failure (spec §23)
+        // timestamp is captured together with attemptDurationMs so both values
+        // are anchored to the same wall-clock instant.
+        const now = Date.now();
         const attemptDurationMs =
           cameraStartedAtRef.current !== null
-            ? Date.now() - cameraStartedAtRef.current
+            ? now - cameraStartedAtRef.current
             : 0;
         trackEvent({
           eventCategory: "error",
@@ -1121,6 +1121,7 @@ export function AssociateQRClient({ caseId }: AssociateQRClientProps) {
           errorMessage: reason.slice(0, 512),
           recoverable: true,
           attemptDurationMs,
+          timestamp: now,
         });
       }
 
@@ -1133,6 +1134,8 @@ export function AssociateQRClient({ caseId }: AssociateQRClientProps) {
   const handleManualSubmit = useCallback(
     (qr: string) => {
       // Telemetry: successful QR entry via manual input (spec §23)
+      // timestamp is captured at form submission so it reflects when the user
+      // confirmed the QR string, not when the telemetry client later flushes it.
       trackEvent({
         eventCategory: "user_action",
         eventName: TelemetryEventName.SCAN_ACTION_QR_SCANNED,
@@ -1144,6 +1147,7 @@ export function AssociateQRClient({ caseId }: AssociateQRClientProps) {
         // Truncate to 256 chars per spec to bound payload size.
         qrPayload: qr.slice(0, 256),
         method: "manual_entry",
+        timestamp: Date.now(),
       });
 
       setScannedQR(qr);
@@ -1175,10 +1179,9 @@ export function AssociateQRClient({ caseId }: AssociateQRClientProps) {
     try {
       const result = await associateMutation({
         qrCode:   scannedQR,
-        caseId,
-        // Placeholder user — replace with Kinde auth context in full integration
-        userId:   "scan-user",
-        userName: "Field Technician",
+        caseId:   caseId as Id<"cases">,
+        userId,
+        userName,
       });
 
       setWasAlreadyMapped(result.wasAlreadyMapped);
@@ -1194,7 +1197,7 @@ export function AssociateQRClient({ caseId }: AssociateQRClientProps) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [scannedQR, caseDoc, caseId, associateMutation]);
+  }, [scannedQR, caseDoc, caseId, associateMutation, userId, userName]);
 
   /** Start over from the result screen */
   const handleStartOver = useCallback(() => {

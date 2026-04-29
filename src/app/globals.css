@@ -77,3 +77,235 @@ select {
     scroll-behavior: auto !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SCAN MOBILE-FIRST RESPONSIVE UTILITIES
+   Breakpoints (canonical values live as CSS custom properties in
+   src/styles/tokens/base.css §8):
+     sm  390px  — standard phone
+     md  640px  — large phone / phablet
+     lg  1024px — tablet / wide glass
+
+   Naming convention:
+     .scan-hide-until-{bp}   hidden below the threshold; visible at/above it
+     .scan-hide-from-{bp}    visible below the threshold; hidden at/above it
+     .scan-only-{bp}         visible only within that tier's range
+
+   Usage: apply directly in JSX className or via CSS Modules composition
+   (composes: scan-hide-until-md from global).  These complement the
+   module-level @media queries used in *.module.css files.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* -- hide-until: hidden on small screens, shown on larger ones ----------- */
+
+/** Hidden on xs/default; shown at sm (390px) and above */
+.scan-hide-until-sm {
+  display: none;
+}
+@media (min-width: 390px) {
+  .scan-hide-until-sm {
+    display: revert;
+  }
+}
+
+/** Hidden on xs/sm; shown at md (640px) and above */
+.scan-hide-until-md {
+  display: none;
+}
+@media (min-width: 640px) {
+  .scan-hide-until-md {
+    display: revert;
+  }
+}
+
+/** Hidden on xs/sm/md; shown at lg (1024px) and above */
+.scan-hide-until-lg {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .scan-hide-until-lg {
+    display: revert;
+  }
+}
+
+/* -- hide-from: shown on small screens, hidden on larger ones ------------ */
+
+/** Shown below sm (390px); hidden at sm and above */
+.scan-hide-from-sm {
+  display: revert;
+}
+@media (min-width: 390px) {
+  .scan-hide-from-sm {
+    display: none;
+  }
+}
+
+/** Shown below md (640px); hidden at md and above */
+.scan-hide-from-md {
+  display: revert;
+}
+@media (min-width: 640px) {
+  .scan-hide-from-md {
+    display: none;
+  }
+}
+
+/** Shown below lg (1024px); hidden at lg and above */
+.scan-hide-from-lg {
+  display: revert;
+}
+@media (min-width: 1024px) {
+  .scan-hide-from-lg {
+    display: none;
+  }
+}
+
+/* -- only: visible only within a single tier ----------------------------- */
+
+/** Visible only at sm tier: 390px–639px */
+.scan-only-sm {
+  display: none;
+}
+@media (min-width: 390px) and (max-width: 639px) {
+  .scan-only-sm {
+    display: revert;
+  }
+}
+
+/** Visible only at md tier: 640px–1023px */
+.scan-only-md {
+  display: none;
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  .scan-only-md {
+    display: revert;
+  }
+}
+
+/** Visible only at lg tier: 1024px and above */
+.scan-only-lg {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .scan-only-lg {
+    display: revert;
+  }
+}
+
+/* -- SCAN touch-target baseline ----------------------------------------- */
+
+/**
+ * Minimum touch target for interactive SCAN elements.
+ * WCAG 2.5.5 (AAA) recommends 44×44px; this helper enforces the floor.
+ * Apply to buttons, links, and icon controls in the SCAN app.
+ */
+.scan-touch-target {
+  min-height: 2.75rem;  /* 44px */
+  min-width: 2.75rem;
+}
+
+/* -- SCAN global touch-target enforcement -------------------------------- */
+
+/**
+ * Automatically enforces the 44×44 px minimum touch target (WCAG 2.5.5 /
+ * iOS HIG) on all interactive elements within the SCAN app shell.
+ *
+ * Scope: [data-app="scan"] on the layout shell div in src/app/scan/layout.tsx
+ *   — isolates these rules from the INVENTORY dashboard and other routes.
+ *
+ * Elements covered:
+ *   button        — all clickable buttons (submit, reset, icon buttons)
+ *   [role="button"] — any element acting as a button via ARIA
+ *   input (non-hidden, non-range) — text, email, password, search, etc.
+ *   select        — dropdown selects
+ *   details > summary — native accordion triggers
+ *
+ * Notes:
+ *   - `min-*` properties preserve explicit smaller visual sizes set by
+ *     component styles while expanding the interactive hit area to the
+ *     minimum. Browsers honour min-height over height when min-height
+ *     is larger, so visual "tall" elements are unaffected.
+ *   - `a[href]` links are intentionally omitted from the global rule
+ *     because inline text links cannot be given a block min-height.
+ *     Standalone link targets (nav links, CTA links) already carry
+ *     explicit min-height rules in their component CSS Modules.
+ *   - `textarea` elements already have generous min-height for content
+ *     (≥5rem) defined in component styles, so they are excluded here
+ *     to avoid overriding intentional layout constraints.
+ */
+[data-app="scan"] button:not([aria-hidden="true"]),
+[data-app="scan"] [role="button"],
+[data-app="scan"] input:not([type="hidden"]):not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+[data-app="scan"] select,
+[data-app="scan"] details > summary {
+  min-height: 2.75rem;  /* 44px */
+}
+
+/* -- SCAN content container --------------------------------------------- */
+
+/**
+ * Standard SCAN page content wrapper.
+ * Max-width cap prevents line lengths from becoming unreadable on lg screens.
+ * Centers the content column within larger viewports.
+ */
+.scan-content {
+  width: 100%;
+  max-width: 40rem;  /* 640px — comfortable reading/form width */
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .scan-content {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .scan-content {
+    padding-inline: 2rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   T5 AUDIT LEDGER PRINT ISOLATION
+   Applied when document.body carries data-printing-audit="1" — an attribute
+   set by T5Audit.handlePrint() just before window.print() and cleared by
+   the window `afterprint` event.  Using a body attribute instead of a
+   permanent @media print rule ensures this isolation is ONLY active when
+   the print dialog was triggered from the T5 Audit panel; direct browser
+   print (Cmd+P from other views) is unaffected.
+
+   Technique: "visibility isolation" — all body descendants are hidden; only
+   the [data-print-target="t5-audit"] subtree is made visible, then
+   repositioned at the top-left of the print canvas.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@media print {
+  /* Isolate T5 Audit content when the print-audit attribute is set */
+  body[data-printing-audit] * {
+    visibility: hidden;
+  }
+
+  body[data-printing-audit] [data-print-target="t5-audit"],
+  body[data-printing-audit] [data-print-target="t5-audit"] * {
+    visibility: visible;
+  }
+
+  body[data-printing-audit] [data-print-target="t5-audit"] {
+    position: fixed;
+    inset: 0;
+    padding: 1.5rem 2rem;
+    background-color: white;
+    overflow: visible;
+    z-index: 9999;
+    /* Remove flex gap so sections stack tightly on the printed page */
+    gap: 0;
+  }
+
+  /* Sensible page margins and font rendering for printed output */
+  @page {
+    margin: 1.25cm 1.5cm;
+    size: A4 portrait;
+  }
+}

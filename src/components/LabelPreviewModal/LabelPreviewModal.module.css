@@ -418,6 +418,48 @@
   cursor: not-allowed;
 }
 
+/* ── Download PDF button — secondary action (PDF export) ──────────── */
+
+.pdfButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  background: var(--surface-raised);
+  color: var(--ink-primary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.pdfButton:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.pdfButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.pdfButton:active:not(:disabled) {
+  background-color: var(--surface-active);
+}
+
+.pdfButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ── Print button — primary action ───────────────────────────────── */
 
 .printButton {
@@ -458,7 +500,8 @@
 /* ── Button icons (SVG inline) ───────────────────────────────────── */
 
 .printIcon,
-.downloadIcon {
+.downloadIcon,
+.pdfIcon {
   display: block;
   width: 1em;
   height: 1em;
@@ -505,6 +548,7 @@
 
   .cancelButton,
   .downloadButton,
+  .pdfButton,
   .printButton {
     /* Full-width on very small screens for touch targets */
     justify-content: center;

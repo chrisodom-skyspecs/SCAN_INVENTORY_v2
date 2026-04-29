@@ -204,6 +204,23 @@
   font-size: 0.6875rem;
 }
 
+/* ── Replay scrubber bar ─────────────────────────────────────────────── */
+
+/**
+ * Layout override for ReplayScrubber when embedded in the M2 toolbar.
+ * Removes the top border (M2 already has a bottom border on .toolbar)
+ * and adjusts padding to match the M2 toolbar density.
+ *
+ * The ReplayScrubber component styles (.root) define its own padding;
+ * this class overrides only the contextual differences needed for M2.
+ */
+.scrubberBar {
+  /* No additional overrides needed — ReplayScrubber.module.css .root
+     provides all styling.  This class exists as a hook for future
+     M2-specific adjustments (e.g. tightening padding on mobile). */
+  flex-shrink: 0;
+}
+
 /* ── Map canvas ───────────────────────────────────────────────────────── */
 
 .mapCanvas {
@@ -346,6 +363,34 @@
   background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
   font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+  user-select: none;
+}
+
+.pinListItem:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-brand);
+}
+
+/**
+ * Selected pin item — highlighted with brand-subtle background.
+ * Applied when pin.caseId === selectedCaseId (journey is shown below).
+ */
+.pinListItemSelected,
+.pinListItem[data-selected="true"] {
+  background: var(--surface-brand-subtle);
+  border-color: var(--border-brand);
+}
+
+.pinListItemSelected:hover,
+.pinListItem[data-selected="true"]:hover {
+  background: var(--surface-brand-subtle);
+}
+
+.pinListItem:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 /* Status-colored pin dot */
@@ -360,8 +405,8 @@
 .pinDot[data-status="deployed"] {
   background: var(--status-deployed, var(--ink-brand));
 }
-.pinDot[data-status="in_field"] {
-  background: var(--status-in-field, var(--ink-success));
+.pinDot[data-status="flagged"] {
+  background: var(--status-flagged, var(--ink-error));
 }
 
 .pinLabel {
@@ -405,6 +450,64 @@
   text-align: center;
 }
 
+/**
+ * Journey stop count badge — shown on each pin item when batch journey
+ * data is available.  Displays the number of stops for that case.
+ * Uses IBM Plex Mono for the numeric count (data/tabular typography spec).
+ */
+.pinStopCount {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.25rem;
+  border-radius: 0.75rem;
+  background: var(--layer-transit-bg, var(--ink-brand));
+  color: var(--surface-base);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/**
+ * Journey panel — container for JourneyStopLayer fallback list.
+ * Rendered below the pin list when a case is selected in fallback mode.
+ * Uses a top border to visually separate it from the pin list.
+ */
+.journeyPanel {
+  width: 100%;
+  max-width: 28rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ── Stop sidebar overlay (Sub-AC 2) ─────────────────────────────────── */
+
+/**
+ * Contextual anchor class for the M2StopSidebar when rendered inside .mapCanvas.
+ *
+ * .mapCanvas has position:relative and overflow:hidden — this establishes the
+ * containing block for the sidebar's position:absolute positioning.  The
+ * M2StopSidebar itself provides the full positioning rules
+ * (top:0; right:0; bottom:0; width:20rem) via its own CSS module.
+ *
+ * This class exists as a hook for M2-specific layout overrides that cannot be
+ * expressed inside the component (e.g., adjusting the sidebar width when the
+ * M2 toolbar is in a compact mode, or shifting the sidebar left to avoid
+ * overlapping a legend panel).
+ */
+.stopSidebar {
+  /* No additional overrides needed for the default M2 layout.
+     The sidebar's own module (.sidebar rule) provides full positioning.
+     Add overrides here if M2-specific context requires adjustments. */
+}
+
 /* ── Screen-reader only ───────────────────────────────────────────────── */
 
 .srOnly {
@@ -418,3 +521,39 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK MODE OVERRIDES
+   Applied when .theme-dark is set on <html> (see src/styles/tokens/base.css §3).
+   Surface / ink / border tokens cascade automatically from the token re-map.
+   This block handles cases that cannot be expressed via token substitution:
+     1. filterSelect dropdown-arrow SVG (hardcoded stroke color in data URI)
+     2. timePicker color-scheme — tells the browser to render the calendar
+        picker UI in dark mode so it matches the overall dark theme.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Dropdown arrow — light version for dark backgrounds.
+ * Overrides the light-theme stroke='%23666' with '%23aaa' (light gray).
+ * WCAG: %23aaa on hsl(210,20%,4%) ≈ 8.8:1 ✓
+ */
+:global(.theme-dark) .filterSelect {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23aaa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/**
+ * DateTime-local input — dark color-scheme.
+ * Instructs the browser's native date/time picker UI (calendar icon, dropdown
+ * popup) to render in dark mode so it visually matches the dark-themed app.
+ * Without this the browser may render a white calendar popup regardless of theme.
+ */
+:global(.theme-dark) .timePicker {
+  color-scheme: dark;
+}
+
+/**
+ * Active snapshot highlight — subtle tint adjustment on dark backgrounds.
+ * When an `at` snapshot is selected the timePicker shifts to --surface-brand-subtle
+ * (already a dark token in .theme-dark) and --border-brand.
+ * No additional override needed — tokens handle this correctly.
+ */

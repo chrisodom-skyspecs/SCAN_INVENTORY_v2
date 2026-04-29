@@ -46,10 +46,14 @@
 
 "use client";
 
-import { useQuery } from "convex/react";
 import Link from "next/link";
-import { api } from "../../../../convex/_generated/api";
+import { useRouter } from "next/navigation";
+import { useScanCaseDetail } from "../../../hooks/use-scan-queries";
+import { useFedExTracking } from "../../../hooks/use-fedex-tracking";
 import { StatusPill } from "../../../components/StatusPill";
+import { TrackingStatus } from "../../../components/TrackingStatus";
+import { useCurrentUser } from "../../../hooks/use-current-user";
+import { OPERATIONS } from "../../../../convex/rbac";
 import type { CaseStatus } from "../../../../convex/cases";
 import styles from "./page.module.css";
 
@@ -286,8 +290,54 @@ function ActionCard({
  * automatically within ~300 ms of a successful associateQRCodeToCase mutation.
  */
 export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
-  // Real-time subscription — Convex re-evaluates on every case mutation
-  const caseDoc = useQuery(api.cases.getCaseById, { caseId });
+  // ── Router (Next.js App Router) ───────────────────────────────────────────
+  // Used for programmatic navigation from the "View full tracking →" link
+  // in the compact TrackingStatus component to the dedicated ship page.
+  const router = useRouter();
+
+  // ── Real-time case subscription ───────────────────────────────────────────
+  // useScanCaseDetail delegates to useCaseById which subscribes to
+  // api.cases.getCaseById.  Convex re-evaluates and pushes the updated
+  // document within ~100–300 ms of any mutation (associateQRCodeToCase,
+  // scanCheckIn, shipCase, etc.) — satisfying the ≤ 2-second real-time
+  // fidelity requirement.
+  const caseDoc = useScanCaseDetail(caseId);
+
+  // ── FedEx tracking subscription ───────────────────────────────────────────
+  // Subscribes to api.shipping.listShipmentsByCase — a reactive Convex query
+  // that updates within ~100–300 ms of any shipCase / createShipment mutation.
+  //
+  // Used in controlled mode for the compact TrackingStatus section below:
+  //   • hasTracking      — true when at least one shipment with a tracking
+  //                        number exists for this case.
+  //   • latestShipment   — the most recent persisted shipment record.
+  //   • liveTracking     — live FedEx data after a manual refresh; null until
+  //                        the user taps Refresh on the ship page.
+  //   • isRefreshing     — true while a live FedEx Track API call is in flight.
+  //   • isActiveShipment — true when the shipment is not yet "delivered".
+  //   • refreshError     — error message from the most recent failed refresh.
+  //   • refreshTracking  — callback to trigger a live FedEx refresh.
+  //
+  // Passing these values to <TrackingStatus> in controlled mode avoids
+  // opening a second Convex WebSocket subscription for the same query
+  // (the ship page already opens its own subscription when navigated to).
+  const {
+    latestShipment,
+    hasTracking,
+    liveTracking,
+    isRefreshing,
+    isActiveShipment,
+    refreshError,
+    refreshTracking,
+  } = useFedExTracking(caseId);
+
+  // ── Role-based permission helpers ─────────────────────────────────────────
+  // Drives conditional rendering of technician-only action cards.
+  //   canInspect        → INSPECTION_START required → technician + admin only
+  //   canGenerateQR     → QR_CODE_GENERATE required → technician + admin only
+  // All other SCAN actions (Check In, Ship Case, Transfer Custody) are
+  // permitted for admin, technician, and pilot (universal operations).
+  const { can, isLoading: rolesLoading } = useCurrentUser();
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (caseDoc === undefined) {
@@ -401,6 +451,8 @@ export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
         {/*
          * Check In — primary SCAN app action.
          *
+         * Permitted for ALL roles: admin, technician, pilot (case:status:change).
+         *
          * Navigates to /scan/[caseId]/check-in which calls the `scanCheckIn`
          * Convex mutation.  That mutation writes cases.status, cases.assigneeId,
          * cases.lat, cases.lng, cases.updatedAt — causing Convex to reactively
@@ -427,7 +479,11 @@ export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
         />
 
         {/*
-         * Inspect — primary SCAN app checklist action.
+         * Inspect — TECHNICIAN + ADMIN only (case:inspection:start).
+         *
+         * Pilots do not have the INSPECTION_START, INSPECTION_UPDATE_ITEM, or
+         * INSPECTION_COMPLETE operations, so the Inspect card is hidden for them.
+         * The underlying Convex mutations enforce this server-side as well.
          *
          * Navigates to /scan/[caseId]/inspect which calls the
          * `updateChecklistItem` Convex mutation for each item status change.
@@ -438,50 +494,61 @@ export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
          * getChecklistWithInspection) and M3 map pins — satisfying the ≤ 2-second
          * real-time fidelity requirement (Sub-AC 36b-2).
          */}
-        <ActionCard
-          href={`/scan/${caseId}/inspect`}
-          title="Inspect"
-          description="Review packing list items and record their condition."
-          variant="checkin"
-          icon={
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-              <line x1="9" y1="12" x2="15" y2="12" />
-              <line x1="9" y1="16" x2="13" y2="16" />
-            </svg>
-          }
-        />
+        {!rolesLoading && can(OPERATIONS.INSPECTION_START) && (
+          <ActionCard
+            href={`/scan/${caseId}/inspect`}
+            title="Inspect"
+            description="Review packing list items and record their condition."
+            variant="checkin"
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                <line x1="9" y1="12" x2="15" y2="12" />
+                <line x1="9" y1="16" x2="13" y2="16" />
+              </svg>
+            }
+          />
+        )}
 
-        <ActionCard
-          href={`/scan/${caseId}/associate`}
-          title={hasQrCode ? "Reassociate QR" : "Associate QR Code"}
-          description={
-            hasQrCode
-              ? "Replace the current QR code with a new one."
-              : "Link a QR code label to this case."
-          }
-          icon={
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-            </svg>
-          }
-        />
+        {/*
+         * Associate / Reassociate QR Code — TECHNICIAN + ADMIN only (qrCode:generate).
+         *
+         * Pilots can read/scan QR codes (qrCode:read) but cannot generate or
+         * associate them (qrCode:generate).  The card is hidden for pilots.
+         * The Convex associateQRCodeToCase mutation enforces this server-side.
+         */}
+        {!rolesLoading && can(OPERATIONS.QR_CODE_GENERATE) && (
+          <ActionCard
+            href={`/scan/${caseId}/associate`}
+            title={hasQrCode ? "Reassociate QR" : "Associate QR Code"}
+            description={
+              hasQrCode
+                ? "Replace the current QR code with a new one."
+                : "Link a QR code label to this case."
+            }
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+            }
+          />
+        )}
 
         <ActionCard
           href={`/scan/${caseId}/ship`}
@@ -542,6 +609,48 @@ export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
           }
         />
       </nav>
+
+      {/*
+        ── Shipping status (Sub-AC 4) ────────────────────────────────────────
+
+        Conditionally rendered when a FedEx tracking number has been recorded
+        for this case (hasTracking === true).  Uses the compact variant of
+        <TrackingStatus> in controlled mode — the same `useFedExTracking(caseId)`
+        call above provides the persisted shipment record and any live FedEx data
+        fetched via the on-demand refresh action.
+
+        Real-time fidelity:
+          When the user taps "Ship Case" on this page or another device calls
+          shipCase, Convex automatically invalidates the listShipmentsByCase
+          subscription — causing `hasTracking` to flip to true and this section
+          to appear within ~100–300 ms, well within the ≤ 2-second SLA.
+
+        "View full tracking →" navigates to /scan/[caseId]/ship which shows
+        the full <TrackingStatus variant="full"> with the complete events timeline,
+        origin/destination details, and all historical shipments for this case.
+      */}
+      {hasTracking && latestShipment && (
+        <>
+          <hr className={styles.divider} aria-hidden="true" />
+          <section
+            aria-label="Shipping status"
+            data-testid="case-detail-shipping-status"
+          >
+            <h3 className={styles.sectionTitle}>Shipping Status</h3>
+            <TrackingStatus
+              caseId={caseId}
+              shipment={latestShipment}
+              liveTracking={liveTracking}
+              isRefreshing={isRefreshing}
+              isActiveShipment={isActiveShipment}
+              onRefresh={refreshTracking}
+              refreshError={refreshError}
+              variant="compact"
+              onViewDetails={() => router.push(`/scan/${caseId}/ship`)}
+            />
+          </section>
+        </>
+      )}
 
       {/* ── Notes ─────────────────────────────────────────────────────── */}
       {caseDoc.notes && (

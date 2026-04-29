@@ -1,0 +1,520 @@
+/**
+ * T3SwimLane.module.css
+ *
+ * Four-column swim-lane (Kanban) grid for the INVENTORY fleet operations board.
+ * Columns: Hangar | Carrier | Field | Returning
+ *
+ * Layout tiers (mobile-first):
+ *   mobile  (<768px)    : horizontal scroll; each column min 240px
+ *   tablet  (768–1023px): horizontal scroll; each column min 260px
+ *   desktop (≥1024px)   : 4 equal columns; full-width, no scroll
+ *
+ * Rules:
+ *   - No hex literals — CSS custom properties only
+ *   - Inter Tight for UI labels and headings
+ *   - IBM Plex Mono for case identifiers and data values
+ *   - WCAG AA contrast in both light and dark themes
+ */
+
+/* ── Column accent scoping via data-column attribute ───────────── */
+/*
+ * Each column gets its own --column-accent / --column-bg / --column-border
+ * tokens derived from the global layer token set.
+ * Component code uses these local tokens instead of column-specific tokens
+ * directly, so adding a new column requires only a new [data-column] block.
+ */
+
+[data-column="hangar"] {
+  --column-accent:  var(--layer-hangar-color);
+  --column-bg:      var(--layer-hangar-subtle);
+  --column-border:  var(--layer-hangar-border);
+  --column-header-bg: var(--layer-hangar-subtle);
+}
+
+[data-column="carrier"] {
+  --column-accent:  var(--layer-transit-color);
+  --column-bg:      var(--layer-transit-subtle);
+  --column-border:  var(--layer-transit-border);
+  --column-header-bg: var(--layer-transit-subtle);
+}
+
+[data-column="field"] {
+  --column-accent:  var(--layer-deployed-color);
+  --column-bg:      var(--layer-deployed-subtle);
+  --column-border:  var(--layer-deployed-border);
+  --column-header-bg: var(--layer-deployed-subtle);
+}
+
+[data-column="returning"] {
+  /* Lime / returning — M4 returning marker tokens */
+  --column-accent:  var(--map-m4-marker-returning);
+  --column-bg:      var(--map-m4-zone-hub-fill);
+  --column-border:  var(--map-m4-marker-returning-stroke);
+  --column-header-bg: var(--map-m4-zone-hub-fill);
+}
+
+
+/* ── Swim-lane grid wrapper ─────────────────────────────────────── */
+
+.swimLane {
+  display: grid;
+  /* Mobile-first: horizontal scroll, equal min-width columns */
+  grid-template-columns: repeat(4, minmax(15rem, 1fr));
+  grid-auto-flow: column;
+  gap: var(--density-gap-md, 1rem);
+  /* Allow horizontal scroll on smaller screens */
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  /* Padding so scrolled content doesn't clip at edges */
+  padding-bottom: 0.5rem;
+  /* Snap columns for touch-friendly horizontal scroll */
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+  /* Min height so empty columns are visible */
+  min-height: 24rem;
+  align-items: start;
+}
+
+.swimLane::-webkit-scrollbar {
+  height: 0.375rem;
+}
+
+.swimLane::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.swimLane::-webkit-scrollbar-thumb {
+  background-color: var(--border-default);
+  border-radius: 9999px;
+}
+
+/* Desktop: 4 equal columns, no horizontal scroll */
+@media (min-width: 1024px) {
+  .swimLane {
+    grid-template-columns: repeat(4, 1fr);
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
+}
+
+
+/* ── Individual column ──────────────────────────────────────────── */
+
+.column {
+  /* Snap point for mobile horizontal scroll */
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background-color: var(--surface-bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  min-width: 15rem;
+  /* Column fills available height in its grid cell */
+  height: 100%;
+}
+
+@media (min-width: 1024px) {
+  .column {
+    min-width: 0;
+  }
+}
+
+
+/* ── Column header ──────────────────────────────────────────────── */
+
+.columnHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  /* Tinted background keyed to column accent via --column-header-bg */
+  background-color: var(--column-header-bg, var(--surface-bg-1));
+  border-bottom: 2px solid var(--column-border, var(--border-subtle));
+  /* Sticky header so the column label stays visible when scrolling cards */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.columnTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: var(--density-font-label, 0.75rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--column-accent, var(--ink-secondary));
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Count badge: e.g. "4" cases in the column */
+.columnCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3125rem;
+  border-radius: 9999px;
+  background-color: var(--column-accent, var(--surface-neutral));
+  color: var(--surface-raised);
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Zero-count badge: subtler style when empty */
+.columnCountZero {
+  background-color: var(--surface-neutral-subtle, var(--surface-sunken));
+  color: var(--ink-muted);
+}
+
+
+/* ── Card list ──────────────────────────────────────────────────── */
+
+.cardList {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  flex: 1;
+}
+
+
+/* ── Individual case card ───────────────────────────────────────── */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 0.625rem;
+  background-color: var(--surface-card, var(--surface-raised));
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease,
+    box-shadow 0.12s ease;
+  text-align: left;
+  width: 100%;
+  box-shadow: var(--elevation-1);
+  user-select: none;
+}
+
+.card:hover {
+  background-color: var(--surface-card-hover, var(--surface-hover));
+  border-color: var(--border-default);
+  box-shadow: var(--elevation-2);
+}
+
+.card:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  border-color: var(--border-focus);
+}
+
+.card[aria-selected="true"] {
+  background-color: var(--surface-card-selected, var(--surface-selected));
+  border-color: var(--column-border, var(--border-brand));
+  box-shadow: var(--elevation-2);
+}
+
+.card[aria-selected="true"]:hover {
+  background-color: var(--surface-card-selected, var(--surface-selected));
+}
+
+/* Non-interactive card variant (no cursor pointer) */
+.cardStatic {
+  cursor: default;
+}
+
+.cardStatic:hover {
+  background-color: var(--surface-card);
+  border-color: var(--border-subtle);
+  box-shadow: var(--elevation-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}
+
+
+/* ── Card row: top line with label and status pill ──────────────── */
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.cardLabel {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: var(--density-font-body, 0.9375rem);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.cardSubLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: var(--density-font-label, 0.75rem);
+  color: var(--ink-tertiary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* ── Card meta row: location / assignee ─────────────────────────── */
+
+.cardMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  row-gap: 0.125rem;
+}
+
+.cardMetaItem {
+  display: flex;
+  align-items: center;
+  gap: 0.1875rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Damage / flag indicator dot */
+.cardFlagDot {
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background-color: var(--signal-error-fill);
+  flex-shrink: 0;
+}
+
+
+/* ── Loading skeleton cards ─────────────────────────────────────── */
+
+.skeletonCard {
+  padding: 0.5rem 0.625rem;
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  box-shadow: var(--elevation-1);
+}
+
+.skeletonLine {
+  height: 0.625rem;
+  border-radius: 9999px;
+  background-color: var(--surface-muted);
+  animation: shimmer 1.4s ease infinite;
+}
+
+.skeletonLineFull {
+  width: 100%;
+}
+
+.skeletonLineMed {
+  width: 65%;
+}
+
+.skeletonLineShort {
+  width: 40%;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonLine {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+
+/* ── Empty-state placeholder (per column) ───────────────────────── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  flex: 1;
+}
+
+.emptyStateIcon {
+  /* SVG icon slot — size set by inline width/height or parent */
+  opacity: 0.35;
+  color: var(--ink-muted);
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+
+.emptyStateTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: var(--density-font-body, 0.8125rem);
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+.emptyStateText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  margin: 0;
+  max-width: 13rem;
+  line-height: 1.45;
+}
+
+
+/* ── Error-state placeholder (per column) ───────────────────── */
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  flex: 1;
+}
+
+.errorStateIcon {
+  opacity: 0.8;
+  color: var(--signal-error-fill);
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+
+.errorStateTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: var(--density-font-body, 0.8125rem);
+  font-weight: 600;
+  color: var(--signal-error-ink, var(--ink-primary));
+  margin: 0;
+}
+
+.errorStateText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  margin: 0;
+  max-width: 13rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.errorStateRetry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--signal-error-fill);
+  background-color: transparent;
+  color: var(--signal-error-fill);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.errorStateRetry:hover {
+  background-color: var(--signal-error-fill);
+  color: var(--surface-raised);
+}
+
+.errorStateRetry:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .errorStateRetry {
+    transition: none;
+  }
+}
+
+/* Error count badge variant — red background */
+.columnCountError {
+  background-color: var(--signal-error-fill);
+  color: var(--surface-raised);
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Token cascade handles most color swaps.  These selectors
+   cover the few places where additional polish is needed.
+   ============================================================ */
+
+/* Card hover in dark mode — use card-hover surface token */
+:global(.theme-dark) .card:hover {
+  background-color: var(--surface-card-hover);
+}
+
+/* Column border — bump to --border-default for dark-mode visibility */
+:global(.theme-dark) .column {
+  border-color: var(--border-default);
+}
+
+/* Column header border — use the column accent at a slightly reduced opacity */
+:global(.theme-dark) .columnHeader {
+  border-bottom-width: 1px;
+}
+
+/* Skeleton shimmer in dark mode */
+:global(.theme-dark) .skeletonLine {
+  background-color: var(--surface-muted);
+}
+
+/* Error state in dark mode — retry button uses dark-mode-appropriate border */
+:global(.theme-dark) .errorStateRetry {
+  border-color: var(--signal-error-fill);
+  color: var(--signal-error-fill);
+}
+
+:global(.theme-dark) .errorStateRetry:hover {
+  background-color: var(--signal-error-fill);
+  color: var(--surface-raised);
+}

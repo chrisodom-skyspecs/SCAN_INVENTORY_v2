@@ -1,0 +1,45 @@
+/**
+ * ScanShell.module.css — outer shell wrapper for the SCAN mobile app
+ *
+ * Styles the root element that carries `data-app="scan"` and
+ * `data-density="comfy"|"compact"`.
+ *
+ * This module contains only the outermost shell div styles.
+ * The header and main content styles remain in /app/scan/layout.module.css
+ * since they are rendered by the Server Component layout.
+ *
+ * Density tokens applied via attribute selectors:
+ *   The `data-density` attribute on `.shell` activates the §9 CSS token blocks
+ *   from base.css — child components inherit the correct --density-* values
+ *   without requiring any explicit prop passing.
+ *
+ * Design tokens only — no hex literals.
+ */
+
+/* ── Outer shell ──────────────────────────────────────────────────── */
+
+/**
+ * .shell — root SCAN app container.
+ *
+ * Properties:
+ *   - Full viewport height using `100dvh` (dynamic viewport height respects
+ *     mobile browser chrome retraction).
+ *   - Flex column so header + main stack vertically.
+ *   - background-color from surface-base token (light or dark via .theme-dark).
+ *
+ * data-density attribute selectors:
+ *   Descendant spacing, font sizes, and row heights automatically adjust
+ *   via the §9 density token cascade — see base.css [data-density="*"] blocks.
+ *
+ *   Example of how a child component benefits:
+ *     .sectionTitle {
+ *       font-size: var(--density-font-heading);   ← 17px comfy / 15px compact
+ *       gap:       var(--density-gap-md);          ← 16px comfy / 10px compact
+ *     }
+ */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background-color: var(--surface-base);
+}

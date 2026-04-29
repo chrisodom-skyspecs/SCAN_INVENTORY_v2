@@ -65,14 +65,18 @@ import {
   useId,
 } from "react";
 import Link from "next/link";
-import { useChecklistWithInspection } from "../../../../hooks/use-checklist";
+import { useScanChecklistWithInspection } from "../../../../hooks/use-scan-queries";
 import {
   useUpdateChecklistItem,
   useCompleteInspection,
 } from "../../../../hooks/use-scan-mutations";
+import { useServerStateReconciliation } from "../../../../hooks/use-server-state-reconciliation";
 import { StatusPill } from "../../../../components/StatusPill";
-import type { ChecklistItem, ManifestItemStatus } from "../../../../hooks/use-checklist";
+import { InspectionStatusBar } from "../../../../components/ItemStatusBadge";
+import { ReconciliationBanner } from "../../../../components/ReconciliationBanner";
+import type { ChecklistItem, ManifestItemStatus } from "../../../../hooks/use-scan-queries";
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { useKindeUser } from "../../../../hooks/use-kinde-user";
 import { trackEvent } from "../../../../lib/telemetry.lib";
 import { TelemetryEventName } from "../../../../types/telemetry.types";
 import styles from "./page.module.css";
@@ -81,28 +85,6 @@ import styles from "./page.module.css";
 
 interface ScanInspectClientProps {
   caseId: string;
-}
-
-// ─── User identity helper ─────────────────────────────────────────────────────
-
-/**
- * Returns the current user's ID and display name.
- *
- * Replace the body with Kinde auth hook calls when full auth integration
- * is wired:
- *
- *   import { useKindeAuth } from "@kinde-oss/kinde-auth-nextjs";
- *   const { user } = useKindeAuth();
- *   return {
- *     id:   user?.id   ?? "anon",
- *     name: user?.given_name
- *             ? `${user.given_name} ${user.family_name ?? ""}`.trim()
- *             : "Field Technician",
- *   };
- */
-function useCurrentUser(): { id: string; name: string } {
-  // Placeholder — replace with useKindeAuth() when wired
-  return { id: "scan-user", name: "Field Technician" };
 }
 
 // ─── Status action config ─────────────────────────────────────────────────────
@@ -149,31 +131,17 @@ function ProgressBar({ total, ok, damaged, missing, unchecked, progressPct }: Pr
         />
       </div>
 
-      {/* Counts row */}
+      {/* Counts row — ItemStatusBadge primitives with icon + distinct coloring */}
       <div className={styles.progressCounts}>
         <span className={styles.progressPct}>{progressPct}% reviewed</span>
-        <div className={styles.progressCountBadges}>
-          {ok > 0 && (
-            <span className={styles.countBadgeOk} aria-label={`${ok} OK`}>
-              {ok} ok
-            </span>
-          )}
-          {damaged > 0 && (
-            <span className={styles.countBadgeDamaged} aria-label={`${damaged} damaged`}>
-              {damaged} damaged
-            </span>
-          )}
-          {missing > 0 && (
-            <span className={styles.countBadgeMissing} aria-label={`${missing} missing`}>
-              {missing} missing
-            </span>
-          )}
-          {unchecked > 0 && (
-            <span className={styles.countBadgeUnchecked} aria-label={`${unchecked} remaining`}>
-              {unchecked} remaining
-            </span>
-          )}
-        </div>
+        {/* InspectionStatusBar handles verified/flagged/missing/unchecked coloring */}
+        <InspectionStatusBar
+          verified={ok}
+          flagged={damaged}
+          missing={missing}
+          unchecked={unchecked}
+          size="sm"
+        />
       </div>
 
       {total === 0 && (
@@ -671,14 +639,27 @@ export function ScanInspectClient({ caseId }: ScanInspectClientProps) {
   // When updateChecklistItem writes to manifestItems/inspections, Convex
   // re-evaluates this query and pushes the diff within ~100–300 ms.  The
   // component re-renders with fresh data automatically.
-  const state = useChecklistWithInspection(caseId);
+  // Real-time subscription — via SCAN query layer (use-scan-queries.ts).
+  // useScanChecklistWithInspection delegates to useChecklistWithInspection
+  // which subscribes to api.checklists.getChecklistWithInspection.
+  // Convex re-evaluates within ~100–300 ms of any updateChecklistItem
+  // mutation, keeping the checklist and progress bar live.
+  const state = useScanChecklistWithInspection(caseId);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const updateItem    = useUpdateChecklistItem();
   const completeInsp  = useCompleteInspection();
 
+  // ── Server-state reconciliation (Sub-AC 2c) ───────────────────────────────
+  // Detects divergence between the optimistic item-status update and the
+  // server-confirmed result.  For inspection, the key field is the item's
+  // `status` (ok / damaged / missing / unchecked) and optionally the
+  // inspection counters.  If another device marks the same item concurrently,
+  // the server may confirm a different status than the optimistic prediction.
+  const reconciliation = useServerStateReconciliation();
+
   // ── User identity ─────────────────────────────────────────────────────────
-  const user = useCurrentUser();
+  const user = useKindeUser();
 
   // ── Local state ───────────────────────────────────────────────────────────
   // Track which items have a pending mutation in flight (for per-row loading).
@@ -722,8 +703,15 @@ export function ScanInspectClient({ caseId }: ScanInspectClientProps) {
       pendingItemsRef.current = next;
       setPendingItems(new Set(next));
 
+      // ── Sub-AC 2c: Track optimistic prediction ──────────────────────────
+      // The optimistic update sets item.status = newStatus in the local store.
+      // If a concurrent write changed this item between the optimistic update
+      // and the server confirmation, the server may return a different status.
+      const mutationId = `item-${templateItemId}-${Date.now()}`;
+      reconciliation.trackMutation(mutationId, { status: newStatus });
+
       try {
-        await updateItem({
+        const result = await updateItem({
           caseId:         caseId as Id<"cases">,
           templateItemId,
           status:         newStatus,
@@ -731,6 +719,11 @@ export function ScanInspectClient({ caseId }: ScanInspectClientProps) {
           technicianId:   user.id,
           technicianName: user.name,
           notes,
+        });
+
+        // ── Sub-AC 2c: Confirm against server result ────────────────────────
+        reconciliation.confirmMutation(mutationId, {
+          status: result.newStatus,
         });
 
         // ── Telemetry: emit item-checked event (spec §23) ──────────────
@@ -752,6 +745,9 @@ export function ScanInspectClient({ caseId }: ScanInspectClientProps) {
         });
 
         // Subscription updates arrive automatically — no refetch needed.
+      } catch {
+        // ── Sub-AC 2c: Cancel — Convex rolled back the optimistic update ────
+        reconciliation.cancelMutation(mutationId);
       } finally {
         const updated = new Set(pendingItemsRef.current);
         updated.delete(templateItemId);
@@ -760,7 +756,7 @@ export function ScanInspectClient({ caseId }: ScanInspectClientProps) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [caseId, updateItem, user, state]
+    [caseId, updateItem, user, state, reconciliation]
   );
 
   /**
@@ -855,7 +851,7 @@ export function ScanInspectClient({ caseId }: ScanInspectClientProps) {
           <h1 className={styles.caseLabel}>{caseLabel}</h1>
           {inspection && (
             <StatusPill
-              kind={inspection.status === "flagged" ? "flagged" : "in_field"}
+              kind={inspection.status === "flagged" ? "flagged" : "in_progress"}
             />
           )}
         </div>
@@ -994,6 +990,32 @@ export function ScanInspectClient({ caseId }: ScanInspectClientProps) {
       )}
 
       <hr className={styles.divider} aria-hidden="true" />
+
+      {/* ── Reconciliation banners (Sub-AC 2c) ────────────────────────── */}
+      {/*
+       * Rendered above the Complete CTA so the technician sees any state
+       * discrepancy before finalising the inspection.
+       *
+       * Stale: a checklist-item mutation is taking longer than 5 s — the
+       * technician should check connectivity before tapping Complete.
+       *
+       * Divergence: the server confirmed a different item status than what
+       * was applied locally.  The checklist has already been corrected by the
+       * Convex subscription push; this banner confirms the correction.
+       */}
+      {reconciliation.isStale && !reconciliation.hasDivergence && (
+        <ReconciliationBanner
+          stale
+          staleSince={reconciliation.staleSince}
+          onDismiss={reconciliation.dismiss}
+        />
+      )}
+      {reconciliation.hasDivergence && (
+        <ReconciliationBanner
+          divergedFields={reconciliation.divergedFields}
+          onDismiss={reconciliation.dismiss}
+        />
+      )}
 
       {/* ── Complete inspection CTA ───────────────────────────────────── */}
       <CompleteInspectionCTA

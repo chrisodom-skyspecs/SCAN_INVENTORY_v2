@@ -1,0 +1,412 @@
+/**
+ * NotificationBell.module.css — In-app notification bell
+ *
+ * Three-region layout:
+ *   .wrapper     — relative positioning anchor for the dropdown
+ *   .bellButton  — icon trigger button with badge overlay
+ *   .dropdown    — floating notification list panel
+ *
+ * Design tokens only — no hex literals.
+ * Typography: Inter Tight (notification text) + IBM Plex Mono (timestamps).
+ * WCAG AA contrast in both light and dark themes.
+ */
+
+/* ── Wrapper ─────────────────────────────────────────────────────── */
+
+.wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ── Bell trigger button ─────────────────────────────────────────── */
+
+/**
+ * .bellButton — the clickable bell icon trigger.
+ *
+ * Square touch target matching the avatar button height (2.25rem = 36px).
+ * Uses transparent background + hover fill for interactive affordance.
+ * Badge is absolutely positioned over the top-right of the bell icon.
+ */
+.bellButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;   /* 36px — matches avatar trigger height */
+  height: 2.25rem;
+
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  color: var(--ink-secondary);
+  padding: 0;
+
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.bellButton:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-default);
+  color: var(--ink-primary);
+}
+
+.bellButton:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* When the dropdown is open, keep the button in its hover state */
+.bellButton[aria-expanded="true"] {
+  background: var(--surface-active);
+  border-color: var(--border-default);
+  color: var(--ink-primary);
+}
+
+/* Slightly darken the bell when there are unread notifications */
+.bellButton[data-has-unread="true"] {
+  color: var(--ink-primary);
+}
+
+/* ── Bell icon ───────────────────────────────────────────────────── */
+
+.bellIcon {
+  width: 1.125rem;  /* 18px */
+  height: 1.125rem;
+  flex-shrink: 0;
+  transition: color 120ms ease;
+}
+
+/* ── Unread count badge ───────────────────────────────────────────── */
+
+/**
+ * .badge — small pill showing the unread notification count.
+ *
+ * Positioned absolutely in the top-right of the bell button.
+ * Size grows slightly for "9+" overflow content.
+ *
+ * Height / padding are kept compact (14px height) so the badge
+ * fits cleanly within the 52px top bar without crowding the icon.
+ */
+.badge {
+  position: absolute;
+  top: 0.25rem;     /* 4px from top edge */
+  right: 0.25rem;   /* 4px from right edge */
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0.9375rem;  /* 15px — room for 1–2 digit number */
+  height: 0.9375rem;
+  padding: 0 0.25rem;
+
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;  /* 9px */
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+
+  color: var(--signal-error-text);
+  background: var(--signal-error-fill);
+  border-radius: 0.5rem;
+  border: 1.5px solid var(--surface-raised); /* outline separates badge from icon */
+
+  /* Ensure badge floats above the icon */
+  z-index: 1;
+  pointer-events: none;  /* clicks should reach the button */
+
+  /* Entry animation */
+  animation: badgePop 180ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Wider badge for "9+" overflow text */
+.badge[data-overflow="true"] {
+  min-width: 1.125rem;  /* 18px */
+  padding: 0 0.1875rem;
+}
+
+@keyframes badgePop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge {
+    animation: none;
+  }
+}
+
+/* ── Dropdown panel ──────────────────────────────────────────────── */
+
+/**
+ * .dropdown — floating notification list anchored to the bell wrapper.
+ *
+ * Width: 20rem (320px) — wide enough for notification titles and messages
+ * without being too wide for mobile viewports.
+ * Max height: 24rem (384px) — scrollable list for long notification history.
+ * z-index: 210 — above the top bar chrome (200) and any overlay panels.
+ */
+.dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);  /* 8px gap below trigger */
+  right: 0;
+
+  width: 20rem;     /* 320px */
+  max-height: 24rem; /* 384px — list scrolls above this */
+
+  display: flex;
+  flex-direction: column;
+
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: 0.625rem;  /* 10px */
+  box-shadow: var(--elevation-3);
+
+  z-index: 210;
+
+  /* Entry animation */
+  animation: dropdownSlideIn 140ms ease both;
+  transform-origin: top right;
+
+  /* Clamp to viewport on mobile so it doesn't clip */
+  max-width: calc(100vw - 1rem);
+}
+
+@keyframes dropdownSlideIn {
+  from {
+    opacity: 0;
+    transform: scaleY(0.92) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dropdown {
+    animation: none;
+  }
+}
+
+/* ── Dropdown header ─────────────────────────────────────────────── */
+
+.dropdownHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  flex-shrink: 0;
+}
+
+.dropdownTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  letter-spacing: -0.01em;
+}
+
+.markAllButton {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-brand);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 100ms ease, opacity 100ms ease;
+}
+
+.markAllButton:hover {
+  opacity: 0.8;
+}
+
+.markAllButton:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* Dropdown divider */
+.dropdownDivider {
+  height: 1px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+/* ── Notification list ───────────────────────────────────────────── */
+
+.notificationList {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+
+  /* Custom scrollbar — matches design system */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.notificationList::-webkit-scrollbar {
+  width: 0.25rem;
+}
+
+.notificationList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notificationList::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+}
+
+/* ── Notification row ────────────────────────────────────────────── */
+
+/**
+ * .notificationRow — a single notification item as a clickable button.
+ *
+ * Unread rows have a left-edge accent border and slightly elevated background.
+ * Read rows use a muted background to de-emphasize them visually.
+ */
+.notificationRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 100ms ease;
+  border-left: 3px solid transparent;
+}
+
+.notificationRow[data-read="false"] {
+  background: var(--surface-brand-subtle);
+  border-left-color: var(--border-brand);
+}
+
+.notificationRow[data-read="true"] {
+  opacity: 0.7;
+}
+
+.notificationRow:hover {
+  background: var(--surface-hover);
+}
+
+.notificationRow:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+/* ── Unread dot inside the row ───────────────────────────────────── */
+
+.unreadDot {
+  display: block;
+  width: 0.4375rem;  /* 7px */
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: var(--border-brand);
+  flex-shrink: 0;
+  margin-top: 0.3125rem;  /* align with first line of content */
+}
+
+/* ── Notification content ────────────────────────────────────────── */
+
+.notificationContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.notificationTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notificationMessage {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ink-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notificationTime {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  font-weight: 400;
+  color: var(--ink-tertiary);
+  margin-top: 0.125rem;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 2rem 1.25rem;
+  text-align: center;
+}
+
+.emptyIcon {
+  width: 2rem;
+  height: 2rem;
+  color: var(--ink-disabled);
+  margin-bottom: 0.25rem;
+}
+
+.emptyTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.emptyBody {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ink-tertiary);
+  line-height: 1.5;
+  max-width: 14rem;
+}
+
+/* ── Responsive: full-width dropdown on narrow mobile ────────────── */
+
+@media (max-width: 480px) {
+  .dropdown {
+    right: -1rem;   /* extend past the right edge of the trigger */
+    width: calc(100vw - 1rem);
+  }
+}

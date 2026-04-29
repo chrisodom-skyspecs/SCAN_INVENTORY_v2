@@ -1,0 +1,341 @@
+/**
+ * InlineHolderEditor.module.css
+ *
+ * Styles for the click-to-edit case holder (assignee) inline editor.
+ *
+ * Rules:
+ *   - No hex literals — design-system CSS custom properties only
+ *   - Inter Tight for all UI labels and button text
+ *   - WCAG AA contrast: all interactive states tested against background tokens
+ *   - Dark mode overrides via :global(.theme-dark) selectors
+ */
+
+/* ── Idle row ───────────────────────────────────────────────────── */
+
+/**
+ * .idleRow — wraps the holder name display and the pencil edit button.
+ *
+ * The edit button is visually hidden (opacity: 0) until the row is
+ * hovered or a child receives keyboard focus.  This keeps the UI clean
+ * while remaining fully keyboard-accessible (the button is always in
+ * the DOM and tab-focusable).
+ */
+.idleRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  position: relative;
+  min-height: 1.5rem;
+}
+
+/* ── Holder name display ────────────────────────────────────────── */
+
+.holderName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.35;
+}
+
+.holderNameEmpty {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--ink-disabled);
+  font-style: italic;
+}
+
+/* ── Edit button (pencil icon) ──────────────────────────────────── */
+
+.editButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  color: var(--ink-tertiary);
+
+  /* Hidden by default — revealed on parent hover or child focus */
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+/* Reveal on hover or focus-within */
+.idleRow:hover .editButton,
+.idleRow:focus-within .editButton {
+  opacity: 1;
+}
+
+.editButton:hover {
+  color: var(--ink-brand);
+  background-color: var(--surface-brand-subtle);
+}
+
+/* Always show when focused via keyboard */
+.editButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  opacity: 1;
+  color: var(--ink-brand);
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .editButton {
+    transition: none;
+  }
+}
+
+/* ── Saving spinner ─────────────────────────────────────────────── */
+
+/**
+ * .savingSpinner — shown in the idle-row while the Convex mutation
+ * round-trip is in flight.  The optimistic update is already applied,
+ * so the holder name reflects the new value; the spinner signals the
+ * pending server confirmation.
+ */
+.savingSpinner {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1.5px solid var(--border-subtle);
+  border-top-color: var(--ink-brand);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: inline-holder-spin 0.6s linear infinite;
+}
+
+@keyframes inline-holder-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .savingSpinner {
+    animation: none;
+    border-color: var(--ink-brand);
+  }
+}
+
+/* ── Edit row ───────────────────────────────────────────────────── */
+
+/**
+ * .editRow — replaces the idle row when in editing state.
+ * Displays the text input and Save/Cancel buttons inline.
+ * Wraps at narrow widths so the layout adapts to the panel width.
+ */
+.editRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Input label (visually hidden for SR) ───────────────────────── */
+
+.inputLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  /* SR-only — visually hidden but accessible */
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* ── Text input ─────────────────────────────────────────────────── */
+
+.input {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  padding: 0.3125rem 0.625rem;
+  cursor: text;
+  min-width: 10rem;
+  max-width: 16rem;
+  transition: border-color 0.15s ease;
+}
+
+.input::placeholder {
+  color: var(--ink-disabled);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.input:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  border-color: var(--border-brand);
+}
+
+.input:hover {
+  border-color: var(--border-default);
+}
+
+/* ── Action button group ────────────────────────────────────────── */
+
+.actionButtons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 0.375rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  user-select: none;
+  line-height: 1;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+/* ── Save button ────────────────────────────────────────────────── */
+
+.saveButton {
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+  border-color: var(--surface-brand);
+}
+
+.saveButton:hover:not(:disabled) {
+  background-color: var(--_b-600, var(--surface-brand));
+  border-color: var(--_b-600, var(--surface-brand));
+}
+
+.saveButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.saveButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Cancel button ──────────────────────────────────────────────── */
+
+.cancelButton {
+  background-color: var(--surface-raised);
+  color: var(--ink-secondary);
+  border-color: var(--border-default);
+}
+
+.cancelButton:hover {
+  background-color: var(--surface-hover);
+}
+
+.cancelButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+/* ── Small cancel (in error row) ────────────────────────────────── */
+
+.cancelButtonSmall {
+  background-color: var(--surface-raised);
+  color: var(--ink-secondary);
+  border-color: var(--border-default);
+}
+
+.cancelButtonSmall:hover {
+  background-color: var(--surface-hover);
+}
+
+.cancelButtonSmall:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+/* ── Error row ──────────────────────────────────────────────────── */
+
+.errorRow {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.errorText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--signal-error-text-subtle);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+
+.retryButton {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3125rem 0.625rem;
+  border-radius: 0.375rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  background-color: var(--signal-error-fill-subtle);
+  color: var(--signal-error-text-subtle);
+  border: 1px solid var(--signal-error-border);
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.retryButton:hover {
+  background-color: var(--signal-error-fill);
+  color: var(--ink-on-error, var(--ink-on-brand));
+}
+
+.retryButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied when html.theme-dark is active.
+   ============================================================ */
+
+/* Input — use sunken surface for contrast against dark panels */
+:global(.theme-dark) .input {
+  background-color: var(--surface-sunken);
+  border-color: var(--border-default);
+}
+
+/* Cancel button — slightly stronger border in dark mode */
+:global(.theme-dark) .cancelButton,
+:global(.theme-dark) .cancelButtonSmall {
+  border-color: var(--border-default);
+}
+
+/* Save button hover — use b-400 (brighter step) for dark mode lift */
+:global(.theme-dark) .saveButton:hover:not(:disabled) {
+  background-color: var(--_b-400, var(--surface-brand));
+  border-color: var(--_b-400, var(--surface-brand));
+}

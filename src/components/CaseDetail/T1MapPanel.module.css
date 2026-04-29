@@ -1,0 +1,337 @@
+/**
+ * T1MapPanel.module.css
+ *
+ * CSS positioning for the T1 Summary map panel.
+ *
+ * Grid placement context:
+ *   T1MapPanel is placed as the content of the LEFT panel cell in T1Shell's
+ *   50/50 CSS grid (grid-template-columns: 1fr 1fr).  T1Shell's .panel is a
+ *   flex-column with min-height: 0 and overflow: hidden in the T1 body context.
+ *
+ *   The component's .root uses height: 100% + position: relative so it fills
+ *   the left cell completely.  The inner .mapCanvas uses position: absolute +
+ *   inset: 0 — the standard react-map-gl / Mapbox GL JS pattern that gives the
+ *   canvas a fixed 0,0,0,0 offset within its established formatting context.
+ *
+ * Design constraints:
+ *   - No hex literals — all colors via CSS custom properties (var(--*))
+ *   - WCAG AA contrast in both light and dark themes
+ *   - Reduced-motion: no transitions or animations unless prefixed
+ *   - Typography: Inter Tight (UI), IBM Plex Mono (coordinate values)
+ */
+
+/* ── Root container ─────────────────────────────────────────────────────────── */
+
+/**
+ * .root — Establishes the positioning context for the absolute map canvas.
+ *
+ * Sizing strategy:
+ *   • height: 100%       — fill the parent flex-column left panel cell.
+ *   • min-height: 0      — allow the flex item to shrink below its intrinsic
+ *                          height when the panel is compact.
+ *   • width: 100%        — span the full width of the left grid column.
+ *   • position: relative — creates the containing block for .mapCanvas
+ *                          (position: absolute; inset: 0).
+ *   • overflow: hidden   — clips the Mapbox GL canvas to the panel bounds;
+ *                          prevents the attribution control or navigation
+ *                          control from bleeding into the right panel.
+ *
+ * When T1MapPanel is the only or primary child in T1Shell's left panel
+ * (rendered without the standard 1.25rem panel padding), this root div
+ * expands to fill the entire left 50% of the T1 grid.
+ */
+.root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  /*
+   * min-height: 16rem prevents a 0-height collapse when the flex parent has
+   * not yet resolved its height (e.g., during SSR hydration).  This ensures
+   * the map placeholder is always at a readable minimum size.
+   * The value overrides the "0" shorthand used in flex-item shrink contexts —
+   * the T1Shell left panel uses `min-height: 0` via CSS but T1MapPanel must
+   * remain at least 16rem tall so the map is usable.
+   */
+  min-height: 16rem;
+  overflow: hidden;
+  /* Base surface behind the map tiles while they load */
+  background: var(--surface-sunken);
+}
+
+/* ── Map canvas ─────────────────────────────────────────────────────────────── */
+
+/**
+ * .mapCanvas — Absolute fill for the react-map-gl / Mapbox GL canvas.
+ *
+ * react-map-gl expects its <Map> to be inside an element with a defined
+ * width × height.  The canonical Mapbox GL JS setup is:
+ *
+ *   parent: position: relative; width: X; height: Y
+ *   canvas: position: absolute; inset: 0; width: 100%; height: 100%
+ *
+ * This allows the map to fill any size container without JS-based sizing.
+ * The `overflow: hidden` on .root clips the GL canvas to the panel bounds.
+ */
+.mapCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Location info overlay ──────────────────────────────────────────────────── */
+
+/**
+ * .locationOverlay — Floating info badge anchored to the bottom of the map.
+ *
+ * Shows the case's locationName as a readable label on top of the map canvas.
+ * Positioned above the Mapbox attribution bar (bottom: 2rem).
+ * z-index 20 places it above GL layers but below modal overlays.
+ *
+ * Uses a semi-transparent backdrop so the map tiles remain visible underneath.
+ */
+.locationOverlay {
+  position: absolute;
+  bottom: 2rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  z-index: 20;
+
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+
+  background: var(--surface-overlay, rgba(255, 255, 255, 0.9));
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  box-shadow: var(--elevation-2);
+
+  /* Prevent the overlay from growing too wide on wide screens */
+  max-width: 20rem;
+
+  /* Frosted glass effect where supported */
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.locationName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.locationCoords {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── Placeholder (no coordinates or no token) ───────────────────────────────── */
+
+/**
+ * .placeholder — Centered empty-state container.
+ *
+ * Rendered when the case has no lat/lng, or when no Mapbox token is configured.
+ * Uses the same absolute-fill pattern as .mapCanvas so it occupies the same
+ * space the map would, keeping the T1 grid proportions consistent.
+ */
+.placeholder {
+  position: absolute;
+  inset: 0;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  padding: 1.5rem;
+  text-align: center;
+  background: var(--surface-sunken);
+}
+
+.placeholderIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: var(--surface-active);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/**
+ * Pin icon — pure CSS map pin shape.
+ * Composed from a circle (head) + a pseudo-element triangle (tail).
+ * No external SVG required.
+ */
+.placeholderPinIcon {
+  position: relative;
+  display: inline-block;
+  width: 1rem;
+  height: 1.25rem;
+}
+
+.placeholderPinIcon::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50% 50% 50% 0;
+  rotate: -45deg;
+  background: var(--ink-tertiary);
+}
+
+.placeholderPinIcon::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+}
+
+.placeholderTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  line-height: 1.35;
+}
+
+.placeholderText {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  line-height: 1.5;
+}
+
+.placeholderCode {
+  display: inline-block;
+  background: var(--surface-active);
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--ink-brand);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+/* ── Loading skeleton ───────────────────────────────────────────────────────── */
+
+/**
+ * .skeleton — Shown while the Convex case query is in-flight (data === undefined).
+ *
+ * Uses the same absolute-fill pattern to preserve grid proportions.
+ * A shimmer animation indicates loading state; respects reduced-motion.
+ */
+.skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    var(--surface-active) 0%,
+    var(--surface-sunken) 40%,
+    var(--surface-active) 80%,
+    var(--surface-active) 100%
+  );
+  background-size: 300% 100%;
+  animation: t1MapSkeleton 1.8s linear infinite;
+}
+
+@keyframes t1MapSkeleton {
+  0%   { background-position: 100% center; }
+  100% { background-position: -100% center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--surface-active);
+  }
+}
+
+/* ── Marker — CSS pin for the case location ─────────────────────────────────── */
+
+/**
+ * .caseMarker — Visual pin placed via react-map-gl <Marker> at the case's
+ * lat/lng position.
+ *
+ * The outer div is the Marker anchor element; it contains a CSS-composed
+ * map pin shape (circle head + pointy tail via clip-path).
+ *
+ * Using a CSS marker rather than an image avoids an extra network request
+ * and allows the color to follow the status design tokens.
+ */
+.caseMarker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: default;
+  transform: translateY(-50%);
+}
+
+.caseMarkerHead {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50% 50% 50% 0;
+  rotate: -45deg;
+  background: var(--layer-deployed-bg, var(--ink-brand));
+  border: 2px solid var(--surface-base);
+  box-shadow: var(--elevation-2);
+  flex-shrink: 0;
+}
+
+/* Status-derived marker colors (data-status attribute on .caseMarkerHead) */
+.caseMarkerHead[data-status="hangar"],
+.caseMarkerHead[data-status="assembled"],
+.caseMarkerHead[data-status="received"],
+.caseMarkerHead[data-status="archived"] {
+  background: var(--layer-hangar-bg);
+}
+
+.caseMarkerHead[data-status="transit_out"],
+.caseMarkerHead[data-status="transit_in"] {
+  background: var(--layer-transit-bg);
+}
+
+.caseMarkerHead[data-status="deployed"] {
+  background: var(--layer-deployed-bg);
+}
+
+.caseMarkerHead[data-status="flagged"] {
+  background: var(--layer-flagged-bg);
+}
+
+.caseMarkerTail {
+  width: 0.125rem;
+  height: 0.375rem;
+  background: var(--ink-tertiary);
+  border-radius: 0 0 1px 1px;
+  flex-shrink: 0;
+}
+
+/* ── Dark theme overrides ───────────────────────────────────────────────────── */
+
+:global(.theme-dark) .locationOverlay {
+  background: var(--surface-overlay, rgba(24, 24, 28, 0.9));
+  border-color: var(--border-default);
+}
+
+:global(.theme-dark) .caseMarkerHead {
+  border-color: var(--surface-sunken);
+}

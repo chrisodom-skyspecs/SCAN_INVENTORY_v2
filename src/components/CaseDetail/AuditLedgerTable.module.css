@@ -1,0 +1,397 @@
+/**
+ * AuditLedgerTable.module.css
+ *
+ * Styles for the T5 Audit Ledger table (sortable columnar view).
+ *
+ * Design-system rules:
+ *   - No hex literals — CSS custom properties only.
+ *   - Inter Tight for all UI text (column headers, actor/action cells).
+ *   - IBM Plex Mono for tabular data (Case ID, Hash values, timestamps).
+ *   - Dark-mode overrides via :global(.theme-dark) selectors.
+ *   - WCAG AA contrast via token cascade.
+ */
+
+/* ── Wrapper ──────────────────────────────────────────────────────────────── */
+
+.ledgerWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+/* ── Scroll container (horizontal overflow on narrow panels) ───────────── */
+
+.tableScroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Provide subtle inset hint on clipped end */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.tableScroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tableScroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tableScroll::-webkit-scrollbar-thumb {
+  background-color: var(--border-default);
+  border-radius: 9999px;
+}
+
+/* ── Table ────────────────────────────────────────────────────────────────── */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  /* Ensure min-content width so columns don't collapse below readable size */
+  min-width: 36rem;
+}
+
+/* ── Table head ───────────────────────────────────────────────────────────── */
+
+.thead {
+  background-color: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-default);
+}
+
+/* Header cells */
+.th {
+  padding: 0;
+  text-align: left;
+  white-space: nowrap;
+  /* No explicit border — bottom border comes from thead */
+}
+
+/* Active (currently sorted) column header */
+.thActive {
+  background-color: var(--surface-selected);
+}
+
+/* Sort button inside <th> — takes full cell click area */
+.sortBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+  min-height: 2rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* Typography: uppercase label style per shared.sectionTitle */
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  user-select: none;
+  transition: color 0.1s ease, background-color 0.1s ease;
+}
+
+.sortBtn:hover {
+  color: var(--ink-primary);
+  background-color: var(--surface-hover);
+}
+
+.sortBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  /* Inset focus ring so it doesn't affect table layout */
+  border-radius: 0.1875rem;
+}
+
+.sortBtnLabel {
+  /* Flex child — label text */
+  flex: 1;
+}
+
+/* Sort direction indicator glyph (↑ / ↓ / ↕) */
+.sortIcon {
+  font-size: 0.5625rem;
+  line-height: 1;
+  opacity: 0.5;
+  flex-shrink: 0;
+  /* Slight shift down for optical alignment */
+  margin-top: 0.0625rem;
+  /* Transitions */
+  transition: opacity 0.1s ease;
+}
+
+.sortBtn:hover .sortIcon,
+.thActive .sortIcon {
+  opacity: 1;
+}
+
+/* ── Table body ───────────────────────────────────────────────────────────── */
+
+.tbody {
+  /* Body rows inherit table background */
+}
+
+/* Body rows — zebra stripe via nth-child rather than row state */
+.tr {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background-color 0.1s ease;
+}
+
+.tr:last-child {
+  border-bottom: none;
+}
+
+.tr:hover {
+  background-color: var(--surface-hover);
+}
+
+/* Base cell */
+.td {
+  padding: 0.5rem 0.75rem;
+  vertical-align: middle;
+}
+
+/* ── Cell: Timestamp ──────────────────────────────────────────────────────── */
+
+/* Prevent timestamp cell from wrapping mid-string */
+.tdTimestamp {
+  white-space: nowrap;
+}
+
+/* Timestamp text — IBM Plex Mono via shared.timestamp, but explicitly set for
+   specificity within this module */
+.timestampCell {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* ── Cell: Actor ──────────────────────────────────────────────────────────── */
+
+.cellActor {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+/* ── Cell: Action ─────────────────────────────────────────────────────────── */
+
+.cellAction {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--ink-secondary);
+}
+
+/* ── Cell: Case ID ────────────────────────────────────────────────────────── */
+
+.cellCaseId {
+  display: inline-block;
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.02em;
+  background-color: var(--surface-sunken);
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.1875rem;
+  white-space: nowrap;
+  /* Allow text selection for easy copy */
+  user-select: all;
+}
+
+/* ── Cell: Hash ───────────────────────────────────────────────────────────── */
+
+.cellHash {
+  display: inline-block;
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  font-weight: 400;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.04em;
+  background-color: var(--surface-sunken);
+  padding: 0.0625rem 0.25rem;
+  border-radius: 0.1875rem;
+  white-space: nowrap;
+  /* Select all on click to make copy easy */
+  user-select: all;
+  cursor: default;
+}
+
+.cellHashEmpty {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.75rem;
+  color: var(--ink-disabled);
+}
+
+/* ── Footer row ───────────────────────────────────────────────────────────── */
+
+.ledgerFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background-color: var(--surface-sunken);
+  border-top: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.rowCount {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.02em;
+}
+
+.sortIndicator {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  color: var(--ink-disabled);
+}
+
+.sortIndicatorCol {
+  font-weight: 600;
+  color: var(--ink-tertiary);
+}
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied when html.theme-dark is active.
+   ============================================================ */
+
+/*
+ * Header background — sunken in dark mode is very dark (--_n-975).
+ * Add a visible bottom border to separate from body.
+ */
+:global(.theme-dark) .thead {
+  border-bottom-color: var(--border-default);
+}
+
+/*
+ * Active column header in dark mode — selected token remaps to a
+ * dark-mode-appropriate tint; no override needed beyond token cascade.
+ */
+
+/*
+ * Body row dividers — bump subtle → default for dark-surface visibility.
+ */
+:global(.theme-dark) .tr {
+  border-bottom-color: var(--border-default);
+}
+
+:global(.theme-dark) .tr:last-child {
+  border-bottom: none;
+}
+
+/*
+ * Case ID chip in dark mode — sunken background is very dark;
+ * add a subtle border so the chip outline is readable.
+ */
+:global(.theme-dark) .cellCaseId {
+  border: 1px solid var(--border-subtle);
+}
+
+/*
+ * Hash chip in dark mode — same treatment as Case ID chip.
+ */
+:global(.theme-dark) .cellHash {
+  border: 1px solid var(--border-subtle);
+}
+
+/*
+ * Footer row — match header background; add top border for separation.
+ */
+:global(.theme-dark) .ledgerFooter {
+  border-top-color: var(--border-default);
+}
+
+/*
+ * Scrollbar thumb — slightly brighter in dark mode for visibility.
+ */
+:global(.theme-dark) .tableScroll {
+  scrollbar-color: var(--border-strong, var(--border-default)) transparent;
+}
+
+:global(.theme-dark) .tableScroll::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong, var(--border-default));
+}
+
+/* ============================================================
+   PRINT STYLES
+   Applied when window.print() is called from T5Audit.
+   Removes interactive chrome (sort buttons, scrollbars, footer)
+   and lets the table expand to full print-canvas width.
+   ============================================================ */
+
+@media print {
+  /* Remove horizontal scroll container — let table flow to full width */
+  .tableScroll {
+    overflow: visible;
+    -webkit-overflow-scrolling: unset;
+    scrollbar-width: none;
+  }
+
+  .tableScroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Full page width; remove the min-width that forces scrolling */
+  .table {
+    width: 100%;
+    min-width: unset;
+    font-size: 0.625rem;
+    /* Avoid orphaned rows at page breaks */
+    page-break-inside: auto;
+  }
+
+  /* Print table header background; repeat header on each printed page */
+  .thead {
+    display: table-header-group;
+    /* Force background colour to print */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: var(--surface-sunken);
+  }
+
+  /* No hover state in print */
+  .tr:hover {
+    background-color: transparent;
+  }
+
+  /* Avoid row breaking across pages */
+  .tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* The sort buttons become plain text in print — hide the icon glyph */
+  .sortBtn {
+    cursor: default;
+    pointer-events: none;
+  }
+
+  .sortIcon {
+    display: none;
+  }
+
+  /* Hide the footer (sort indicator / row count) — redundant on paper */
+  .ledgerFooter {
+    display: none;
+  }
+
+  /* Ensure Case ID + Hash chips show their background */
+  .cellCaseId,
+  .cellHash {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

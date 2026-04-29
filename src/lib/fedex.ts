@@ -219,6 +219,9 @@ function invalidateTokenCache(): void {
   _tokenCache = null;
 }
 
+/** Clears cached OAuth tokens — call when env credentials change (e.g. in tests). */
+export { invalidateTokenCache };
+
 // ─── Zod schemas for Track API response ───────────────────────────────────────
 
 const fedExTrackingEventSchema = z.object({
@@ -654,3 +657,35 @@ export function areFedExCredentialsConfigured(): boolean {
 }
 
 export { FEDEX_PRODUCTION_BASE, FEDEX_SANDBOX_BASE };
+
+// ─── getTrackingStatus alias ──────────────────────────────────────────────────
+
+/**
+ * Alias for `trackPackage` — preferred entry point for the SCAN / INVENTORY
+ * shipping workflow when callers want a status-centric function name.
+ *
+ * Authenticates via OAuth2 (with in-process token caching and automatic
+ * refresh on expiry), calls the FedEx Track v1 API, and returns a normalised
+ * `FedExTrackingResult`.  All error paths throw a `FedExError` with a
+ * machine-readable `code`:
+ *
+ *   CONFIGURATION_ERROR  — credentials not set in env
+ *   AUTH_ERROR           — FedEx rejected the OAuth token
+ *   NOT_FOUND            — tracking number does not exist in FedEx system
+ *   RATE_LIMITED         — FedEx returned HTTP 429
+ *   SERVER_ERROR         — FedEx returned HTTP 5xx
+ *   NETWORK_ERROR        — fetch() threw (DNS failure, timeout, etc.)
+ *   PARSE_ERROR          — unexpected response shape
+ *   UNKNOWN_ERROR        — catch-all
+ *
+ * @param trackingNumber  FedEx tracking number. Whitespace is stripped.
+ *
+ * @example
+ * import { getTrackingStatus } from "@/lib/fedex";
+ *
+ * const status = await getTrackingStatus("794644823741");
+ * // status.status      → "in_transit"
+ * // status.description → "In transit"
+ * // status.events      → [{ timestamp, eventType, description, location }, ...]
+ */
+export const getTrackingStatus = trackPackage;

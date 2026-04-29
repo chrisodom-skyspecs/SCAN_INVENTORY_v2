@@ -1,0 +1,182 @@
+/**
+ * DossierOverviewPanel.module.css
+ *
+ * Styles for the Overview tab content in the T4 Tabbed Dossier.
+ * All values use design-system CSS custom properties — zero hex literals.
+ * Inter Tight for UI labels; IBM Plex Mono for data/identifiers.
+ */
+
+/* ── Panel root ───────────────────────────────────────────────────── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  /* Panel receives padding from .tabPanel in T4DossierShell */
+}
+
+/* ── Loading / not-found wrapper ──────────────────────────────────── */
+
+.loadingWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 8rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--ink-tertiary);
+}
+
+/* ── Stats row ────────────────────────────────────────────────────── */
+/*
+ * Four-column grid of stat cards: Total Items, OK, Damaged, Missing.
+ * Collapses to 2 columns on narrow viewports (<= 320px).
+ */
+
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 24rem) {
+  .statsRow {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Individual stat card ─────────────────────────────────────────── */
+
+.statCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1875rem;
+  padding: 0.75rem 0.5rem;
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  text-align: center;
+  min-width: 0;
+}
+
+/* Variant: OK — green-tinted background + text */
+.statCardOk {
+  background-color: var(--signal-success-fill-subtle);
+  border-color: var(--signal-success-border);
+}
+
+.statCardOk .statValue {
+  color: var(--signal-success-text);
+}
+
+/* Variant: Damaged — error/red-tinted */
+.statCardDamaged {
+  background-color: var(--signal-error-fill-subtle);
+  border-color: var(--signal-error-border);
+}
+
+.statCardDamaged .statValue {
+  color: var(--signal-error-text);
+}
+
+/* Variant: Missing — warning/amber-tinted */
+.statCardMissing {
+  background-color: var(--signal-warning-fill-subtle, var(--surface-sunken));
+  border-color: var(--signal-warning-border, var(--border-default));
+}
+
+.statCardMissing .statValue {
+  color: var(--signal-warning-text, var(--ink-secondary));
+}
+
+/* Variant: Neutral — standard sunken background, brand-colored value */
+.statCardNeutral .statValue {
+  color: var(--ink-primary);
+}
+
+/* ── Stat value (numeric) ─────────────────────────────────────────── */
+
+.statValue {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+/* ── Stat label (description text) ───────────────────────────────── */
+
+.statLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  line-height: 1.2;
+  /* Prevent label from overflowing narrow card */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* ── Loading skeleton for stat value ──────────────────────────────── */
+
+.statSkeleton {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.375rem;
+  background-color: var(--surface-active);
+  border-radius: 0.25rem;
+  animation: skeletonPulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statSkeleton {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1;   }
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied when html.theme-dark is active.
+   Token cascade handles most color swaps; these rules address
+   additional polish for the dark palette.
+   ============================================================ */
+
+/* Stat card base — slightly stronger border in dark mode */
+:global(.theme-dark) .statCard {
+  border-color: var(--border-default);
+}
+
+/* OK variant — keep success tokens visible against dark surface */
+:global(.theme-dark) .statCardOk {
+  background-color: var(--signal-success-fill-subtle);
+  border-color: var(--signal-success-border);
+}
+
+/* Damaged variant — error tokens re-mapped to brighter in dark theme */
+:global(.theme-dark) .statCardDamaged {
+  background-color: var(--signal-error-fill-subtle);
+  border-color: var(--signal-error-border);
+}
+
+/* Missing variant — warning tokens in dark theme */
+:global(.theme-dark) .statCardMissing {
+  background-color: var(--signal-warning-fill-subtle, var(--surface-sunken));
+  border-color: var(--signal-warning-border, var(--border-default));
+}

@@ -28,7 +28,20 @@
  */
 
 import { query } from "./_generated/server";
+import type { Auth, UserIdentity } from "convex/server";
 import { v } from "convex/values";
+
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+
+async function requireAuth(ctx: { auth: Auth }): Promise<UserIdentity> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error(
+      "[AUTH_REQUIRED] Unauthenticated. Provide a valid Kinde access token."
+    );
+  }
+  return identity;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -104,6 +117,7 @@ export const listCaseTemplates = query({
     includeInactive: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<CaseTemplateSummary[]> => {
+    await requireAuth(ctx);
     let rows;
 
     if (args.includeInactive) {
@@ -153,6 +167,7 @@ export const listCaseTemplates = query({
 export const getCaseTemplateById = query({
   args: { templateId: v.id("caseTemplates") },
   handler: async (ctx, args): Promise<CaseTemplateDetail | null> => {
+    await requireAuth(ctx);
     const t = await ctx.db.get(args.templateId);
     if (!t) return null;
 

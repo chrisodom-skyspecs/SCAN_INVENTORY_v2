@@ -47,6 +47,7 @@ import React from "react";
 import { render } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { MapView } from "@/types/map";
+import { MAP_URL_STATE_DEFAULTS } from "@/types/map";
 import { TelemetryEventName } from "@/types/telemetry.types";
 
 // ─── Mock next/navigation (required by useMapParams → useMapUrlState) ─────────
@@ -114,6 +115,23 @@ vi.mock("@/hooks/use-case-templates", () => ({
   useCaseTemplates: () => ({ kits: [] }),
 }));
 
+// ─── Mock useKindeUser (not under test here) ──────────────────────────────────
+
+vi.mock("@/hooks/use-kinde-user", () => ({
+  useKindeUser: () => ({
+    id: "test_user_001",
+    name: "Operator",
+    isLoading: false,
+    isAuthenticated: true,
+  }),
+}));
+
+// ─── Mock useDefaultLayoutOnCaseChange (not under test here) ─────────────────
+
+vi.mock("@/hooks/use-default-layout-on-case-change", () => ({
+  useDefaultLayoutOnCaseChange: () => undefined,
+}));
+
 // ─── Stub child map / panel components (avoid complex render deps) ────────────
 
 vi.mock("@/components/Map/M1FleetOverview", () => ({
@@ -142,7 +160,11 @@ import { InventoryMapClient } from "../InventoryMapClient";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function renderClient() {
-  return render(<InventoryMapClient initialView={_mockView} />);
+  return render(
+    <InventoryMapClient
+      initialState={{ ...MAP_URL_STATE_DEFAULTS, view: _mockView }}
+    />
+  );
 }
 
 /**
@@ -193,7 +215,7 @@ describe("InventoryMapClient — page load telemetry", () => {
     const { rerender } = renderClient();
 
     mockTrackEvent.mockClear();
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_NAV_PAGE_LOADED);
     expect(events).toHaveLength(0);
@@ -222,7 +244,7 @@ describe("InventoryMapClient — case selection/deselection telemetry", () => {
     mockTrackEvent.mockClear(); // ignore mount events (page_loaded, map_view_changed)
 
     _mockActiveCaseId = "case_xyz789";
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_NAV_CASE_SELECTED);
     expect(events).toHaveLength(1);
@@ -244,7 +266,7 @@ describe("InventoryMapClient — case selection/deselection telemetry", () => {
     mockTrackEvent.mockClear(); // ignore mount events
 
     _mockActiveCaseId = null;
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_NAV_CASE_DESELECTED);
     expect(events).toHaveLength(1);
@@ -286,7 +308,7 @@ describe("InventoryMapClient — case selection/deselection telemetry", () => {
     mockTrackEvent.mockClear();
 
     _mockActiveCaseId = "case_second";
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_NAV_CASE_SELECTED);
     expect(events).toHaveLength(1);
@@ -316,7 +338,7 @@ describe("InventoryMapClient — org filter telemetry", () => {
     mockTrackEvent.mockClear(); // ignore mount events
 
     _mockOrg = "org_alpha";
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_FILTER_ORG_CHANGED);
     expect(events).toHaveLength(1);
@@ -337,7 +359,7 @@ describe("InventoryMapClient — org filter telemetry", () => {
     mockTrackEvent.mockClear();
 
     _mockOrg = null;
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_FILTER_ORG_CHANGED);
     expect(events).toHaveLength(1);
@@ -366,7 +388,7 @@ describe("InventoryMapClient — org filter telemetry", () => {
     mockTrackEvent.mockClear();
 
     _mockOrg = "org_two";
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_FILTER_ORG_CHANGED);
     expect(events).toHaveLength(1);
@@ -381,7 +403,7 @@ describe("InventoryMapClient — org filter telemetry", () => {
     const { rerender } = renderClient();
 
     mockTrackEvent.mockClear();
-    rerender(<InventoryMapClient initialView="M1" />); // same org, new render
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />); // same org, new render
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_FILTER_ORG_CHANGED);
     expect(events).toHaveLength(0);
@@ -410,7 +432,7 @@ describe("InventoryMapClient — kit filter telemetry", () => {
     mockTrackEvent.mockClear();
 
     _mockKit = "kit_drone";
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_FILTER_KIT_CHANGED);
     expect(events).toHaveLength(1);
@@ -431,7 +453,7 @@ describe("InventoryMapClient — kit filter telemetry", () => {
     mockTrackEvent.mockClear();
 
     _mockKit = null;
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_FILTER_KIT_CHANGED);
     expect(events).toHaveLength(1);
@@ -458,7 +480,7 @@ describe("InventoryMapClient — kit filter telemetry", () => {
     const { rerender } = renderClient();
 
     mockTrackEvent.mockClear();
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_FILTER_KIT_CHANGED);
     expect(events).toHaveLength(0);
@@ -487,7 +509,7 @@ describe("InventoryMapClient — layer toggle telemetry", () => {
     mockTrackEvent.mockClear();
 
     _mockLayers = ["cases", "clusters", "labels", "heat"];
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_LAYER_TOGGLED);
     expect(events).toHaveLength(1);
@@ -509,7 +531,7 @@ describe("InventoryMapClient — layer toggle telemetry", () => {
     mockTrackEvent.mockClear();
 
     _mockLayers = ["cases", "clusters", "labels"]; // satellite removed
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_LAYER_TOGGLED);
     expect(events).toHaveLength(1);
@@ -540,7 +562,7 @@ describe("InventoryMapClient — layer toggle telemetry", () => {
 
     // Add "heat" and "terrain" simultaneously (e.g., via setLayers())
     _mockLayers = ["cases", "clusters", "heat", "terrain"];
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_LAYER_TOGGLED);
     // One event for "heat" (added) + one for "terrain" (added)
@@ -562,7 +584,7 @@ describe("InventoryMapClient — layer toggle telemetry", () => {
 
     // Remove "labels", add "heat"
     _mockLayers = ["cases", "clusters", "heat"];
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_LAYER_TOGGLED);
     expect(events).toHaveLength(2); // one removed ("labels"), one added ("heat")
@@ -585,7 +607,7 @@ describe("InventoryMapClient — layer toggle telemetry", () => {
     mockTrackEvent.mockClear();
     // Same array contents (new reference — React re-renders even with the same values)
     _mockLayers = ["cases", "clusters", "labels"];
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     const events = callsForEvent(TelemetryEventName.INV_ACTION_LAYER_TOGGLED);
     expect(events).toHaveLength(0);

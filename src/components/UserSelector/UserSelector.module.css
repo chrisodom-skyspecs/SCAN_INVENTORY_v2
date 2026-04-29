@@ -1,0 +1,388 @@
+/**
+ * UserSelector.module.css
+ *
+ * Searchable user combobox component styles.
+ *
+ * Rules:
+ *   - No hex literals — design-system CSS custom properties only.
+ *   - Inter Tight for display names and labels.
+ *   - IBM Plex Mono for email addresses and user IDs (tabular/data content).
+ *   - Touch targets: minimum 44 × 44 px per option row (WCAG 2.5.5).
+ *   - WCAG AA contrast in both light and dark themes.
+ *   - prefers-reduced-motion guards on all transitions.
+ */
+
+/* ── Container ──────────────────────────────────────────────────────── */
+
+.container {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ── Input wrap ─────────────────────────────────────────────────────── */
+
+/**
+ * .inputWrap — relative container for the search icon, input, loading
+ * spinner, and clear button.  Using position:relative here lets us
+ * absolutely-position the icon and clear button inside the input area
+ * without affecting document flow.
+ */
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* ── Search icon ────────────────────────────────────────────────────── */
+
+.searchIcon {
+  position: absolute;
+  left: 0.75rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--ink-tertiary);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+/* ── Main input ─────────────────────────────────────────────────────── */
+
+.input {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  color: var(--ink-primary);
+  background-color: var(--surface-raised);
+  border: 1.5px solid var(--border-default);
+  border-radius: 0.5rem;
+  /* Left padding = icon width + gap; right padding = clear button + gap */
+  padding: 0.75rem 2.5rem 0.75rem 2.25rem;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 150ms ease;
+  min-height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input {
+    transition: none;
+  }
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--border-brand);
+  box-shadow: 0 0 0 3px var(--surface-brand-subtle);
+}
+
+.input::placeholder {
+  color: var(--ink-quaternary);
+}
+
+.input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: var(--surface-muted);
+}
+
+/**
+ * .inputSelected — subtle visual indicator that a user has been
+ * confirmed from the dropdown.  Applies a light brand-tinted border
+ * so the operator can see that the field is "locked" to a valid user.
+ */
+.inputSelected {
+  border-color: var(--border-brand);
+}
+
+/* ── Loading spinner ────────────────────────────────────────────────── */
+
+/**
+ * Small inline spinner shown on the right side of the input while
+ * Convex loads the user list on first mount.
+ */
+.loadingSpinner {
+  position: absolute;
+  right: 0.75rem;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--ink-brand);
+  border-radius: 50%;
+  animation: spinnerRotate 600ms linear infinite;
+  pointer-events: none;
+}
+
+@keyframes spinnerRotate {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingSpinner {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ── Clear button ───────────────────────────────────────────────────── */
+
+.clearButton {
+  position: absolute;
+  right: 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0.25rem;
+  color: var(--ink-tertiary);
+  transition: color 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clearButton {
+    transition: none;
+  }
+}
+
+.clearButton:hover {
+  color: var(--ink-primary);
+}
+
+.clearButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.clearIconSvg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* ── Listbox dropdown ───────────────────────────────────────────────── */
+
+/**
+ * .listbox — the dropdown that appears below the input.
+ *
+ * Absolutely positioned relative to .container so it doesn't shift
+ * the layout.  z-index 50 places it above peer form fields but below
+ * the global search modal (z-index 900) and notifications.
+ */
+.listbox {
+  position: absolute;
+  /* Appears directly below the input wrap (~44px min-height + gap) */
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  z-index: 50;
+
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  background-color: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: 0.625rem;
+  box-shadow: var(--elevation-3, 0 4px 12px rgba(0 0 0 / 0.12));
+  max-height: 18rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ── Option row ─────────────────────────────────────────────────────── */
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  /* Touch target */
+  min-height: 44px;
+  user-select: none;
+  transition: background-color 80ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option {
+    transition: none;
+  }
+}
+
+.option:hover {
+  background-color: var(--surface-hover);
+}
+
+.optionHighlighted {
+  background-color: var(--surface-brand-subtle);
+}
+
+/* ── Person icon (inside option) ────────────────────────────────────── */
+
+.personIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--ink-secondary);
+  flex-shrink: 0;
+}
+
+/* ── Option body ────────────────────────────────────────────────────── */
+
+.optionBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.optionName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.optionEmail {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── No-results state ───────────────────────────────────────────────── */
+
+.noResults {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0.75rem;
+  cursor: default;
+}
+
+.noResultsText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-tertiary);
+  text-align: center;
+}
+
+/* ── Selection chip ─────────────────────────────────────────────────── */
+
+/**
+ * .selectionChip — confirmation row rendered below the input when a
+ * user has been selected.  Shows the person icon, display name, and
+ * their Kinde user ID in monospace.  Helps operators verify the correct
+ * user was picked before submitting a custody handoff.
+ */
+.selectionChip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--surface-brand-subtle);
+  border: 1px solid var(--border-brand);
+  border-radius: 0.5rem;
+}
+
+.chipName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-brand);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chipId {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   DARK THEME OVERRIDES  (.theme-dark on <html>)
+
+   Design-token rules above adapt automatically.  These explicit
+   overrides handle:
+     a) Box-shadow literals that cannot reference CSS custom properties.
+     b) Interactive state re-assertions to guarantee WCAG AA ≥ 3:1 on
+        dark surfaces.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Input — dark mode ───────────────────────────────────────────────
+ * --surface-raised (--_n-900) and --border-default (--_n-800) adapt
+ * automatically.  Explicit re-assertion documents the intent.
+ */
+:global(.theme-dark) .input {
+  background-color: var(--surface-raised);
+  border-color: var(--border-default);
+  color: var(--ink-primary);
+}
+
+:global(.theme-dark) .input:focus {
+  border-color: var(--border-brand);
+  box-shadow: 0 0 0 3px var(--surface-brand-subtle);
+  background-color: var(--surface-raised);
+}
+
+/* ── Listbox — dark mode ─────────────────────────────────────────────
+ * --surface-overlay (--_n-900) and --border-default (--_n-800).
+ * box-shadow uses a literal — override with a white-tinted shadow that
+ * reads against dark backgrounds.
+ */
+:global(.theme-dark) .listbox {
+  background-color: var(--surface-overlay);
+  border-color: var(--border-default);
+  box-shadow: 0 4px 16px var(--shadow-dark-overlay);
+}
+
+/* ── Highlighted option — dark mode ──────────────────────────────────
+ * --surface-brand-subtle maps to --_b-900 in dark mode (deep navy tint).
+ * Re-assert to guarantee the intended dark-mode surface.
+ */
+:global(.theme-dark) .optionHighlighted {
+  background-color: var(--surface-brand-subtle);
+}
+
+/* ── Selection chip — dark mode ──────────────────────────────────────
+ * --surface-brand-subtle (--_b-900) and --border-brand (--_b-600).
+ * --ink-brand (--_b-400) for the name text — sufficient contrast.
+ */
+:global(.theme-dark) .selectionChip {
+  background-color: var(--surface-brand-subtle);
+  border-color: var(--border-brand);
+}
+
+/* ── Loading spinner — dark mode ─────────────────────────────────────
+ * Update the border track from --border-default to a darker variant
+ * so the spinner track is visible on dark input backgrounds.
+ */
+:global(.theme-dark) .loadingSpinner {
+  border-color: var(--surface-muted);
+  border-top-color: var(--ink-brand);
+}

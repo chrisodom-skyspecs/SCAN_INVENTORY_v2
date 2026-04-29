@@ -484,14 +484,23 @@
 .pinDot[data-status="deployed"] {
   background: var(--status-deployed, var(--ink-brand));
 }
-.pinDot[data-status="in_field"] {
-  background: var(--status-in-field, var(--ink-success));
+.pinDot[data-status="hangar"] {
+  background: var(--status-hangar, var(--ink-tertiary));
 }
-.pinDot[data-status="shipping"] {
-  background: var(--status-shipping, var(--ink-warning));
+.pinDot[data-status="transit_out"] {
+  background: var(--status-transit-out, var(--ink-warning));
 }
-.pinDot[data-status="returned"] {
-  background: var(--status-returned, var(--ink-tertiary));
+.pinDot[data-status="flagged"] {
+  background: var(--status-flagged, var(--ink-error));
+}
+.pinDot[data-status="transit_in"] {
+  background: var(--status-transit-in, var(--ink-warning));
+}
+.pinDot[data-status="received"] {
+  background: var(--status-received, var(--ink-tertiary));
+}
+.pinDot[data-status="archived"] {
+  background: var(--status-archived, var(--ink-muted));
 }
 
 .pinLabel {
@@ -548,3 +557,51 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK MODE OVERRIDES — M5 MISSION CONTROL
+   Applied when .theme-dark is set on <html> (see src/styles/tokens/base.css §3).
+
+   M5 design intent: the telemetry HUD and scrubber bar are intentionally
+   dark-styled in BOTH themes (the Mapbox satellite base is always dark, and
+   the HUD overlay uses a near-opaque dark background).  Therefore most M5
+   elements are already visually "dark-ready" without additional overrides.
+
+   The following cases require explicit .theme-dark overrides:
+     1. filterSelect dropdown-arrow SVG (hardcoded stroke in data URI)
+     2. scrubberInput color-scheme (datetime-local browser picker)
+     3. scrubberBar replay state gets additional contrast in dark mode
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Dropdown arrow — light version for dark backgrounds.
+ * Overrides the light-theme stroke='%23666' with '%23aaa' (light gray).
+ * WCAG: %23aaa on hsl(210,20%,4%) ≈ 8.8:1 ✓
+ */
+:global(.theme-dark) .filterSelect {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23aaa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/**
+ * Scrubber datetime-local input — dark color-scheme.
+ * Instructs the browser's native date/time picker to render in dark mode.
+ * Especially important for M5's replay scrubber since it is the primary
+ * interactive control for the mission timeline.
+ */
+:global(.theme-dark) .scrubberInput {
+  color-scheme: dark;
+}
+
+/**
+ * scrubberBar replaying state in dark mode — slightly elevated contrast.
+ * In dark mode --surface-brand-subtle is already the dark brand tint (--_b-900).
+ * The border-brand token shifts to --_b-600 in dark.  No additional override
+ * is needed for the replaying state — the token cascade handles it.
+ */
+
+/**
+ * Live badge pulse dot — in dark mode --map-m5-position-fill shifts to
+ * --_i-200 (brighter teal).  The liveBadgePulse picks this up via
+ * var(--map-m5-position-fill, ...) with no JS intervention needed.
+ * Animation timing and properties remain unchanged across themes.
+ */

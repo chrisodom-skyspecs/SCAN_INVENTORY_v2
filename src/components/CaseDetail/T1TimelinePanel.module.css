@@ -1,0 +1,315 @@
+/**
+ * T1TimelinePanel.module.css
+ *
+ * Styles for the T1 right-panel event timeline.
+ *
+ * Grid placement context:
+ *   T1TimelinePanel is placed as the content of the RIGHT panel cell in
+ *   T1Shell's 50/50 CSS grid (grid-template-columns: 1fr 1fr).  The right
+ *   panel cell is a flex-column with overflow-y: auto and padding: 1.25rem.
+ *   T1TimelinePanel fills that flex column without creating a second
+ *   scroll context — the parent cell handles scrolling.
+ *
+ * Design constraints:
+ *   • No hex literals — all colors via CSS custom properties (var(--*))
+ *   • WCAG AA contrast in both light and dark themes
+ *   • Inter Tight for headings, labels, actor names, and metadata text
+ *   • IBM Plex Mono for timestamps, count badges, and data identifiers
+ *   • Reduced-motion: skeleton shimmer respects prefers-reduced-motion
+ *
+ * Token families used:
+ *   --surface-*         background surfaces
+ *   --border-*          dividers and chip borders
+ *   --ink-*             text hierarchy (primary, secondary, tertiary, disabled)
+ *   --elevation-focus   keyboard focus ring
+ *
+ * This file only styles the container, header, empty state, and loading
+ * skeleton.  Individual event items (dot, thread, content) are styled by
+ * TimelineEvent.module.css which is co-located with the TimelineEvent
+ * component at src/components/TimelineEvent/.
+ */
+
+/* ── Root container ─────────────────────────────────────────────────────────── */
+
+/**
+ * .root fills the parent flex-column right panel cell.
+ *
+ * flex-direction: column stacks the panelHeader above the eventList naturally.
+ * min-height: 0 prevents the root from overflowing when the panel is compact.
+ * overflow: visible — scrolling is handled by the parent T1Shell .panel cell.
+ */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  /* No explicit overflow: scrolling delegated to the parent panel cell */
+}
+
+/* ── Panel header ────────────────────────────────────────────────────────────── */
+
+/**
+ * .panelHeader — sticky header that stays visible as the user scrolls.
+ *
+ * Sticky offset calculation
+ * ─────────────────────────
+ * The parent T1Shell .panel cell has padding: 1.25rem.  The sticky header
+ * must compensate for this padding to appear flush at the top of the scroll
+ * viewport.  Using top: -1.25rem ensures the header sticks at the top of
+ * the visible panel area even after the body padding offsets the scroll.
+ *
+ * This mirrors the identical calculation in T2Timeline.module.css where the
+ * panel header uses top: -1.25rem to compensate for .body padding: 1.25rem.
+ *
+ * z-index: 2 keeps the header above event content as events scroll beneath it.
+ * background-color matches the panel surface (--surface-raised) so scrolled
+ * events are cleanly hidden behind the opaque header chip.
+ */
+.panelHeader {
+  position: sticky;
+  top: -1.25rem; /* compensate for parent .panel padding: 1.25rem */
+  z-index: 2;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+
+  padding: 0.875rem 0 0.625rem;
+  background-color: var(--surface-raised);
+
+  /* Subtle bottom edge so scrolling events slide cleanly under the header */
+  box-shadow: 0 1px 0 var(--border-subtle);
+  margin-bottom: 0.75rem;
+}
+
+.panelHeaderLeft {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* ── Panel title ─────────────────────────────────────────────────────────────── */
+
+/**
+ * .panelTitle — Section label above the event list.
+ *
+ * Uses the same style as T2Timeline's .panelTitle: small uppercase caps
+ * in Inter Tight with generous letter-spacing.  This is a design-system
+ * convention for section labels in case detail panels.
+ */
+.panelTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* ── Event count badge ───────────────────────────────────────────────────────── */
+
+/**
+ * .countBadge — compact numeric chip showing total event count.
+ *
+ * IBM Plex Mono for tabular numeric content.
+ * Sunken background + subtle border creates a chip shape without a strong
+ * visual weight that would compete with the timeline content.
+ *
+ * aria-live="polite" on the element (set in TSX) ensures screen readers
+ * announce the updated count when new events arrive via Convex push.
+ */
+.countBadge {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  flex-shrink: 0;
+  /* Align baseline with the .panelTitle text */
+  line-height: 1.6;
+}
+
+/* ── Event list ──────────────────────────────────────────────────────────────── */
+
+/**
+ * .eventList — the <ol> container for timeline event items.
+ *
+ * list-style: none removes the default browser ordered-list numbers — the
+ * visual ordering is conveyed by the vertical spine dots and chronological
+ * position, not by ordinal markers.
+ *
+ * The actual event item layout (spine column + content column) is defined
+ * by TimelineEvent.module.css which styles the <li> elements directly.
+ */
+.eventList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Loading skeleton ────────────────────────────────────────────────────────── */
+
+/**
+ * .skeleton — container for shimmer placeholder rows.
+ *
+ * Uses the same 2rem spine-col + 1fr content-col grid layout as the real
+ * event items (matching TimelineEvent.module.css .item grid), so the layout
+ * remains stable when skeleton transitions to real content.
+ */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.25rem 0;
+}
+
+.skeletonItem {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  grid-template-areas: "spine content";
+  gap: 0;
+  align-items: start;
+}
+
+.skeletonSpineCol {
+  grid-area: spine;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding-top: 0.125rem;
+}
+
+.skeletonDot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  flex-shrink: 0;
+}
+
+/**
+ * .skeletonThread — placeholder for the vertical connecting line.
+ * Fixed height gives the skeleton a predictable minimum row height
+ * without needing to measure the content column's height.
+ */
+.skeletonThread {
+  width: 1.5px;
+  height: 2.75rem;
+  background: var(--border-subtle);
+  margin-top: 0.1875rem;
+  border-radius: 9999px;
+}
+
+.skeletonContentCol {
+  grid-area: content;
+  padding: 0 0 0.875rem 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+}
+
+/* ── Skeleton shimmer animation ──────────────────────────────────────────────── */
+
+/**
+ * .skeletonLine — animated shimmer bar for each text row placeholder.
+ *
+ * Uses a sweeping gradient from --surface-sunken (dark endpoint) to
+ * --surface-hover (lighter midpoint) to simulate loading motion.
+ * The animation respects prefers-reduced-motion: no-preference.
+ */
+.skeletonLine {
+  border-radius: 0.25rem;
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-hover) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 400% 100%;
+  animation: t1TimelineShimmer 1.4s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonLine {
+    animation: none;
+    background: var(--surface-sunken);
+  }
+}
+
+@keyframes t1TimelineShimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Skeleton bar sizes — proportional to the real event item row heights */
+
+.skeletonLineTitle {
+  height: 0.8125rem;
+  width: 55%;
+}
+
+.skeletonLineMeta {
+  height: 0.6875rem;
+  width: 70%;
+}
+
+.skeletonLineDetail {
+  height: 0.625rem;
+  width: 40%;
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied automatically when html.theme-dark is active.
+   Token cascade handles most color changes; these selectors
+   handle visual polish beyond what token remapping provides.
+   ============================================================ */
+
+/*
+ * Panel header — in dark mode surface-raised is very close to the event
+ * content surface.  Strengthen the bottom shadow so events visually slide
+ * under the header when scrolling.
+ */
+:global(.theme-dark) .panelHeader {
+  box-shadow: 0 1px 0 var(--border-default);
+}
+
+/*
+ * Count badge — border-subtle (--_n-850) is nearly invisible against the
+ * dark sunken background.  Bump to border-default for chip shape readability.
+ */
+:global(.theme-dark) .countBadge {
+  border-color: var(--border-default);
+}
+
+/*
+ * Skeleton shimmer midpoint — --surface-hover (--_n-800, 18% l) provides
+ * a brighter midpoint against the dark base.  Switch to --surface-active
+ * (--_n-700, 27% l) for a slightly more visible shimmer in deep dark palette.
+ */
+:global(.theme-dark) .skeletonLine {
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-active) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 400% 100%;
+}
+
+:global(.theme-dark) .skeletonThread {
+  background-color: var(--border-default);
+}

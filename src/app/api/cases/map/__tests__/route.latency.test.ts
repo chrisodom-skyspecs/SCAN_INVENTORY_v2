@@ -9,16 +9,23 @@
  *
  * Why "end-to-end"?
  *   The handler covers more than just data assembly:
- *     1. Env resolution   — reads NEXT_PUBLIC_CONVEX_URL / CONVEX_SITE_URL
+ *     1. Env resolution   — reads NEXT_PUBLIC_CONVEX_URL
  *     2. Param validation — mode, bounds (all-or-nothing), filters JSON
- *     3. URL construction — builds the upstream Convex site URL
- *     4. Upstream fetch   — awaits the mocked Response
- *     5. JSON extraction  — response.json()
+ *     3. Client setup     — ConvexHttpClient construction + setAuth
+ *     4. Query invocation — ConvexHttpClient.query() → awaits the mocked fetch
+ *     5. JSON extraction  — response.json() + Convex protocol unwrapping
  *     6. NextResponse     — wraps the payload with the correct status code
  *
- *   The upstream Convex HTTP call is replaced with a vi.stubGlobal fetch mock
- *   that returns a pre-built M1Response payload (250-case fleet), so the test
- *   runs without a live deployment while exercising every code path in the handler.
+ *   The Convex HTTP query call is replaced with a vi.stubGlobal fetch mock
+ *   that returns a pre-built Convex protocol response wrapping an M1Response
+ *   payload (250-case fleet), so the test runs without a live deployment while
+ *   exercising every code path in the handler.
+ *
+ * Convex HTTP client protocol:
+ *   ConvexHttpClient.query() POSTs to <convex_url>/api/query and expects:
+ *     { "status": "success", "value": <query_result> }
+ *   The fetch mock returns exactly this shape so the client can unwrap the
+ *   value and return it to the route handler.
  *
  * Fleet size:
  *   250 cases — realistic mid-fleet size; larger than the 5-case smoke test
@@ -32,16 +39,19 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 import { GET } from "@/app/api/cases/map/route";
-import type { M1Response } from "@/types/cases-map";
+import type { M1Response } from "@/types/map";
 
 // ─── Mock upstream payload (250-case M1 fleet) ───────────────────────────────
 
 const CASE_STATUSES = [
+  "hangar",
   "assembled",
+  "transit_out",
   "deployed",
-  "in_field",
-  "shipping",
-  "returned",
+  "flagged",
+  "transit_in",
+  "received",
+  "archived",
 ] as const;
 
 /** Pre-build a realistic 250-case M1Response once, reused across all iterations. */
@@ -79,7 +89,20 @@ function buildMockM1Response(caseCount = 250): M1Response {
 }
 
 const MOCK_M1_BODY = buildMockM1Response(250);
-const MOCK_M1_JSON = JSON.stringify(MOCK_M1_BODY);
+
+/**
+ * Convex HTTP client protocol response — wraps the query result in the
+ * envelope that ConvexHttpClient.query() expects to receive from /api/query.
+ *
+ * Shape: { "status": "success", "value": <query_result> }
+ *
+ * The route handler uses ConvexHttpClient which POSTs to <convex_url>/api/query
+ * and parses this envelope to extract the typed query result.
+ */
+const MOCK_CONVEX_RESPONSE_JSON = JSON.stringify({
+  status: "success",
+  value: MOCK_M1_BODY,
+});
 
 // ─── Async p50 helper ─────────────────────────────────────────────────────────
 
@@ -110,16 +133,20 @@ const TEST_CONVEX_URL = "https://test-deploy-abc123.convex.cloud";
 
 describe("GET /api/cases/map — wired route handler p50 latency < 200ms", () => {
   beforeAll(() => {
-    // Provide a valid Convex deployment URL so the handler resolves a site URL
-    // rather than short-circuiting with a 503.
+    // Provide a valid Convex deployment URL so ConvexHttpClient can be
+    // constructed rather than the handler short-circuiting with a 503.
     process.env.NEXT_PUBLIC_CONVEX_URL = TEST_CONVEX_URL;
 
-    // Stub global fetch — intercepts the upstream Convex HTTP call inside the
-    // route handler and returns a pre-built 200 response without any network I/O.
+    // Stub global fetch — intercepts the ConvexHttpClient.query() POST to
+    // <convex_url>/api/query and returns a pre-built Convex protocol response
+    // wrapping the M1 payload, so the test runs without a live deployment
+    // while exercising every code path in the handler.
+    //
+    // ConvexHttpClient expects: { "status": "success", "value": <result> }
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_url: unknown, _init?: unknown) => {
-        return new Response(MOCK_M1_JSON, {
+        return new Response(MOCK_CONVEX_RESPONSE_JSON, {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
@@ -219,7 +246,7 @@ describe("GET /api/cases/map — wired route handler p50 latency < 200ms", () =>
 
   it(`p50 < ${P50_BUDGET_MS}ms — M1 with bounds AND filters combined (${ITERATIONS} iterations)`, async () => {
     const filters = encodeURIComponent(
-      JSON.stringify({ status: ["in_field"], assigneeId: "user_3" })
+      JSON.stringify({ status: ["deployed"], assigneeId: "user_3" })
     );
 
     const p50 = await measureP50(async () => {

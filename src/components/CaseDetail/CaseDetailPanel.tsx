@@ -5,7 +5,7 @@
  * body. Used in the INVENTORY dashboard's right-side detail panel.
  *
  * T1 = Summary         — case overview, assignee, location, compact FedEx badge
- * T2 = Manifest        — packing list / manifest items with status
+ * T2 = Manifest        — packing list with equipment items, qty/status columns
  * T3 = Inspection      — inspection history and checklist progress
  * T4 = Shipping        — full FedEx tracking section (primary integration point)
  * T5 = Audit           — immutable event timeline (behind FF_AUDIT_HASH_CHAIN)
@@ -33,6 +33,13 @@ import styles from "./CaseDetailPanel.module.css";
 // ─── Lazy-loaded T-layout components ─────────────────────────────────────────
 
 const T1Overview   = lazy(() => import("./T1Overview"));
+/**
+ * T2Manifest — the Manifest / Packing List panel.
+ *
+ * Lazy-loaded so T2 manifest code is only fetched when the user switches to
+ * the Manifest tab.  The component subscribes to the case's checklist items
+ * via Convex for real-time packing list display with quantity/status columns.
+ */
 const T2Manifest   = lazy(() => import("./T2Manifest"));
 const T3Inspection = lazy(() => import("./T3Inspection"));
 const T4Shipping   = lazy(() => import("./T4Shipping"));

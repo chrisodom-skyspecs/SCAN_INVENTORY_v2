@@ -9,7 +9,10 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:latency": "vitest run src/lib/__tests__/convex-endpoint-latency.test.ts src/lib/__tests__/convex-endpoint-latency.bench.test.ts src/app/api/cases/map/__tests__/route.latency.test.ts",
+    "seed": "npx convex run seed:seedDatabase",
+    "seed:reset": "npx convex run seed:seedDatabase '{\"clearExisting\":true}'"
   },
   "dependencies": {
     "@auth/core": "^0.37.0",

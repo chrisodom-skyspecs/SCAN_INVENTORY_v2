@@ -9,7 +9,8 @@
  *   <StatusPill kind="exception" filled />  // solid fill
  *
  * `kind` covers every status value from the Convex schema:
- *   - Case lifecycle:      assembled | deployed | in_field | shipping | returned
+ *   - Case lifecycle:      hangar | assembled | transit_out | deployed |
+ *                          flagged | transit_in | received | archived
  *   - Inspection:          pending | in_progress | completed | flagged
  *   - Shipment:            label_created | picked_up | in_transit |
  *                          out_for_delivery | delivered | exception
@@ -23,16 +24,18 @@ import styles from "./StatusPill.module.css";
 
 export type StatusKind =
   // Case lifecycle
+  | "hangar"
   | "assembled"
+  | "transit_out"
   | "deployed"
-  | "in_field"
-  | "shipping"
-  | "returned"
+  | "flagged"
+  | "transit_in"
+  | "received"
+  | "archived"
   // Inspection
   | "pending"
   | "in_progress"
   | "completed"
-  | "flagged"
   // Manifest item (checklist)
   | "unchecked"
   | "ok"
@@ -54,16 +57,18 @@ export type StatusKind =
 
 const STATUS_LABELS: Record<StatusKind, string> = {
   // Case lifecycle
-  assembled: "Assembled",
-  deployed: "Deployed",
-  in_field: "In Field",
-  shipping: "Shipping",
-  returned: "Returned",
+  hangar:      "In Hangar",
+  assembled:   "Assembled",
+  transit_out: "Transit Out",
+  deployed:    "Deployed",
+  flagged:     "Flagged",
+  transit_in:  "Transit In",
+  received:    "Received",
+  archived:    "Archived",
   // Inspection
   pending: "Pending",
   in_progress: "In Progress",
   completed: "Completed",
-  flagged: "Flagged",
   // Manifest item (checklist)
   unchecked: "Unchecked",
   ok: "OK",
@@ -98,16 +103,18 @@ type SignalKind = "success" | "warning" | "error" | "info" | "neutral";
  */
 const STATUS_SIGNAL: Record<StatusKind, SignalKind> = {
   // Case lifecycle
-  assembled: "info",       // ready, waiting — informational
-  deployed: "success",     // in the field — positive
-  in_field: "info",        // actively being used
-  shipping: "warning",     // in transit — watch it
-  returned: "neutral",     // back at base
+  hangar:      "neutral",  // stored, dormant
+  assembled:   "info",     // ready, waiting — informational
+  transit_out: "warning",  // in transit outbound — watch it
+  deployed:    "success",  // actively in use at site — positive
+  flagged:     "error",    // has outstanding issues — needs attention
+  transit_in:  "warning",  // in transit inbound — watch it
+  received:    "neutral",  // back at base
+  archived:    "neutral",  // decommissioned
   // Inspection
   pending: "neutral",      // not started yet
   in_progress: "info",     // underway
   completed: "success",    // done, all good
-  flagged: "error",        // needs review
   // Manifest item (checklist)
   unchecked: "neutral",    // not yet reviewed
   ok: "success",           // present and undamaged

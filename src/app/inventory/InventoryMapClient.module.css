@@ -22,7 +22,12 @@
   display: grid;
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
-  height: 100dvh;
+  /*
+   * Height is the remaining viewport after the INVENTORY navbar.
+   * --inv-navbar-height is set on the layout root by InventoryLayout.
+   * Falls back to 0px when the navbar is absent (e.g. isolated tests).
+   */
+  height: calc(100dvh - var(--inv-navbar-height, 0px));
   min-height: 0;
   overflow: hidden;
   position: relative;

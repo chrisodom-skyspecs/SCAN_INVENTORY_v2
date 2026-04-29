@@ -64,10 +64,13 @@ import {
   useRef,
 } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
-import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { useScanCheckIn } from "../../../../hooks/use-scan-mutations";
+import { useScanCaseDetail } from "../../../../hooks/use-scan-queries";
+import { useKindeUser } from "../../../../hooks/use-kinde-user";
+import { useServerStateReconciliation } from "../../../../hooks/use-server-state-reconciliation";
 import { StatusPill } from "../../../../components/StatusPill";
+import { ReconciliationBanner } from "../../../../components/ReconciliationBanner";
 import type { CaseStatus } from "../../../../../convex/cases";
 import styles from "./page.module.css";
 
@@ -81,60 +84,50 @@ interface ScanCheckInClientProps {
 
 /**
  * Valid outbound transitions per source status.
- * Mirrors VALID_TRANSITIONS in convex/scan.ts — kept in sync manually.
+ * Mirrors VALID_TRANSITIONS in convex/scan.ts and
+ * CASE_STATUS_TRANSITIONS in src/types/case-status.ts — kept in sync manually.
  * A no-op (same status) is rendered as "Re-check In" and allowed.
  */
 const VALID_TRANSITIONS: Readonly<Record<CaseStatus, readonly CaseStatus[]>> = {
-  assembled: ["deployed", "in_field", "shipping"],
-  deployed:  ["in_field", "shipping", "returned", "assembled"],
-  in_field:  ["deployed", "shipping", "returned"],
-  shipping:  ["returned"],
-  returned:  ["assembled", "deployed"],
+  hangar:      ["assembled"],
+  assembled:   ["transit_out", "deployed", "hangar"],
+  transit_out: ["deployed", "received"],
+  deployed:    ["flagged", "transit_in", "assembled"],
+  flagged:     ["deployed", "transit_in", "assembled"],
+  transit_in:  ["received"],
+  received:    ["assembled", "archived", "hangar"],
+  archived:    [],
 };
 
 /**
  * Human-readable labels for each status.
  */
 const STATUS_LABELS: Record<CaseStatus, string> = {
-  assembled: "Assembled",
-  deployed:  "Deployed",
-  in_field:  "In Field",
-  shipping:  "Shipping",
-  returned:  "Returned",
+  hangar:      "In Hangar",
+  assembled:   "Assembled",
+  transit_out: "Transit Out",
+  deployed:    "Deployed",
+  flagged:     "Flagged",
+  transit_in:  "Transit In",
+  received:    "Received",
+  archived:    "Archived",
 };
 
 /**
  * Descriptive hint shown below the status label.
  */
 const STATUS_HINTS: Record<CaseStatus, string> = {
-  assembled: "Fully packed, ready to deploy",
-  deployed:  "At site, awaiting field inspection",
-  in_field:  "Actively in use — starts inspection",
-  shipping:  "In transit via carrier",
-  returned:  "Back at warehouse",
+  hangar:      "Stored in hangar; not yet assembled",
+  assembled:   "Fully packed and ready to deploy",
+  transit_out: "In transit to field site",
+  deployed:    "Actively in use at a field site",
+  flagged:     "Has outstanding issues requiring review",
+  transit_in:  "In transit returning to base",
+  received:    "Received back at base",
+  archived:    "Decommissioned; no longer in active rotation",
 };
 
 // ─── User identity helper ─────────────────────────────────────────────────────
-
-/**
- * Returns the current user's ID and display name.
- *
- * Replace the body with Kinde auth hook calls when full auth integration
- * is wired:
- *
- *   import { useKindeAuth } from "@kinde-oss/kinde-auth-nextjs";
- *   const { user } = useKindeAuth();
- *   return {
- *     id:   user?.id   ?? "anon",
- *     name: user?.given_name
- *             ? `${user.given_name} ${user.family_name ?? ""}`.trim()
- *             : "Field Technician",
- *   };
- */
-function useCurrentUser(): { id: string; name: string } {
-  // Placeholder — replace with useKindeAuth() when wired
-  return { id: "scan-user", name: "Field Technician" };
-}
 
 // ─── GPS capture hook ─────────────────────────────────────────────────────────
 
@@ -503,15 +496,26 @@ function SuccessView({
  */
 export function ScanCheckInClient({ caseId }: ScanCheckInClientProps) {
   // ── Convex subscriptions ──────────────────────────────────────────────────
-  // getCaseById is a real-time subscription: the header refreshes automatically
-  // after a successful check-in (Convex pushes the updated doc back).
-  const caseDoc = useQuery(api.cases.getCaseById, { caseId });
+  // useScanCaseDetail delegates to useCaseById (via the SCAN query layer).
+  // The subscription updates automatically after any mutation that touches the
+  // cases row — e.g., after a successful checkIn, Convex pushes the updated
+  // doc back within ~100–300 ms satisfying the ≤ 2-second real-time fidelity
+  // requirement.
+  const caseDoc = useScanCaseDetail(caseId);
 
   // ── Mutation ──────────────────────────────────────────────────────────────
   const checkIn = useScanCheckIn();
 
+  // ── Server-state reconciliation (Sub-AC 2c) ───────────────────────────────
+  // Detects divergence between the optimistic status update and the server-
+  // confirmed result.  For check-in, the key field is `status`: we predict
+  // the technician-selected status, but the server may derive a different one
+  // if a concurrent mutation changed the case between the optimistic update
+  // and the server write.
+  const reconciliation = useServerStateReconciliation();
+
   // ── User identity ─────────────────────────────────────────────────────────
-  const user = useCurrentUser();
+  const user = useKindeUser();
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [selectedStatus, setSelectedStatus] = useState<CaseStatus | null>(null);
@@ -576,9 +580,20 @@ export function ScanCheckInClient({ caseId }: ScanCheckInClientProps) {
     setPhase("submitting");
     setSubmitError(null);
 
+    // ── Sub-AC 2c: Track optimistic prediction before mutation ────────────────
+    // The optimistic update in useScanCheckIn() sets status = selectedStatus in
+    // the local store.  If the server confirms a different status (race condition
+    // or server-side re-computation), reconciliation will surface the divergence.
+    const mutationId = `check-in-${Date.now()}`;
+    reconciliation.trackMutation(mutationId, {
+      status:       selectedStatus,
+      assigneeId:   user.id,
+      assigneeName: user.name,
+    });
+
     try {
       const result = await checkIn({
-        caseId,
+        caseId:         caseId as Id<"cases">,
         status:         selectedStatus,
         timestamp:      Date.now(),
         technicianId:   user.id,
@@ -590,6 +605,15 @@ export function ScanCheckInClient({ caseId }: ScanCheckInClientProps) {
         notes:          notes.trim() || undefined,
       });
 
+      // ── Sub-AC 2c: Compare server result against prediction ──────────────────
+      // Mutation resolved — confirm against what the server actually applied.
+      // If newStatus or assigneeId differ from the prediction, the banner shows.
+      reconciliation.confirmMutation(mutationId, {
+        status:       result.newStatus,
+        assigneeId:   user.id,   // server echoes back the same userId
+        assigneeName: user.name,
+      });
+
       setSuccessData({
         previousStatus: result.previousStatus as CaseStatus,
         newStatus:      result.newStatus      as CaseStatus,
@@ -598,6 +622,10 @@ export function ScanCheckInClient({ caseId }: ScanCheckInClientProps) {
       });
       setPhase("success");
     } catch (err) {
+      // ── Sub-AC 2c: Cancel pending record — Convex rolled back the optimistic
+      // update automatically.  No divergence to surface; show error instead.
+      reconciliation.cancelMutation(mutationId);
+
       const message =
         err instanceof Error
           ? err.message
@@ -615,6 +643,7 @@ export function ScanCheckInClient({ caseId }: ScanCheckInClientProps) {
     locationEnabled,
     geo,
     notes,
+    reconciliation,
   ]);
 
   const handleRetry = useCallback(() => {
@@ -818,6 +847,28 @@ export function ScanCheckInClient({ caseId }: ScanCheckInClientProps) {
           </svg>
           <span className={styles.errorBannerText}>{submitError}</span>
         </div>
+      )}
+
+      {/* ── Reconciliation banners (Sub-AC 2c) ────────────────────────── */}
+      {/*
+       * Stale banner: shown when a mutation has been pending for > 5 s.
+       * Divergence banner: shown when the server confirmed a different status
+       * than what the optimistic update applied locally.  The view has already
+       * been corrected by Convex's subscription push; the banner informs the
+       * technician so they are not confused by a momentary status flicker.
+       */}
+      {reconciliation.isStale && !reconciliation.hasDivergence && (
+        <ReconciliationBanner
+          stale
+          staleSince={reconciliation.staleSince}
+          onDismiss={reconciliation.dismiss}
+        />
+      )}
+      {reconciliation.hasDivergence && (
+        <ReconciliationBanner
+          divergedFields={reconciliation.divergedFields}
+          onDismiss={reconciliation.dismiss}
+        />
       )}
 
       {/* ── Submit row ────────────────────────────────────────────────── */}

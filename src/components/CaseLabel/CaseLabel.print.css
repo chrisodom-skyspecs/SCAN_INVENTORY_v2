@@ -1,0 +1,16 @@
+/**
+ * Global @media print hooks for CaseLabel.
+ * CSS Modules (.module.css) purity forbids bare html/body selectors; keep those rules here.
+ */
+@media print {
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  body {
+    visibility: hidden;
+  }
+}

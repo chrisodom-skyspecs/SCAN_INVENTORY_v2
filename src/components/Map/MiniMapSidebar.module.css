@@ -1,0 +1,828 @@
+/**
+ * MiniMapSidebar.module.css
+ *
+ * Styles for the MiniMapSidebar component — a fixed-dimension overlay sidebar
+ * with a scrollable list of condensed timeline entries.
+ *
+ * Positioning model
+ * ─────────────────
+ * The sidebar is rendered as `position: absolute` inside a parent with
+ * `position: relative; overflow: hidden` (the map canvas container).
+ * Default anchor: right edge, full height.
+ * Narrow-screen (≤ 640 px): bottom-drawer, full width, 50% height.
+ *
+ * Layout hierarchy
+ * ─────────────────
+ * .sidebar  (flex-column, full height)
+ *   ├── .header       (flex-shrink: 0 — never scrolls)
+ *   ├── .entryList    (flex: 1; overflow-y: auto — scrollable region)
+ *   │     └── .entryRow × N (condensed entry row per timeline event)
+ *   └── .footer       (flex-shrink: 0 — optional non-scrolling footer)
+ *
+ * Scrollable region
+ * ─────────────────
+ * .entryList uses flex: 1; min-height: 0; overflow-y: auto.
+ * `min-height: 0` is required for overflow-y: auto to work correctly inside a
+ * flex column with a fixed parent height (see CSS flexbox spec §5.6).
+ * `overscroll-behavior: contain` prevents scroll chaining to the map canvas
+ * or page body when the list reaches the top/bottom boundary.
+ *
+ * Design constraints
+ * ──────────────────
+ * • No hex literals — all colors via CSS custom properties (var(--*))
+ * • WCAG AA contrast in both light and dark themes
+ * • Inter Tight: title, event type label, actor name, empty state text
+ * • IBM Plex Mono: case label, timestamp, count badge
+ * • Reduced-motion: no CSS animation on any element
+ * • Touch targets: close button ≥ 44×44 px (WCAG 2.5.5)
+ *
+ * Token families used
+ * ────────────────────
+ * --surface-*           sidebar background, header, sunken areas
+ * --border-*            sidebar edge, header separator, entry dividers
+ * --ink-*               text (primary, secondary, tertiary, disabled, brand)
+ * --elevation-*         sidebar drop shadow
+ * --layer-transit-*     transit blue dots (shipped, inspection_started)
+ * --layer-deployed-*    green dots (inspection_completed, delivered)
+ * --layer-history-*     gray dots (intermediate / no-location)
+ * --signal-error-*      red dots (damage_reported)
+ */
+
+/* ── Root sidebar container ───────────────────────────────────────────────── */
+
+/**
+ * Right-edge overlay sidebar.
+ *
+ * Anchored to the right side of the map canvas (position: relative; overflow: hidden).
+ * width: 20rem (320 px) — wide enough for all condensed entry content.
+ * height: 100% (top: 0 → bottom: 0) — full canvas height.
+ *
+ * z-index: 20 — renders above Mapbox GL tiles (z 0–15), StopMarker badges
+ * (z 10), and other map overlays, but below modal dialogs (z 30+).
+ */
+.sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20rem;
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  background: var(--surface-raised);
+  border-left: 1px solid var(--border-default);
+  box-shadow: var(--elevation-3, -4px 0 16px rgba(0, 0, 0, 0.12));
+  z-index: 20;
+}
+
+/**
+ * Narrow-screen (≤ 640 px): transition to a bottom-drawer layout.
+ *
+ * On small viewports a full-height right sidebar covers too much of the map.
+ * The sidebar becomes a bottom sheet: full-width, 50% of canvas height.
+ * The left border becomes a top border.
+ */
+@media (max-width: 640px) {
+  .sidebar {
+    top: auto;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 50%;
+    border-left: none;
+    border-top: 1px solid var(--border-default);
+    box-shadow: var(--elevation-3, 0 -4px 16px rgba(0, 0, 0, 0.12));
+  }
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+/**
+ * Fixed (non-scrolling) sidebar header.
+ *
+ * flex-shrink: 0 prevents the header from shrinking when the list is long.
+ * min-height: 2.75rem ensures consistent vertical rhythm regardless of text.
+ * background: var(--surface-sunken) — sunken tray separates header from list.
+ * border-bottom: 1px solid var(--border-default) — clear header/list boundary.
+ */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+  min-height: 2.75rem;
+}
+
+/**
+ * Left side of the header: title + count badge stacked inline.
+ * flex: 1 allows the info area to take all space left of the close button.
+ * min-width: 0 prevents overflow for long titles.
+ */
+.headerInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+}
+
+/**
+ * Sidebar title — Inter Tight, small-caps uppercase label.
+ * Matches the sectionTitle pattern in shared.module.css.
+ */
+.headerTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/**
+ * Entry count badge — IBM Plex Mono for tabular numeric content.
+ * Rendered as a small pill chip; aria-live announces updates in real time.
+ */
+.countBadge {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  background: var(--surface-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+
+/**
+ * Close button — × icon, minimum 44×44 px touch target (WCAG 2.5.5).
+ * Visual size is 1.75rem × 1.75rem; min-width/min-height extend the
+ * tap target to the accessible minimum without affecting layout.
+ */
+.closeButton {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease, border-color 100ms ease;
+}
+
+.closeButton:hover {
+  background: var(--surface-critical-subtle);
+  color: var(--ink-critical);
+  border-color: var(--border-critical);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .closeButton {
+    transition: none;
+  }
+}
+
+/** Close icon SVG size */
+.closeIcon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+}
+
+/* ── Scroll region (wraps scrollable content + position indicator) ──────────── */
+
+/**
+ * Scroll region — `position: relative` flex column that fills all vertical
+ * space between the header and optional footer.
+ *
+ * This wrapper establishes the coordinate system for the absolutely-positioned
+ * position indicator track, scoping it to the scrollable content area only
+ * (not the header or footer).
+ *
+ * The wrapper takes over the flex growth that `.entryList` previously claimed
+ * directly from `.sidebar`.  Its children (`.entryList`, `.emptyState`,
+ * skeleton list) retain their own flex properties to fill this region.
+ */
+.scrollRegion {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Position indicator track ────────────────────────────────────────────────── */
+
+/**
+ * Thin vertical strip on the left edge of the scroll region.
+ *
+ * Represents the full scrollable height of the entry list.  Only rendered
+ * when the entry list content overflows its container (managed in React state).
+ *
+ * Geometry:
+ *   position: absolute — overlaid on the scroll region without affecting layout
+ *   top: 0; left: 0; bottom: 0 — full height of the scroll region
+ *   width: 3px — narrow, unobtrusive
+ *
+ * z-index: 2 — above the entry list (z 0) and custom scrollbar (z 1), but
+ * below the header (z implicitly higher via stacking context).
+ *
+ * pointer-events: none — the track is purely decorative; mouse/touch events
+ * pass through to the underlying entry list.
+ *
+ * aria-hidden="true" is set on the element in JSX — screen readers skip it.
+ */
+.positionTrack {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--border-subtle);
+  pointer-events: none;
+  z-index: 2;
+  border-radius: 9999px;
+  opacity: 0.6;
+}
+
+/* ── Position indicator thumb ────────────────────────────────────────────────── */
+
+/**
+ * Colored thumb inside the position track that marks the currently visible
+ * viewport region of the entry list.
+ *
+ * Sized and positioned by JavaScript (inline `style` prop):
+ *   height — proportional to the fraction of total content that is visible.
+ *             (clientHeight / scrollHeight) × clientHeight, clamped to ≥ 16px.
+ *   top    — proportional position within the track's travel distance.
+ *             (scrollTop / scrollRange) × maxThumbTop.
+ *
+ * The thumb color (--ink-tertiary) is intentionally subtle in light mode —
+ * it communicates scroll position without competing with the timeline content.
+ * In dark mode it is re-mapped to a higher-contrast token (see dark overrides).
+ *
+ * Transition: `top` and `height` animate over 80ms on scroll to smooth out
+ * any jitter from rapid scroll events.  Animation is suppressed when the user
+ * has `prefers-reduced-motion: reduce` enabled.
+ *
+ * min-height: 16px — enforced via JS (MIN_THUMB_PX constant) to ensure the
+ * thumb is always perceivable, but also declared here as a CSS safety net.
+ */
+.positionThumb {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  min-height: 1rem;
+  background: var(--ink-tertiary);
+  border-radius: 9999px;
+  /* Smooth position + size transitions on scroll */
+  transition: top 80ms ease, height 80ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .positionThumb {
+    transition: none;
+  }
+}
+
+/* ── Scrollable entry list ─────────────────────────────────────────────────── */
+
+/**
+ * Ordered list of condensed timeline entry rows.
+ *
+ * flex: 1 — fills all vertical space within .scrollRegion (not .sidebar directly).
+ * min-height: 0 — required for overflow-y: auto to work inside a flex column.
+ * overflow-y: auto — the list scrolls independently of the map canvas.
+ * overscroll-behavior: contain — prevents scroll chaining to canvas / page body.
+ *
+ * Gap between rows is managed by the thread line (.thread) inside each row,
+ * not by list `gap` — this preserves the visual spine continuity.
+ *
+ * Custom scrollbar:
+ *   scrollbar-width: thin (Firefox)
+ *   ::-webkit-scrollbar (Chrome/Safari)
+ *
+ * Left padding accounts for the 3px position indicator track at left: 0 of
+ * .scrollRegion.  The 0.5rem (8px) left padding is wider than the track (3px)
+ * so the first entry column (dot, 1.5rem grid column) starts after the track.
+ */
+.entryList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.entryList::-webkit-scrollbar {
+  width: 0.25rem;
+}
+
+.entryList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.entryList::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 0.125rem;
+}
+
+/* ── Single condensed entry row ────────────────────────────────────────────── */
+
+/**
+ * Condensed timeline entry.
+ *
+ * 2-column grid: [dot column] [content column]
+ * The dot column contains the indicator dot + connecting thread line.
+ * The content column contains event type label, case label, timestamp, actor.
+ *
+ * The thread (.thread) creates visual continuity between entries — it is
+ * hidden on the last entry via [data-is-last="true"] .thread.
+ */
+.entryRow {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  grid-template-areas: "dot content";
+  gap: 0;
+  align-items: start;
+  list-style: none;
+}
+
+/* ── Dot column ────────────────────────────────────────────────────────────── */
+
+.dotCol {
+  grid-area: dot;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding-top: 0.1875rem; /* align dot with first line of eventType text */
+}
+
+/**
+ * Semantic color dot — 0.5rem circle indicating the event type category.
+ *
+ * Colors controlled via data-variant attribute:
+ *   brand   — var(--surface-brand)         lifecycle progression
+ *   transit — var(--layer-transit-bg)       field action / movement
+ *   success — var(--layer-deployed-bg)      positive completion
+ *   error   — var(--signal-error-fill)      requires attention
+ *   neutral — var(--layer-history-subtle)   transfer / config
+ *
+ * data-no-location="true" — dashed border signals missing GPS fix.
+ *
+ * Inner ring (box-shadow) creates a "halo" so the dot reads on both light
+ * and dark map tile backgrounds.
+ */
+.dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  z-index: 1;
+
+  /* Default (neutral) */
+  background-color: var(--layer-history-subtle);
+  border: 1px solid var(--layer-history-border);
+  /* Inner ring to separate dot from connecting thread */
+  box-shadow: 0 0 0 1.5px var(--surface-raised);
+}
+
+/* Variant: brand (status_change, mission_assigned) */
+.dot[data-variant="brand"] {
+  background-color: var(--surface-brand);
+  border-color: var(--surface-brand);
+  box-shadow: 0 0 0 1.5px var(--surface-raised), 0 0 0 2.5px var(--surface-brand);
+}
+
+/* Variant: transit (inspection_started, shipped, scan_check_in) */
+.dot[data-variant="transit"] {
+  background-color: var(--layer-transit-bg);
+  border-color: var(--layer-transit-border);
+  box-shadow: 0 0 0 1.5px var(--surface-raised);
+}
+
+/* Variant: success (inspection_completed, delivered) */
+.dot[data-variant="success"] {
+  background-color: var(--layer-deployed-bg);
+  border-color: var(--layer-deployed-border);
+  box-shadow: 0 0 0 1.5px var(--surface-raised);
+}
+
+/* Variant: error (damage_reported) */
+.dot[data-variant="error"] {
+  background-color: var(--signal-error-fill);
+  border-color: var(--signal-error-border);
+  box-shadow: 0 0 0 1.5px var(--surface-raised), 0 0 0 2.5px var(--signal-error-border);
+}
+
+/* No-location: dashed border, muted fill — signals missing GPS fix */
+.dot[data-no-location="true"] {
+  background-color: var(--surface-sunken);
+  border-style: dashed;
+  border-color: var(--border-default);
+  box-shadow: 0 0 0 1.5px var(--surface-raised);
+}
+
+/**
+ * Connecting thread line between entries.
+ *
+ * A vertical line that threads from the dot of one entry to the dot of the
+ * next, creating the visual spine of the timeline.
+ *
+ * flex: 1 extends the thread to fill the gap between this entry's dot and
+ * the next entry's dot — the content column's height drives the thread length.
+ * min-height: 0.5rem prevents the thread from disappearing for very short entries.
+ *
+ * Hidden on the last entry via [data-is-last="true"] .thread so the spine
+ * terminates cleanly without dangling below the final entry.
+ */
+.thread {
+  width: 1px;
+  flex: 1;
+  min-height: 0.5rem;
+  background-color: var(--border-subtle);
+  margin-top: 0.125rem;
+  border-radius: 9999px;
+}
+
+/* Hide the thread after the last entry */
+.entryRow[data-is-last="true"] .thread {
+  display: none;
+}
+
+/* ── Entry content column ──────────────────────────────────────────────────── */
+
+.entryContent {
+  grid-area: content;
+  padding: 0 0 0.625rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+/* Tighter bottom padding on the last entry — no thread, so the panel's own
+   bottom padding provides sufficient visual breathing room. */
+.entryRow[data-is-last="true"] .entryContent {
+  padding-bottom: 0.25rem;
+}
+
+/**
+ * Event type label — condensed primary row.
+ *
+ * Inter Tight, 0.75 rem, semi-bold — the most prominent text in the row.
+ * Truncated with ellipsis when the label overflows (e.g., "Inspection Completed"
+ * in a narrow sidebar).
+ */
+.entryEventType {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Damage events: highlight in error color for immediate visual attention */
+.entryRow[data-event-type="damage_reported"] .entryEventType {
+  color: var(--signal-error-text);
+}
+
+/**
+ * Meta row: case label + timestamp on the same horizontal line.
+ *
+ * Uses flex with space-between to push the timestamp to the right edge
+ * of the content column.  Both items truncate independently when needed.
+ */
+.entryMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+/**
+ * Case label — IBM Plex Mono for code-like identifiers.
+ * Truncated with ellipsis for long identifiers.
+ */
+.entryCaseLabel {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/**
+ * Timestamp — IBM Plex Mono, tabular-nums for aligned time display.
+ * flex-shrink: 0 so the timestamp never gets clipped before the case label.
+ */
+.entryTimestamp {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/**
+ * Actor name — optional tertiary row below case label and timestamp.
+ * Inter Tight, smallest size, secondary ink.
+ */
+.entryActor {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  color: var(--ink-tertiary);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Loading skeleton ──────────────────────────────────────────────────────── */
+
+/**
+ * Skeleton shimmer row — matches the layout of .entryRow but uses shimmer
+ * blocks instead of real content.
+ */
+.skeletonRow {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  gap: 0;
+  align-items: start;
+  list-style: none;
+  padding-bottom: 0.75rem;
+}
+
+.skeletonDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  margin-top: 0.1875rem;
+  justify-self: center;
+  flex-shrink: 0;
+}
+
+.skeletonContent {
+  padding-left: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.skeletonMeta {
+  display: flex;
+  gap: 0.375rem;
+}
+
+/**
+ * Shimmer animation base.
+ * The shimmer gradient moves from right to left using background-position.
+ * animation is intentionally NOT declared here — it is only applied via
+ * the specific modifier classes so `prefers-reduced-motion` can override.
+ */
+.skeletonLine {
+  border-radius: 0.25rem;
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-hover) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 400% 100%;
+  animation: miniMapSidebarShimmer 1.4s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonLine {
+    animation: none;
+    background: var(--surface-sunken);
+  }
+}
+
+@keyframes miniMapSidebarShimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/** Event type skeleton line — full width, taller (primary text height) */
+.skeletonLineType {
+  height: 0.75rem;
+  width: 70%;
+}
+
+/** Case label skeleton line — narrower, short */
+.skeletonLineCase {
+  height: 0.5625rem;
+  width: 45%;
+}
+
+/** Timestamp skeleton line — shorter, right-aligned visually */
+.skeletonLineTime {
+  height: 0.5625rem;
+  width: 30%;
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────────── */
+
+/**
+ * Empty state — shown when entries.length === 0 and isLoading is false.
+ * Centered vertically and horizontally within the available scroll area.
+ * flex: 1 so it fills the space the entry list would occupy.
+ */
+.emptyState {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.emptyIcon {
+  width: 2rem;
+  height: 2rem;
+  color: var(--ink-tertiary);
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
+.emptyTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.emptyText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  max-width: 16rem;
+  line-height: 1.5;
+}
+
+/* ── Optional footer ───────────────────────────────────────────────────────── */
+
+/**
+ * Non-scrolling footer anchored to the sidebar bottom.
+ * flex-shrink: 0 prevents it from compressing when the entry list is long.
+ * Top border visually separates the footer from the scrollable list.
+ */
+.footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-default);
+  padding: 0.625rem 0.75rem;
+  background: var(--surface-sunken);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   DARK MODE OVERRIDES
+   The token cascade in base.css handles most remaps automatically.
+   These selectors address cases needing extra polish in the deep dark palette.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Sidebar border — border-default is remapped in dark mode; this override
+ * ensures the left/top edge reads clearly against the dark map canvas.
+ */
+:global(.theme-dark) .sidebar {
+  border-left-color: var(--border-default);
+}
+
+@media (max-width: 640px) {
+  :global(.theme-dark) .sidebar {
+    border-top-color: var(--border-default);
+  }
+}
+
+/**
+ * Header separator — the bottom border between header and entry list.
+ * border-default provides better contrast on dark surfaces than border-subtle.
+ */
+:global(.theme-dark) .header {
+  border-bottom-color: var(--border-default);
+}
+
+/**
+ * Count badge — border-subtle blends into the dark sunken background;
+ * use border-default for chip shape readability.
+ */
+:global(.theme-dark) .countBadge {
+  border-color: var(--border-default);
+}
+
+/**
+ * Entry connecting thread — border-subtle (--_n-850) is very close in
+ * lightness to dark surface backgrounds.  Use border-default (--_n-800)
+ * for visible thread lines in the deep dark palette.
+ */
+:global(.theme-dark) .thread {
+  background-color: var(--border-default);
+  opacity: 0.6;
+}
+
+/**
+ * Neutral dot (data-variant absent or "neutral") — history-subtle token
+ * is nearly invisible on the dark surface-raised background.
+ * Re-apply the inner ring using the dark surface token.
+ */
+:global(.theme-dark) .dot {
+  box-shadow: 0 0 0 1.5px var(--surface-raised);
+}
+
+:global(.theme-dark) .dot[data-no-location="true"] {
+  border-color: var(--border-default);
+}
+
+/**
+ * Skeleton shimmer — use surface-active (lighter step in dark palette)
+ * for the shimmer midpoint so the animation is visible against the
+ * dark surface-sunken background.
+ */
+:global(.theme-dark) .skeletonLine {
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-active) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 400% 100%;
+}
+
+/**
+ * Footer border — same rationale as header border override.
+ */
+:global(.theme-dark) .footer {
+  border-top-color: var(--border-default);
+}
+
+/**
+ * Position indicator track — dark mode.
+ *
+ * border-subtle (--_n-850) nearly disappears on dark surface backgrounds.
+ * Switch to border-default (--_n-800) and increase opacity for readability.
+ */
+:global(.theme-dark) .positionTrack {
+  background: var(--border-default);
+  opacity: 0.5;
+}
+
+/**
+ * Position indicator thumb — dark mode.
+ *
+ * ink-tertiary (--_n-400) is too dim against the dark surface-raised
+ * background.  Re-map to ink-secondary (--_n-300) for adequate contrast.
+ */
+:global(.theme-dark) .positionThumb {
+  background: var(--ink-secondary);
+}

@@ -14,9 +14,11 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  width: 100%;
   max-width: 42rem;
   margin: 0 auto;
   padding: 0 1rem;
+  box-sizing: border-box;
 }
 
 /* ── Page header ───────────────────────────────────────────────────── */
@@ -349,7 +351,7 @@
 }
 
 .refreshBtn {
-  min-height: 2.25rem;
+  min-height: 2.75rem;  /* 44px touch target — must not be less than ctaButton base */
   padding: 0.4375rem 0.875rem;
   font-size: 0.8125rem;
 }
@@ -754,15 +756,18 @@
 .inlineLink {
   background: none;
   border: none;
-  padding: 0;
+  padding: 0.25rem;
   cursor: pointer;
   font: inherit;
   color: var(--ink-brand);
   text-decoration: underline;
   text-underline-offset: 0.125rem;
   font-weight: 500;
-  min-height: 2.75rem;
-  display: inline;
+  /* Touch target: display must be inline-flex/block for min-height to apply */
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;  /* 44px */
+  vertical-align: middle;
 }
 
 .inlineLink:hover {
@@ -843,3 +848,114 @@
     padding: 0 2rem;
   }
 }
+
+
+/* ════════════════════════════════════════════════════════════════════
+   DARK THEME OVERRIDES  (.theme-dark on <html>)
+
+   Design-token-based rules in this file automatically adapt to dark
+   mode via the .theme-dark overrides in src/styles/tokens/base.css §3.
+   This section handles the cases that require explicit override:
+
+     a) Elements whose appearance on a dark surface requires a contrast
+        adjustment beyond what token substitution alone provides.
+     b) Interactive state (hover / focus / active) re-assertions so
+        that WCAG AA ≥ 3:1 contrast is guaranteed in dark mode.
+     c) Separator / ring colours that reference --surface-raised;
+        when both sides of the ring are the same token value the
+        visual ring disappears — override to --surface-base instead.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Event dot ring ──────────────────────────────────────────────────
+ * .eventDot uses `border: 2px solid var(--surface-raised)` to create a
+ * halo ring separating the dot from the timeline connector line.
+ * In dark mode, --surface-raised = --_n-900 and the surrounding page
+ * area is also --_n-900, so the ring vanishes.  Switch to --surface-base
+ * (--_n-950) which provides a visible step.
+ */
+:global(.theme-dark) .eventDot {
+  border-color: var(--surface-base);
+}
+
+/* ── Success banner ───────────────────────────────────────────────────
+ * Re-assert signal token values for the success confirmation flash.
+ * In dark mode, the subtle fills shift to deep ramp stops; asserting
+ * them explicitly guarantees the banner colour adapts correctly.
+ */
+:global(.theme-dark) .successBanner {
+  background-color: var(--signal-success-fill-subtle);
+  border-color: var(--signal-success-border);
+  color: var(--signal-success-text-subtle);
+}
+
+/* ── Error banner ─────────────────────────────────────────────────────
+ * Same rationale as .successBanner above — re-assert the error signal
+ * tokens so the banner is readable against the dark page background.
+ */
+:global(.theme-dark) .errorBanner {
+  background-color: var(--signal-error-fill-subtle);
+  border-color: var(--signal-error-border);
+  color: var(--signal-error-text-subtle);
+}
+
+/* ── Secondary CTA button ─────────────────────────────────────────────
+ * In dark mode, --surface-raised = --_n-900 and --border-default =
+ * --_n-800; these produce a very subtle, hard-to-see button outline.
+ * Switch to the brand border token so the button reads as interactive.
+ */
+:global(.theme-dark) .ctaButtonSecondary {
+  background-color: var(--surface-raised);
+  border-color: var(--border-brand);
+  color: var(--ink-brand);
+}
+
+:global(.theme-dark) .ctaButtonSecondary:hover:not(:disabled) {
+  background-color: var(--surface-brand-subtle);
+  border-color: var(--border-brand);
+}
+
+/* ── Inline refresh / "Refresh" link button ───────────────────────────
+ * --ink-brand adapts automatically (--_b-300 in dark mode).
+ * Focus ring via --elevation-focus also adapts. No explicit override.
+ */
+
+/* ── Status card ──────────────────────────────────────────────────────
+ * --surface-raised (--_n-900), --border-default (--_n-800), and
+ * --elevation-1 (darker shadow) all adapt via the token system.
+ * No explicit override needed for the card frame.
+ */
+
+/* ── Tracking history active item ─────────────────────────────────────
+ * Re-assert brand-tinted active state so the selected shipment row
+ * is clearly distinguished from its siblings in dark mode.
+ */
+:global(.theme-dark) .historyItemActive {
+  background-color: var(--surface-brand-subtle);
+  border-color: var(--border-brand);
+}
+
+/* ── Live badge ────────────────────────────────────────────────────────
+ * --signal-success-fill and --signal-success-text adapt automatically.
+ * The pulsing dot uses currentColor so it stays in sync.
+ * No explicit override needed.
+ */
+
+/* ── Optional accordion summary ───────────────────────────────────────
+ * --surface-raised (summary background) and --surface-sunken (body
+ * background) both resolve to darker values, providing a clear
+ * inset feel. --ink-brand adapts for the expand/collapse prefix glyph.
+ * No explicit override needed.
+ */
+
+/* ── Field inputs and textarea ────────────────────────────────────────
+ * --surface-sunken (--_n-975) and --border-strong (--_n-600) adapt via
+ * the token system.  --ink-primary (--_n-50) provides high contrast.
+ * Focus states use --border-focus and --border-focus-ring which adapt.
+ * No explicit override needed.
+ */
+
+/* ── Loading skeleton ──────────────────────────────────────────────────
+ * Skeleton loaders use --surface-sunken (--_n-975 in dark mode).
+ * The shimmer animation opacity oscillation (0.6–1.0) creates sufficient
+ * rhythm against the page background (--_n-950).  No override needed.
+ */

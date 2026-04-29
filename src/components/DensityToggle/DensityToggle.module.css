@@ -1,0 +1,193 @@
+/**
+ * DensityToggle.module.css — INVENTORY dashboard density toggle control
+ *
+ * Styles a two-button segment control for switching between "comfy" and
+ * "compact" density modes.
+ *
+ * Structure:
+ *   .wrapper   — outer container with role="group"; horizontal flex
+ *   .option    — individual toggle button (comfy or compact)
+ *   .icon      — 14×14 SVG indicator icon (rows / lines graphic)
+ *   .label     — text label (visually hidden at narrow viewports)
+ *
+ * Active state:
+ *   .option[data-active="true"] — selected option with brand fill.
+ *   aria-pressed="true"         — same element; communicates state to AT.
+ *
+ * Design tokens only — no hex literals.
+ * Typography: Inter Tight.
+ * WCAG AA contrast: active button ink meets ≥3:1 against active background.
+ */
+
+/* ── Wrapper ──────────────────────────────────────────────────────────── */
+
+/**
+ * .wrapper — horizontal flex container for the two option buttons.
+ *
+ * Renders as a pill-shaped segment control by applying border-radius on
+ * the container and overriding individual button corners so only the outer
+ * edges of the first and last button are rounded.
+ *
+ * Box-shadow: elevation-0 (no shadow) — the control sits flush in the top bar.
+ */
+.wrapper {
+  display: inline-flex;
+  align-items: center;
+
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: 0.5rem;  /* 8px — matches searchInput border-radius */
+  overflow: hidden;        /* clips child button corners */
+
+  /* Visually separates from adjacent nav controls */
+  flex-shrink: 0;
+}
+
+/* ── Option button ─────────────────────────────────────────────────────── */
+
+/**
+ * .option — individual toggle button.
+ *
+ * Displays icon + label in a horizontal flex.
+ * Height matches the search input (2rem = 32px) so the entire top bar
+ * right-side cluster is vertically aligned.
+ *
+ * Active state (data-active="true"):
+ *   - Brand-tinted background (surface-sidebar-active / surface-selected)
+ *   - Brand ink color for icon + label
+ *
+ * Inactive state: secondary ink on transparent background.
+ *
+ * Transition: background and color animate to match --shell-nav-transition.
+ */
+.option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;           /* 5px between icon and label */
+
+  height: 2rem;             /* 32px — matches search input */
+  padding: 0 0.5rem;        /* 8px horizontal padding */
+
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;       /* 12px */
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ink-secondary);
+
+  background: transparent;
+  border: none;
+  border-radius: 0;         /* container clips corners */
+  cursor: pointer;
+
+  /* Separate buttons visually with a hairline divider */
+  border-right: 1px solid var(--border-subtle);
+
+  transition:
+    background var(--shell-nav-transition, 220ms ease),
+    color var(--shell-nav-transition, 220ms ease);
+
+  white-space: nowrap;
+}
+
+/* Remove right border from the last option (container has the border) */
+.option:last-child {
+  border-right: none;
+}
+
+/* ── Hover state ──────────────────────────────────────────────────────── */
+
+.option:hover {
+  background: var(--surface-hover);
+  color: var(--ink-primary);
+}
+
+/* ── Active / selected state ──────────────────────────────────────────── */
+
+/**
+ * [data-active="true"] — the currently selected density option.
+ *
+ * Uses the same --surface-sidebar-active and --ink-brand tokens as the
+ * side nav active links so the interactive language is consistent across
+ * the INVENTORY shell chrome.
+ *
+ * Both aria-pressed="true" (JS attribute) and data-active="true" (CSS hook)
+ * are set simultaneously by the component — they carry the same state but
+ * serve different audiences (AT vs CSS).
+ */
+.option[data-active="true"] {
+  background: var(--surface-selected);
+  color: var(--ink-brand);
+  font-weight: 600;
+}
+
+.option[data-active="true"]:hover {
+  /* Keep active style on hover — don't revert to hover state */
+  background: var(--surface-selected);
+  color: var(--ink-brand);
+}
+
+/* ── Focus visible ────────────────────────────────────────────────────── */
+
+.option:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;     /* inset outline so it doesn't break the container border */
+  z-index: 1;               /* bring focused button above its sibling */
+  position: relative;
+}
+
+/* ── Icon ─────────────────────────────────────────────────────────────── */
+
+/**
+ * .icon — 14×14 SVG indicator.
+ *
+ * flex-shrink: 0 prevents the icon from compressing at narrow widths.
+ * Color is inherited from .option so active/hover states tint it automatically.
+ */
+.icon {
+  width: 0.875rem;  /* 14px */
+  height: 0.875rem;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+/* ── Label ────────────────────────────────────────────────────────────── */
+
+/**
+ * .label — text label alongside the icon.
+ *
+ * Visually hidden at ≤ 480px (same breakpoint as the .userName in
+ * InventoryNavbar.module.css) to keep the top bar compact on small screens.
+ * Screen readers can still access the label regardless of viewport width.
+ */
+.label {
+  white-space: nowrap;
+}
+
+/* Hide label text at very narrow viewports — icon alone is sufficient */
+@media (max-width: 480px) {
+  .label {
+    /* sr-only pattern — accessible but visually hidden */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Reduce padding when label is hidden */
+  .option {
+    padding: 0 0.4375rem; /* 7px */
+  }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .option {
+    transition: none;
+  }
+}

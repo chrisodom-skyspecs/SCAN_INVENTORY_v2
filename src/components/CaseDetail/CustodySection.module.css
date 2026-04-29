@@ -261,3 +261,24 @@
   border-radius: 0.125rem;
   box-shadow: var(--elevation-focus);
 }
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   ============================================================ */
+
+/*
+ * Handoff row dividers — bump from border-subtle to border-default for
+ * legible row separation in dark mode.
+ */
+:global(.theme-dark) .handoffRow {
+  border-bottom-color: var(--border-default);
+}
+
+/*
+ * Chain step connector line — border-default in dark mode gives the
+ * vertical custody trail thread sufficient contrast.
+ */
+:global(.theme-dark) .chainStepLine {
+  background-color: var(--border-default);
+}

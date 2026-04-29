@@ -58,21 +58,44 @@
  */
 
 import { mutation } from "./_generated/server";
+import type { Auth, UserIdentity } from "convex/server";
 import { v } from "convex/values";
+
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+
+/**
+ * Asserts that the calling client has a verified Kinde JWT.
+ * Throws [AUTH_REQUIRED] for unauthenticated requests.
+ * Returns UserIdentity so callers can access the subject (kindeId).
+ */
+async function requireAuth(ctx: { auth: Auth }): Promise<UserIdentity> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error(
+      "[AUTH_REQUIRED] Unauthenticated. Provide a valid Kinde access token. " +
+      "Ensure the client is wrapped in ConvexProviderWithAuth and the user is signed in."
+    );
+  }
+  return identity;
+}
 
 // ─── Shared value validators ──────────────────────────────────────────────────
 
 /**
  * Case lifecycle status validator.
- * Mirrors caseStatus in convex/schema.ts — defined here so mutation args can
- * reference it without importing the schema directly.
+ * Mirrors caseStatus in convex/schema.ts and CaseStatus in
+ * src/types/case-status.ts — defined here so mutation args can reference it
+ * without importing the schema or client-side types directly.
  */
 const caseStatusValidator = v.union(
+  v.literal("hangar"),
   v.literal("assembled"),
+  v.literal("transit_out"),
   v.literal("deployed"),
-  v.literal("in_field"),
-  v.literal("shipping"),
-  v.literal("returned"),
+  v.literal("flagged"),
+  v.literal("transit_in"),
+  v.literal("received"),
+  v.literal("archived"),
 );
 
 /**
@@ -96,21 +119,29 @@ const manifestItemStatusValidator = v.union(
  * the allowed target statuses in the UI, but we also guard server-side.
  *
  * Allowed transitions:
- *   assembled  → deployed | in_field | shipping
- *   deployed   → in_field | shipping | returned | assembled  (repack)
- *   in_field   → deployed | shipping | returned
- *   shipping   → returned
- *   returned   → assembled | deployed
+ *   hangar      → assembled
+ *   assembled   → transit_out | deployed | hangar
+ *   transit_out → deployed | received
+ *   deployed    → flagged | transit_in | assembled
+ *   flagged     → deployed | transit_in | assembled
+ *   transit_in  → received
+ *   received    → assembled | archived | hangar
+ *   archived    → (terminal — no valid outbound transitions)
  *
  * A "no-op" transition (same status) is always allowed — it just records a
  * check-in event without changing the status value.
+ *
+ * Mirrors CASE_STATUS_TRANSITIONS in src/types/case-status.ts.
  */
 const VALID_TRANSITIONS: Readonly<Record<string, ReadonlySet<string>>> = {
-  assembled: new Set(["deployed", "in_field", "shipping"]),
-  deployed:  new Set(["in_field", "shipping", "returned", "assembled"]),
-  in_field:  new Set(["deployed", "shipping", "returned"]),
-  shipping:  new Set(["returned"]),
-  returned:  new Set(["assembled", "deployed"]),
+  hangar:      new Set(["assembled"]),
+  assembled:   new Set(["transit_out", "deployed", "hangar"]),
+  transit_out: new Set(["deployed", "received"]),
+  deployed:    new Set(["flagged", "transit_in", "assembled"]),
+  flagged:     new Set(["deployed", "transit_in", "assembled"]),
+  transit_in:  new Set(["received"]),
+  received:    new Set(["assembled", "archived", "hangar"]),
+  archived:    new Set([]),
 };
 
 // ─── Return types ─────────────────────────────────────────────────────────────
@@ -127,7 +158,13 @@ export interface ScanCheckInResult {
   /** Status written by this mutation. */
   newStatus: string;
   /**
-   * ID of the inspection record created when transitioning to "in_field".
+   * Convex document ID of the scan log row inserted into the `scans` table.
+   * Populated for every scanCheckIn call — enables callers to link the
+   * check-in event to follow-up queries (T5 scan timeline, last-seen display).
+   */
+  scanId: string;
+  /**
+   * ID of the inspection record created when transitioning to "deployed".
    * Undefined when no new inspection was created (status unchanged, or
    * transitioning to a non-inspection status).
    */
@@ -234,45 +271,77 @@ export const scanCheckIn = mutation({
 
     /**
      * Epoch ms timestamp of the scan action.
-     * Written to cases.updatedAt (M1 sort index) and events.timestamp.
+     * Written to cases.updatedAt (M1 sort index), scans.scannedAt, and events.timestamp.
      */
     timestamp:      v.number(),
 
     /**
      * Kinde user ID of the scanning technician.
-     * Written to cases.assigneeId — the field M1/M3 assigneeId filter uses.
+     * Written to cases.assigneeId (M1/M3 filter) and scans.scannedBy.
      */
     technicianId:   v.string(),
 
     /**
      * Display name of the technician.
-     * Written to cases.assigneeName for map pin tooltips and dashboard display.
+     * Written to cases.assigneeName for map pin tooltips and scans.scannedByName.
      */
     technicianName: v.string(),
 
     /**
      * GPS latitude of the scan location.
-     * Written to cases.lat — used by all map modes' withinBounds() check.
+     * Written to cases.lat (all modes withinBounds check) and scans.lat.
      */
     lat:            v.optional(v.number()),
 
     /**
      * GPS longitude of the scan location.
-     * Written to cases.lng — used by all map modes' withinBounds() check.
+     * Written to cases.lng and scans.lng.
      */
     lng:            v.optional(v.number()),
 
     /**
      * Human-readable location name (e.g. "Site Alpha — Turbine Row 3").
-     * Written to cases.locationName for map pin tooltips.
+     * Written to cases.locationName and scans.locationName.
      */
     locationName:   v.optional(v.string()),
 
     /** Optional technician notes appended to the case. */
     notes:          v.optional(v.string()),
+
+    /**
+     * Raw QR code payload decoded by the SCAN app camera.
+     *
+     * Optional — when provided, stored verbatim in scans.qrPayload so the
+     * scan log preserves the exact value the technician's device decoded.
+     * When omitted (e.g. when the check-in originates from manual entry),
+     * the case's stored `qrCode` field is used as the canonical payload.
+     *
+     * Written to scans.qrPayload — the field that enables queries like
+     * "what QR payload was decoded when this case was last scanned?".
+     */
+    qrPayload:      v.optional(v.string()),
+
+    /**
+     * Why this scan was initiated.
+     *   "check_in"   — standard status transition / location confirmation
+     *   "inspection" — entering or resuming a checklist inspection pass
+     *   "handoff"    — beginning a custody handoff workflow
+     *   "lookup"     — informational only
+     * Defaults to "check_in" when omitted.
+     */
+    scanContext:    v.optional(v.string()),
+
+    /**
+     * Optional device / browser metadata JSON string.
+     * Stored in scans.deviceInfo for support diagnostics only; not indexed.
+     */
+    deviceInfo:     v.optional(v.string()),
   },
 
   handler: async (ctx, args): Promise<ScanCheckInResult> => {
+    // Reject unauthenticated requests at the function level.
+    await requireAuth(ctx);
+
     const now = args.timestamp;
 
     // ── Verify case exists ────────────────────────────────────────────────────
@@ -321,6 +390,40 @@ export const scanCheckIn = mutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await ctx.db.patch(args.caseId, casePatch as any);
 
+    // ── INSERT scan log row ───────────────────────────────────────────────────
+    //
+    // The `scans` table is append-only — every physical QR code encounter is
+    // recorded here regardless of whether a status transition occurred.
+    //
+    // This INSERT invalidates (real-time, ≤ 2 s):
+    //   getScansByCase(caseId)       — by_case index      → T5 scan activity timeline
+    //   getLastScanForCase(caseId)   — by_case_scanned_at → "Last scanned N min ago"
+    //   getScansByUser(scannedBy)    — by_user index       → SCAN app "My Activity"
+    //   getRecentScans()             — by_scanned_at index → dashboard overview feed
+    //
+    // Fields written:
+    //   caseId        — the scanned case (AC-required field)
+    //   scannedBy     — Kinde user ID of the scanning technician (AC-required)
+    //   scannedAt     — epoch ms of the scan; from args.timestamp (AC-required)
+    //   lat/lng/locationName — GPS location of the scan (AC-required "location")
+    //   qrPayload     — raw QR code payload (use arg if provided, fall back to
+    //                   the case's stored qrCode — the canonical value)
+    const effectiveQrPayload = args.qrPayload ?? caseDoc.qrCode;
+
+    const scanId = await ctx.db.insert("scans", {
+      caseId:        args.caseId,
+      qrPayload:     effectiveQrPayload,
+      scannedBy:     args.technicianId,
+      scannedByName: args.technicianName,
+      scannedAt:     now,
+      lat:           args.lat,
+      lng:           args.lng,
+      locationName:  args.locationName,
+      scanContext:   args.scanContext ?? "check_in",
+      deviceInfo:    args.deviceInfo,
+      // inspectionId linked below when a new inspection is created
+    });
+
     // ── Record status_change event (immutable audit) ──────────────────────────
     // The events table is append-only — no deletes or updates.
     if (fromStatus !== toStatus) {
@@ -337,22 +440,23 @@ export const scanCheckIn = mutation({
           lng:      args.lng,
           location: args.locationName,
           notes:    args.notes,
+          scanId:   scanId.toString(),
         },
       });
     }
 
-    // ── Create inspection when entering in_field ──────────────────────────────
+    // ── Create inspection when entering deployed ──────────────────────────────
     // M3 (Field Mode) reads from the inspections table for:
     //   • inspectionProgress (checkedItems / totalItems)
     //   • damagedItems / missingItems counters on map pins
     //   • byInspectionStatus aggregate for summary
     //
-    // We only create a NEW inspection on the in_field entry transition.
-    // Subsequent check-ins while already in_field update the case but do not
+    // We only create a NEW inspection on the deployed entry transition.
+    // Subsequent check-ins while already deployed update the case but do not
     // reset the in-progress inspection.
     let inspectionId: string | undefined;
 
-    if (toStatus === "in_field" && fromStatus !== "in_field") {
+    if (toStatus === "deployed" && fromStatus !== "deployed") {
       // Count existing manifest items for accurate initial inspection totals.
       // Using the by_case index — O(log n + |items|), same as getChecklistByCase.
       const manifestItems = await ctx.db
@@ -388,6 +492,10 @@ export const scanCheckIn = mutation({
 
       inspectionId = newId.toString();
 
+      // Link the scan row to the newly created inspection so the T5 audit panel
+      // can correlate scan events with the inspection they initiated.
+      await ctx.db.patch(scanId, { inspectionId: newId });
+
       // Audit event for the inspection start
       await ctx.db.insert("events", {
         caseId:    args.caseId,
@@ -401,6 +509,7 @@ export const scanCheckIn = mutation({
           checkedItems,
           damagedItems,
           missingItems,
+          scanId: scanId.toString(),
         },
       });
     }
@@ -409,6 +518,7 @@ export const scanCheckIn = mutation({
       caseId:         args.caseId,
       previousStatus: fromStatus,
       newStatus:      toStatus,
+      scanId:         scanId.toString(),
       inspectionId,
     };
   },
@@ -535,6 +645,9 @@ export const updateChecklistItem = mutation({
   },
 
   handler: async (ctx, args): Promise<UpdateChecklistItemResult> => {
+    // Reject unauthenticated requests at the function level.
+    await requireAuth(ctx);
+
     const now = args.timestamp;
 
     // ── Load all manifest items for this case (by_case index) ─────────────────
@@ -730,6 +843,9 @@ export const startInspection = mutation({
   },
 
   handler: async (ctx, args): Promise<InspectionResult> => {
+    // Reject unauthenticated requests at the function level.
+    await requireAuth(ctx);
+
     const now = args.timestamp;
 
     // ── Verify case exists and is in an inspectable state ─────────────────────
@@ -738,7 +854,8 @@ export const startInspection = mutation({
       throw new Error(`Case ${args.caseId} not found.`);
     }
 
-    const inspectableStatuses = ["deployed", "in_field"];
+    // Cases that can be inspected: deployed at site or flagged (has issues)
+    const inspectableStatuses = ["deployed", "flagged"];
     if (!inspectableStatuses.includes(caseDoc.status)) {
       throw new Error(
         `Cannot start inspection: case "${caseDoc.label}" is in status ` +
@@ -843,6 +960,9 @@ export const completeInspection = mutation({
   },
 
   handler: async (ctx, args): Promise<InspectionResult> => {
+    // Reject unauthenticated requests at the function level.
+    await requireAuth(ctx);
+
     const now = args.timestamp;
 
     // ── Verify inspection exists ──────────────────────────────────────────────

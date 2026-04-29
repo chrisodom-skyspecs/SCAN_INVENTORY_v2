@@ -1,0 +1,294 @@
+/**
+ * StopCard.module.css
+ *
+ * Styles for the StopCard component — a standalone card for a single journey stop.
+ *
+ * Design constraints:
+ *   • No hex literals — all colors via CSS custom properties (var(--*))
+ *   • WCAG AA contrast in both light and dark themes
+ *   • Reduced-motion: no CSS animations
+ *   • Inter Tight for all labels, event type, actor, location text
+ *   • IBM Plex Mono for stop number badge and timestamp
+ *   • Touch targets ≥ 44×44 px for interactive thumbnails (WCAG 2.5.5)
+ *
+ * Token families used:
+ *   --layer-deployed-*   for the first / origin stop badge
+ *   --layer-transit-*    for the last / most-recent stop badge
+ *   --layer-history-*    for intermediate stop badges
+ *   --surface-*          for card background and hover states
+ *   --border-*           for card and badge borders
+ *   --ink-*              for text colors
+ *   --elevation-*        for card shadow depth
+ */
+
+/* ── Root card ────────────────────────────────────────────────────────────── */
+
+.card {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr;
+  gap: 0 0.5rem;
+  align-items: start;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: 0.5rem;
+  box-shadow: var(--elevation-1);
+  padding: 0.75rem 0.875rem 0.75rem 0.625rem;
+  overflow: hidden;
+}
+
+/* ── Left column: stop number badge ──────────────────────────────────────── */
+
+.badgeCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 0.125rem;
+  flex-shrink: 0;
+}
+
+/**
+ * Numbered circle badge.
+ *
+ * Base appearance: intermediate stop — gray
+ * [data-position="first"]: first/origin stop — green (--layer-deployed-*)
+ * [data-position="last"]:  last/most-recent stop — blue (--layer-transit-*)
+ * [data-no-location="true"]: dashed border to signal missing GPS
+ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  flex-shrink: 0;
+  user-select: none;
+
+  /* Default: intermediate stop — neutral gray */
+  background: var(--layer-history-subtle);
+  color: var(--layer-history-color);
+  border: 1.5px solid var(--layer-history-border);
+}
+
+/* First stop (origin) — green */
+.badge[data-position="first"] {
+  background: var(--layer-deployed-bg);
+  color: var(--surface-base);
+  border-color: var(--layer-deployed-border);
+}
+
+/* Last stop (most recent) — blue */
+.badge[data-position="last"] {
+  background: var(--layer-transit-bg);
+  color: var(--surface-base);
+  border-color: var(--layer-transit-border);
+}
+
+/* No-location variant — dashed border */
+.badge[data-no-location="true"] {
+  background: var(--surface-sunken);
+  color: var(--ink-tertiary);
+  border-style: dashed;
+  border-color: var(--border-default);
+}
+
+/* ── Right column: content ────────────────────────────────────────────────── */
+
+.contentCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+
+/* ── Header row: event type label + timestamp ─────────────────────────────── */
+
+.headerRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  row-gap: 0.125rem;
+}
+
+/* ── Event type label ─────────────────────────────────────────────────────── */
+
+.eventType {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Timestamp ────────────────────────────────────────────────────────────── */
+
+.timestamp {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+
+/* ── Actor name ───────────────────────────────────────────────────────────── */
+
+.actorName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Location name ────────────────────────────────────────────────────────── */
+
+.locationName {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  color: var(--ink-tertiary);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Missing-location placeholder */
+.locationMissing {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  color: var(--ink-disabled);
+  font-style: italic;
+  line-height: 1.3;
+}
+
+/* ── Evidence thumbnail strip ─────────────────────────────────────────────── */
+
+/**
+ * Horizontal scroll container for evidence thumbnails.
+ * Shown when thumbnails.length > 0; hidden when thumbnails prop is empty.
+ */
+.thumbnailStrip {
+  display: flex;
+  flex-direction: row;
+  gap: 0.375rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-top: 0.375rem;
+  /* Clip overscroll glow on iOS */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;      /* Firefox */
+  padding-bottom: 0.125rem;  /* ensure bottom border/shadow not clipped */
+}
+
+/* Hide WebKit scrollbar in the thumbnail strip */
+.thumbnailStrip::-webkit-scrollbar {
+  display: none;
+}
+
+/* Individual thumbnail wrapper */
+.thumbnailItem {
+  flex-shrink: 0;
+}
+
+/**
+ * Interactive thumbnail — rendered as a button.
+ * Minimum 44×44 px tap target (WCAG 2.5.5).
+ */
+.thumbnailButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;     /* 48px — slightly above 44px min for visual balance */
+  height: 3rem;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.375rem;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.thumbnailButton:hover {
+  border-color: var(--border-brand);
+}
+
+.thumbnailButton:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* Thumbnail image — fills the button or sits as a static element */
+.thumbnailImg {
+  width: 3rem;
+  height: 3rem;
+  object-fit: cover;
+  border-radius: 0.3125rem;
+  display: block;
+  /* Static images have the same dimensions as interactive ones */
+  border: 1px solid var(--border-subtle);
+}
+
+/* Remove border from img when inside a button (button provides the border) */
+.thumbnailButton .thumbnailImg {
+  border: none;
+  border-radius: 0;  /* button clips with its own border-radius */
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Token cascade handles most overrides automatically; these
+   selectors address elements that need extra polish in dark mode.
+   ============================================================ */
+
+/**
+ * Card border — use border-default for more contrast against the dark
+ * surface-card (--_n-850) background in dark mode.
+ */
+:global(.theme-dark) .card {
+  border-color: var(--border-default);
+}
+
+/**
+ * No-location badge — ensure the dashed border reads against dark sunken bg.
+ */
+:global(.theme-dark) .badge[data-no-location="true"] {
+  border-color: var(--border-strong);
+}
+
+/**
+ * Thumbnail static image border — bump to default for dark mode visibility.
+ */
+:global(.theme-dark) .thumbnailImg {
+  border-color: var(--border-default);
+}
+
+/**
+ * Thumbnail button border.
+ */
+:global(.theme-dark) .thumbnailButton {
+  border-color: var(--border-default);
+}
+
+:global(.theme-dark) .thumbnailButton:hover {
+  border-color: var(--border-brand);
+}

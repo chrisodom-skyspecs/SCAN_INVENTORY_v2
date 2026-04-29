@@ -1,0 +1,351 @@
+/**
+ * HistoryTrailLayer.module.css
+ *
+ * Styles for the INVENTORY map history trails overlay component.
+ *
+ * Design constraints:
+ *   • No hex literals — all colors via CSS custom properties (var(--*))
+ *   • WCAG AA contrast in both light and dark themes
+ *   • Reduced-motion: no animation under prefers-reduced-motion
+ *   • Inter Tight for UI text, IBM Plex Mono for data/timestamps
+ *
+ * The `--layer-history-*` tokens are defined in src/styles/tokens/base.css §7.
+ * They map to neutral grays in both light and dark themes.
+ */
+
+/* ── Toggle control (in-map overlay) ─────────────────────────────────────────
+   A compact toggle button that appears over the map when the history layer
+   is first activated.  Complements the LayerTogglePanelConnected.
+*/
+
+.toggleControl {
+  position: absolute;
+  top: 3.75rem;     /* below the main toolbar */
+  right: 1rem;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.625rem;
+  background: var(--surface-overlay, rgba(255, 255, 255, 0.92));
+  border: 1px solid var(--layer-history-border);
+  border-radius: 0.375rem;
+  box-shadow: var(--elevation-2);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  cursor: pointer;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.toggleControl:hover {
+  background: var(--surface-raised);
+  border-color: var(--layer-history-color);
+}
+
+.toggleControl:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.toggleControl[data-active="true"] {
+  background: var(--layer-history-subtle);
+  border-color: var(--layer-history-color);
+  color: var(--layer-history-color);
+}
+
+.toggleDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--layer-history-bg);
+  border: 1px solid var(--layer-history-border);
+  flex-shrink: 0;
+  transition: background 0.12s ease;
+}
+
+.toggleControl[data-active="true"] .toggleDot {
+  background: var(--layer-history-color);
+  border-color: var(--layer-history-color);
+}
+
+/* ── Legend container ─────────────────────────────────────────────────────────
+   Floating legend panel positioned at bottom-right of the map canvas.
+   Overlays the Mapbox tiles without displacing other UI elements.
+*/
+
+.legend {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1rem;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--surface-overlay, rgba(255, 255, 255, 0.9));
+  border: 1px solid var(--border-default);
+  border-radius: 0.5rem;
+  box-shadow: var(--elevation-2);
+  min-width: 8rem;
+  max-width: 12rem;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ── Legend title ─────────────────────────────────────────────────────────── */
+
+.legendTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-tertiary);
+  line-height: 1.2;
+}
+
+/* ── Legend items ─────────────────────────────────────────────────────────── */
+
+.legendItems {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-secondary);
+  line-height: 1.3;
+}
+
+/* Line swatch — represents a trail path segment */
+.legendLineSwatch {
+  display: block;
+  width: 1.25rem;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--layer-history-bg);
+  flex-shrink: 0;
+}
+
+/* Circle swatch — represents a scan waypoint */
+.legendDotSwatch {
+  display: block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--layer-history-bg);
+  border: 1px solid var(--layer-history-border);
+  flex-shrink: 0;
+}
+
+/* First/origin marker swatch */
+.legendDotSwatchFirst {
+  background: var(--layer-deployed-bg);
+  border-color: var(--layer-deployed-border);
+}
+
+/* Last/current position marker swatch */
+.legendDotSwatchLast {
+  background: var(--layer-history-color);
+  border-color: var(--layer-history-color);
+}
+
+/* ── Trail count badge ────────────────────────────────────────────────────── */
+
+.legendCount {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.5625rem;
+  color: var(--ink-tertiary);
+  margin-top: 0.0625rem;
+  min-height: 0.875rem;
+}
+
+.legendCount[data-loading="true"] {
+  color: var(--ink-tertiary);
+}
+
+.legendCountLoading {
+  display: inline-block;
+  width: 3.5rem;
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background: linear-gradient(
+    90deg,
+    var(--layer-history-subtle) 0%,
+    var(--layer-history-border) 50%,
+    var(--layer-history-subtle) 100%
+  );
+  background-size: 200% 100%;
+  animation: trailCountShimmer 1.4s linear infinite;
+}
+
+@keyframes trailCountShimmer {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legendCountLoading {
+    animation: none;
+    background: var(--layer-history-subtle);
+  }
+}
+
+/* ── Screen-reader only utility ───────────────────────────────────────────── */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  list-style: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK MODE OVERRIDES — HistoryTrailLayer
+   Applied when .theme-dark is set on <html>.
+   The toggleControl and legend use rgba(255,255,255,0.92/0.9) as a rgba
+   fallback for --surface-overlay.  In dark mode we override these with
+   the dark equivalent (near-opaque dark surface) so the glass effect
+   reads correctly against the dark map canvas.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Toggle control — dark glassmorphism background.
+ * Overrides the rgba(255,255,255,0.92) fallback with a dark variant.
+ * The var(--surface-overlay) token cascades automatically, but the
+ * rgba() fallback value must be explicitly overridden.
+ */
+:global(.theme-dark) .toggleControl {
+  background: var(--surface-overlay, rgba(18, 20, 24, 0.92));
+}
+
+/**
+ * Legend panel — dark glassmorphism background.
+ * Same pattern as toggleControl — override the rgba() fallback.
+ */
+:global(.theme-dark) .legend {
+  background: var(--surface-overlay, rgba(18, 20, 24, 0.90));
+}
+
+/* ── Fallback mode (no Mapbox token) ─────────────────────────────────────── */
+
+.fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 0.5rem;
+  box-shadow: var(--elevation-1);
+  width: 100%;
+  max-width: 24rem;
+  margin: 0.75rem auto 0;
+}
+
+.fallbackHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fallbackBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--layer-history-subtle);
+  color: var(--layer-history-color);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+.fallbackTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  flex: 1;
+}
+
+.fallbackCount {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ── Fallback trail list ──────────────────────────────────────────────────── */
+
+.fallbackTrailList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.fallbackTrailItem {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.3125rem 0.5rem;
+  background: var(--surface-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.3125rem;
+}
+
+.fallbackTrailLabel {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  flex-shrink: 0;
+}
+
+.fallbackTrailMeta {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fallbackTrailMore {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  text-align: center;
+  padding: 0.25rem 0;
+}

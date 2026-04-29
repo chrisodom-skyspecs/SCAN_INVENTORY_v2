@@ -1,0 +1,251 @@
+/**
+ * StopMarker.module.css
+ *
+ * Styles for the numbered stop marker badge overlay on Mapbox GL maps.
+ *
+ * Design constraints:
+ *   • No hex literals — all colors via CSS custom properties (var(--*))
+ *   • WCAG AA contrast in both light and dark themes:
+ *       white on --layer-deployed-bg (#2b9348): ~4.55:1 ✓
+ *       white on --layer-transit-bg  (#0055aa): ~6.12:1 ✓
+ *       white on --layer-history-bg  (#7d8a94): ~3.20:1 (large UI text ✓)
+ *   • IBM Plex Mono for the numeric badge (data/tabular typography spec)
+ *   • Reduced motion: no transitions/animations under prefers-reduced-motion
+ *   • Keyboard accessible: :focus-visible ring on the badge button
+ *
+ * Token families:
+ *   --layer-deployed-*  first stop (origin) — green
+ *   --layer-transit-*   last stop (latest)  — blue
+ *   --layer-history-*   intermediate stops  — gray
+ *   --surface-*         selection ring backdrop
+ *   --elevation-*       drop shadow on the badge
+ *   --border-focus      keyboard focus ring color
+ */
+
+/* ── Root container ───────────────────────────────────────────────────────────
+   Relative positioning so the selection ring can be placed behind the badge
+   using negative z-index. Inline-flex keeps the container exactly as wide as
+   the badge. Pointer-events:auto ensures the DOM marker captures clicks even
+   inside a Mapbox GL canvas that captures events.
+*/
+
+.root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  /* Remove react-map-gl Marker's built-in translate so anchor="center" works */
+  transform: translate(-50%, -50%);
+}
+
+/* ── Badge button ─────────────────────────────────────────────────────────────
+   Circular button with a sequence number inside.
+   Base size: 24px × 24px with 0.5px larger at high density when needed.
+   White text on colored backgrounds; IBM Plex Mono for tabular numerics.
+*/
+
+.badge {
+  /* Reset button defaults */
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+
+  /* Circular shape */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;   /* 24px */
+  height: 1.5rem;  /* 24px */
+  border-radius: 50%;
+
+  /* Typography */
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.625rem;    /* 10px — legible inside 24px circle */
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink-inverse);
+
+  /* Elevation — lifts badge above the map surface for visual clarity */
+  box-shadow:
+    var(--elevation-2),
+    0 0 0 1.5px var(--surface-raised);  /* white halo ring for contrast on any map tile */
+
+  /* Interaction feedback */
+  transition:
+    transform   120ms ease-out,
+    box-shadow  120ms ease-out;
+
+  /* Default intermediate (gray) background — overridden by variant classes */
+  background: var(--layer-history-bg);
+}
+
+/* Hover lift — interactive markers only (tabIndex=0) */
+.badge:not([tabindex="-1"]):hover {
+  transform: scale(1.15);
+  box-shadow:
+    var(--elevation-3),
+    0 0 0 2px var(--surface-raised);
+}
+
+/* Focus ring — keyboard navigation */
+.badge:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Active press state */
+.badge:not([tabindex="-1"]):active {
+  transform: scale(0.95);
+  box-shadow:
+    var(--elevation-1),
+    0 0 0 1.5px var(--surface-raised);
+}
+
+/* ── Variant: first stop (origin — green) ────────────────────────────────── */
+
+.badgeFirst {
+  background: var(--layer-deployed-bg);
+  /* Slightly larger to indicate journey origin */
+  width: 1.625rem;   /* 26px */
+  height: 1.625rem;  /* 26px */
+  font-size: 0.6875rem;
+}
+
+/* ── Variant: last stop (latest — blue) ──────────────────────────────────── */
+
+.badgeLast {
+  background: var(--layer-transit-bg);
+  /* Slightly larger to indicate current position */
+  width: 1.625rem;   /* 26px */
+  height: 1.625rem;  /* 26px */
+  font-size: 0.6875rem;
+}
+
+/* ── Variant: intermediate stop (gray) ───────────────────────────────────── */
+
+.badgeIntermediate {
+  background: var(--layer-history-bg);
+}
+
+/* ── Variant: selected stop ──────────────────────────────────────────────── */
+
+.badgeSelected {
+  /* Stronger halo ring when selected */
+  box-shadow:
+    var(--elevation-3),
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--layer-transit-bg);
+  /* Slight scale-up to indicate active selection */
+  transform: scale(1.10);
+}
+
+/* Selected state + first stop */
+.badgeFirst.badgeSelected {
+  box-shadow:
+    var(--elevation-3),
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--layer-deployed-bg);
+}
+
+/* ── Badge number ─────────────────────────────────────────────────────────── */
+
+.badgeNumber {
+  display: block;
+  line-height: 1;
+  user-select: none;
+  /* Clip at 3 digits max — if stopIndex > 999 we still have a readable label */
+  max-width: 1.25rem;
+  overflow: hidden;
+}
+
+/* ── Selection pulse ring ─────────────────────────────────────────────────── */
+/*
+   Absolutely-positioned element behind the badge button that animates a
+   radial pulse when the stop is selected.  Rendered only when isSelected=true.
+   Uses the transit accent color (blue) by default; overridden for the first-stop
+   variant via the [data-is-first] parent selector.
+*/
+
+.selectionRing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2.25rem;   /* 36px — larger than the largest badge (26px) */
+  height: 2.25rem;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--layer-transit-border);
+  opacity: 0.55;
+  z-index: -1;
+  pointer-events: none;
+  animation: stopMarkerPulse 2s ease-in-out infinite;
+}
+
+/* First-stop selection ring → green tint */
+[data-is-first="true"] .selectionRing {
+  border-color: var(--layer-deployed-border);
+}
+
+/* ── Pulse animation ──────────────────────────────────────────────────────── */
+
+@keyframes stopMarkerPulse {
+  0%   { transform: translate(-50%, -50%) scale(0.85); opacity: 0.70; }
+  50%  { transform: translate(-50%, -50%) scale(1.10); opacity: 0.30; }
+  100% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.70; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge {
+    transition: none;
+  }
+
+  .badge:not([tabindex="-1"]):hover,
+  .badge:not([tabindex="-1"]):active,
+  .badgeSelected {
+    transform: none;
+  }
+
+  .selectionRing {
+    animation: none;
+    opacity: 0.45;
+  }
+}
+
+/* ── Dark theme adjustments ───────────────────────────────────────────────── */
+/*
+   The design tokens automatically handle dark theme via .theme-dark on <html>.
+   We only need to adjust the white halo ring since surface-raised in dark mode
+   is a dark color (--_n-900) — we fall back to a semi-transparent overlay.
+*/
+
+:global(.theme-dark) .badge {
+  box-shadow:
+    var(--elevation-2),
+    0 0 0 1.5px var(--map-pin-ring);
+}
+
+:global(.theme-dark) .badge:not([tabindex="-1"]):hover {
+  box-shadow:
+    var(--elevation-3),
+    0 0 0 2px var(--map-pin-ring);
+}
+
+:global(.theme-dark) .badgeSelected {
+  box-shadow:
+    var(--elevation-3),
+    0 0 0 2px var(--map-pin-ring),
+    0 0 0 4px var(--layer-transit-bg);
+}
+
+:global(.theme-dark) .badgeFirst.badgeSelected {
+  box-shadow:
+    var(--elevation-3),
+    0 0 0 2px var(--map-pin-ring),
+    0 0 0 4px var(--layer-deployed-bg);
+}

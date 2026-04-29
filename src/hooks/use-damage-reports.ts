@@ -73,6 +73,8 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
+import { buildSummary } from "../../convex/checklistHelpers";
 
 // Re-export types so consumers can import them from the hook module.
 export type {
@@ -125,7 +127,7 @@ export type {
 export function useDamageReportsByCase(caseId: string | null) {
   return useQuery(
     api.damageReports.getDamageReportsByCase,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -168,7 +170,7 @@ export function useDamageReportsByCase(caseId: string | null) {
 export function useDamageReportEvents(caseId: string | null) {
   return useQuery(
     api.damageReports.getDamageReportEvents,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -212,7 +214,7 @@ export function useDamageReportEvents(caseId: string | null) {
 export function useDamageReportSummary(caseId: string | null) {
   return useQuery(
     api.damageReports.getDamageReportSummary,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -258,7 +260,7 @@ export function useDamageReportSummary(caseId: string | null) {
  * }
  */
 export function useAllDamageReports(
-  caseStatus?: "assembled" | "deployed" | "in_field" | "shipping" | "returned",
+  caseStatus?: "hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "transit_in" | "received" | "archived",
 ) {
   return useQuery(api.damageReports.listAllDamageReports, {
     caseStatus,
@@ -310,7 +312,7 @@ export function useAllDamageReports(
 export function useDamagePhotoReports(caseId: string | null) {
   return useQuery(
     api.damageReports.getDamagePhotoReports,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -382,7 +384,7 @@ export function useDamagePhotoReportsByRange(
   return useQuery(
     api.damageReports.getDamagePhotoReportsByRange,
     caseId !== null
-      ? { caseId, fromTimestamp, toTimestamp }
+      ? { caseId: caseId as Id<"cases">, fromTimestamp, toTimestamp }
       : "skip",
   );
 }
@@ -461,10 +463,102 @@ export function useDamageReportEventsByRange(
   return useQuery(
     api.damageReports.getDamageReportEventsByRange,
     caseId !== null
-      ? { caseId, fromTimestamp, toTimestamp }
+      ? { caseId: caseId as Id<"cases">, fromTimestamp, toTimestamp }
       : "skip",
   );
 }
+
+// ─── useDamagePhotoReportsWithUrls ───────────────────────────────────────────
+
+/**
+ * Subscribe to all damage photo reports for a case, with server-resolved URLs.
+ *
+ * Returns every row from the `damage_reports` table for the given case with
+ * `photoUrl` pre-resolved server-side via `ctx.storage.getUrl()`.  Photos are
+ * sorted by reportedAt descending (most recent photo first).
+ *
+ * The resolved `photoUrl` is ready to use directly in `<img src={photoUrl} />`
+ * without any additional client-side fetch.  It is a temporary signed URL valid
+ * for ~1 hour; Convex re-runs this query subscription automatically whenever
+ * `damage_reports` rows change, refreshing URLs alongside data.
+ *
+ * Use this hook (instead of `useDamagePhotoReports`) wherever actual photo
+ * thumbnails or annotation overlays need to be displayed — specifically:
+ *   • T3 inspection panel — annotated photo gallery in the Issues section
+ *   • T4 shipping panel photo evidence section (if enlarged)
+ *
+ * Backed by `api.damageReports.getDamagePhotoReportsWithUrls` which resolves
+ * storage IDs server-side in a single parallel Promise.all.  This avoids
+ * N separate client→server round-trips for URL resolution.
+ *
+ * Pass `null` as `caseId` to skip the subscription (no case selected).
+ *
+ * Return values:
+ *   `undefined`                       — loading (show skeleton)
+ *   `DamagePhotoReportWithUrl[]`      — live photo list with resolved URLs
+ *
+ * @example
+ * function AnnotatedPhotoGallery({ caseId }: { caseId: string | null }) {
+ *   const photos = useDamagePhotoReportsWithUrls(caseId);
+ *   if (photos === undefined) return <PhotoSkeleton />;
+ *   if (photos.length === 0) return null;
+ *   return (
+ *     <ul>
+ *       {photos.map((photo) => (
+ *         <li key={photo.id}>
+ *           {photo.photoUrl && <img src={photo.photoUrl} alt="Damage evidence" />}
+ *         </li>
+ *       ))}
+ *     </ul>
+ *   );
+ * }
+ */
+export function useDamagePhotoReportsWithUrls(caseId: string | null) {
+  return useQuery(
+    api.damageReports.getDamagePhotoReportsWithUrls,
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
+  );
+}
+
+// ─── useDamagePhotoReportsByRangeWithUrls ─────────────────────────────────────
+
+/**
+ * Subscribe to damage photo reports within a timestamp range, with resolved URLs.
+ *
+ * Timestamp-range companion to `useDamagePhotoReportsWithUrls`.  Returns
+ * `damage_reports` rows whose `reportedAt` falls within [fromTimestamp,
+ * toTimestamp] (inclusive epoch ms), each with `photoUrl` resolved server-side.
+ * Results are sorted by reportedAt descending.
+ *
+ * Suitable for:
+ *   • Per-inspection or per-shift photo galleries with date filter controls
+ *   • Export views that need photo evidence for a specific inspection window
+ *
+ * Pass `null` as `caseId` to skip the subscription.
+ *
+ * Return values:
+ *   `undefined`                   — loading (show skeleton)
+ *   `DamagePhotoReportWithUrl[]`  — live date-filtered photo list (may be empty)
+ *
+ * @param caseId        Convex case ID, or `null` to skip the subscription.
+ * @param fromTimestamp Inclusive lower bound in epoch ms.
+ * @param toTimestamp   Inclusive upper bound in epoch ms.
+ */
+export function useDamagePhotoReportsByRangeWithUrls(
+  caseId: string | null,
+  fromTimestamp: number,
+  toTimestamp: number,
+) {
+  return useQuery(
+    api.damageReports.getDamagePhotoReportsByRangeWithUrls,
+    caseId !== null
+      ? { caseId: caseId as Id<"cases">, fromTimestamp, toTimestamp }
+      : "skip",
+  );
+}
+
+// Re-export URL-resolved type so consumers don't need a separate import.
+export type { DamagePhotoReportWithUrl } from "../../convex/damageReports";
 
 // ─── useGenerateDamagePhotoUploadUrl ─────────────────────────────────────────
 
@@ -564,5 +658,75 @@ export function useGenerateDamagePhotoUploadUrl() {
  *   }
  */
 export function useSubmitDamagePhoto() {
-  return useMutation(api.damageReports.submitDamagePhoto);
+  return useMutation(api.damageReports.submitDamagePhoto).withOptimisticUpdate(
+    (localStore, args) => {
+      // Only apply optimistic update when the damage report is linked to a
+      // specific manifest item.  Without templateItemId, the photo is a
+      // case-level attachment and no checklist item needs updating.
+      if (!args.templateItemId) return;
+
+      const { caseId, templateItemId, reportedAt, reportedById, reportedByName } = args;
+
+      /**
+       * Apply "damaged" status to the matching checklist item.
+       * Returns a new array — does not mutate in place.
+       */
+      const applyDamageUpdate = <T extends {
+        templateItemId: string;
+        status: string;
+        checkedAt?: number;
+        checkedById?: string;
+        checkedByName?: string;
+      }>(items: T[]): T[] =>
+        items.map((item) =>
+          item.templateItemId === templateItemId
+            ? {
+                ...item,
+                status:        "damaged",
+                checkedAt:     reportedAt,
+                checkedById:   reportedById,
+                checkedByName: reportedByName,
+              }
+            : item
+        );
+
+      // ── Optimistically update getChecklistByCase ───────────────────────────
+      // Immediately marks the manifest item as "damaged" in the checklist item
+      // list so the status chip and row colour update without waiting for the
+      // server round-trip.
+      const checklistItems = localStore.getQuery(
+        api.checklists.getChecklistByCase,
+        { caseId }
+      );
+      if (checklistItems !== undefined) {
+        localStore.setQuery(
+          api.checklists.getChecklistByCase,
+          { caseId },
+          applyDamageUpdate(checklistItems)
+        );
+      }
+
+      // ── Optimistically update getChecklistWithInspection ──────────────────
+      // Combined subscription used by ScanInspectClient.  Re-runs buildSummary
+      // on the updated items so the progress bar, damaged count, and
+      // "Complete Inspection" gate reflect the new damage status instantly.
+      const checklistWithInsp = localStore.getQuery(
+        api.checklists.getChecklistWithInspection,
+        { caseId }
+      );
+      if (checklistWithInsp !== undefined) {
+        const updatedItems   = applyDamageUpdate(checklistWithInsp.items);
+        const updatedSummary = buildSummary(caseId.toString(), updatedItems);
+        localStore.setQuery(
+          api.checklists.getChecklistWithInspection,
+          { caseId },
+          {
+            ...checklistWithInsp,
+            items:   updatedItems,
+            summary: updatedSummary,
+          }
+        );
+      }
+    }
+  );
 }

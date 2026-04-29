@@ -1,7 +1,7 @@
 /**
  * M5MissionControl — Mission Control map mode
  *
- * Shows live telemetry tracks, aircraft/drone positions, mission zones,
+ * Shows live telemetry tracks, cluster/heatmap aggregates, mission zones,
  * and exclusion areas on a high-contrast satellite base style.
  *
  * URL params wired via useMapParams:
@@ -16,13 +16,16 @@
  *   This component is only rendered when the FF_MAP_MISSION flag is active.
  *   InventoryMapClient is responsible for the flag check.
  *
- * Data source: useMapCasePins (Convex real-time subscription).
- *   Subscribes to api.mapData.getM1MapData scoped by missionId (derived from
- *   the `org` URL param). When org is set, only cases on that mission are shown.
- *   When org is null, all cases across the fleet are displayed.
- *   Convex re-evaluates within ~100–300 ms of any SCAN app mutation that
- *   touches the cases table, satisfying the ≤ 2-second real-time fidelity
- *   requirement.
+ * Data source: useCaseMapData({ mode: "M5" }) — Convex real-time M5 subscription.
+ *   Subscribes to api.mapData.getM5MapData, which returns cluster/heatmap
+ *   aggregates and fleet-wide summary counts (totalCases, byStatus).  M5 does
+ *   not return individual case records — records is always [] for this mode.
+ *   Fleet counts are available via summary.total and summary.byStatus.
+ *
+ *   Reactive to:
+ *     • Any case status mutation → summary counts update in real-time
+ *   Convex re-evaluates within ~100–300 ms, satisfying the ≤ 2-second
+ *   real-time fidelity requirement.
  *
  * Design tokens: all colors via var(--map-m5-*) and var(--surface-*).
  * No hex literals; WCAG AA compliant.
@@ -37,9 +40,27 @@
 
 import { type ChangeEvent, useId } from "react";
 import { useMapParams } from "@/hooks/use-map-params";
-import { useMapCasePins } from "@/hooks/use-map-case-pins";
+import { useCaseMapData } from "@/hooks/use-case-map-data";
 import { MAP_VIEW_VALUES, type MapView } from "@/types/map";
+import { useIsDark } from "@/providers/theme-provider";
 import styles from "./M5MissionControl.module.css";
+
+// ─── Mapbox style URLs ────────────────────────────────────────────────────────
+
+/**
+ * M5 Mission Control always uses a satellite base — live telemetry tracks
+ * and mission zone polygons are designed for high contrast against imagery.
+ *
+ * In dark theme we use "satellite-streets-v12" with additional darkness from
+ * the Mapbox token `fog` and `atmosphere` configurations (handled at runtime).
+ * In light theme the same satellite style is used since satellite imagery is
+ * inherently dark and the mission-control HUD tokens are dark by design.
+ *
+ * If the user wants a pure "mission planning" light base, they can switch to
+ * M2/M4; M5 is specifically a dark/satellite-first experience.
+ */
+const MAPBOX_STYLE_LIGHT = "mapbox://styles/mapbox/satellite-streets-v12";
+const MAPBOX_STYLE_DARK  = "mapbox://styles/mapbox/satellite-streets-v12";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -108,11 +129,11 @@ export interface M5MissionControlProps {
  * and mode switcher tabs. All state is persisted to and restored from the URL
  * via useMapParams so deep links and page refreshes restore the full session.
  *
- * Case pin data comes from useMapCasePins, which maintains a live Convex
- * subscription to api.mapData.getM1MapData. The subscription is scoped to the
- * mission selected via the org filter (missionId). When no mission is selected,
- * all fleet cases are shown. Pins update within ~100–300 ms of any SCAN app
- * mutation that changes case status, location, or assignee.
+ * Fleet summary data comes from useCaseMapData({ mode: "M5" }), which
+ * maintains a live Convex subscription to api.mapData.getM5MapData.
+ * M5 returns cluster/heatmap aggregates — no individual case pins.
+ * summary.total and summary.byStatus drive the analytics overlay and legend.
+ * Fleet counts update within ~100–300 ms of any SCAN app mutation.
  *
  * Replay mode: when `at` is non-null the map replays the mission state at
  * that wall-clock timestamp. null = live / current feed.
@@ -129,16 +150,33 @@ export function M5MissionControl({
   // so the component always restores its state from the deep link.
   const { view, org, kit, at, setView, setOrg, setKit, setAt } = useMapParams();
 
-  // ── Live mission case pin subscription (Convex real-time) ──────────
+  // ── Dark mode — Mapbox style and UI token activation ──────────────────────���──
   //
-  // No status filter — M5 shows all cases scoped to the selected mission.
-  // `org` maps to a Convex mission document ID; null = global fleet view.
+  // useIsDark() reads the ThemeContext.  M5 always uses a satellite base style
+  // (inherently dark), but `isDark` is still needed to:
+  //   1. Pass data-theme to the map container so the Mapbox integration can
+  //      apply additional fog/atmosphere settings for dark mode.
+  //   2. Activate the .theme-dark CSS block which re-maps the scrubber bar's
+  //      color-scheme for the datetime-local input.
+  const isDark   = useIsDark();
+  const mapStyle = isDark ? MAPBOX_STYLE_DARK : MAPBOX_STYLE_LIGHT;
+
+  // ── Live M5 Mission Control subscription via useCaseMapData ──────────
   //
-  // Convex re-evaluates within ~100–300 ms when any case in the mission
-  // changes status, location, or assignee — satisfying the ≤ 2-second
-  // real-time fidelity requirement regardless of replay/live mode.
-  const { pins, isLoading, summary } = useMapCasePins({
-    missionId: org ?? undefined,
+  // useCaseMapData({ mode: "M5" }) subscribes to api.mapData.getM5MapData,
+  // which returns cluster/heatmap aggregates rather than individual case records.
+  //
+  // records is always [] for M5 — the map renders cluster layers directly from
+  // the Mapbox GL source rather than individual pins.
+  //
+  // summary.total gives the fleet-wide case count (all statuses).
+  // summary.byStatus provides per-status breakdowns for the heatmap legend.
+  //
+  // Convex re-evaluates within ~100–300 ms when any case status changes,
+  // satisfying the ≤ 2-second real-time fidelity requirement regardless of
+  // replay/live mode.
+  const { records: pins, isLoading, summary } = useCaseMapData({
+    mode: "M5",
   });
 
   const orgSelectId    = useId();
@@ -146,6 +184,10 @@ export function M5MissionControl({
   const scrubberLabelId = useId();
 
   // ── Derived counts ─────────────────────────────────────────────────
+  //
+  // M5 summary.total comes from M5Response.summary.totalCases — the full
+  // fleet count.  summary.byStatus contains case lifecycle status breakdowns
+  // for use in the heatmap legend and mission analytics overlay.
   const totalMissionCases = summary?.total ?? 0;
 
   // ── Derived state ──────────────────────────────────────────────────
@@ -253,10 +295,10 @@ export function M5MissionControl({
             </select>
           </div>
 
-          {/* Mission case summary badge (live — updates via Convex subscription) */}
+          {/* Fleet summary badge (live — updates via useCaseMapData M5 subscription) */}
           <div className={styles.filterGroup} aria-live="polite" aria-atomic="true">
             <span className={styles.filterLabel}>
-              {org ? "Mission cases" : "Fleet"}
+              Fleet
             </span>
             <span
               className={styles.summaryBadge}
@@ -264,8 +306,8 @@ export function M5MissionControl({
               data-pin-count={pins.length}
               aria-label={
                 isLoading
-                  ? "Loading mission data…"
-                  : `${totalMissionCases} case${totalMissionCases !== 1 ? "s" : ""}${org ? " in mission" : " total"}`
+                  ? "Loading fleet data…"
+                  : `${totalMissionCases} case${totalMissionCases !== 1 ? "s" : ""} total`
               }
             >
               {isLoading ? (
@@ -360,13 +402,25 @@ export function M5MissionControl({
       {/* ── Map canvas ── */}
       <main className={styles.mapCanvas} aria-label="Mission Control map">
         {mapboxToken ? (
-          /* Map rendered by react-map-gl; mission case pin data exposed via
-             data attributes for the Mapbox layer integration to consume. */
+          /* Map rendered by react-map-gl; M5 cluster/heatmap aggregates are
+             consumed directly by the Mapbox GL source layer.  summary.total and
+             summary.byStatus drive the analytics overlay and heatmap legend.
+             records is always [] for M5 — no individual case pins.
+
+             data-fleet-count — reactive total case count from
+               useCaseMapData({ mode: "M5" }) → summary.total; drives the
+               fleet-wide analytics overlay header in the Mapbox GL layer.
+             data-by-status — reactive JSON-serialized status breakdown from
+               summary.byStatus; drives the heatmap legend layer colors and
+               cluster status badge overlays without re-querying Convex. */
           <div
             id="m5-map-container"
             className={styles.mapContainer}
             data-mapbox-token={mapboxToken}
-            data-pin-count={pins.length}
+            data-mapbox-style={mapStyle}
+            data-theme={isDark ? "dark" : "light"}
+            data-fleet-count={totalMissionCases}
+            data-by-status={summary ? JSON.stringify(summary.byStatus) : undefined}
             data-loading={isLoading ? "true" : undefined}
           />
         ) : (
@@ -377,7 +431,7 @@ export function M5MissionControl({
           >
             {isLoading ? (
               <p className={styles.mapPlaceholderText}>
-                Loading mission data…
+                Loading fleet data…
               </p>
             ) : (
               <>
@@ -387,46 +441,43 @@ export function M5MissionControl({
                     NEXT_PUBLIC_MAPBOX_TOKEN
                   </code>
                 </p>
-                {pins.length > 0 && (
-                  /* Mission case list — live data from the Convex subscription */
-                  <ul
-                    className={styles.pinList}
-                    aria-label={`${pins.length} case${pins.length !== 1 ? "s" : ""} in mission`}
-                    data-testid="m5-pin-list"
-                  >
-                    {pins.slice(0, 20).map((pin) => (
-                      <li
-                        key={pin.caseId}
-                        className={styles.pinListItem}
-                        data-status={pin.status}
-                        data-case-id={pin.caseId}
-                      >
-                        <span
-                          className={styles.pinDot}
-                          data-status={pin.status}
-                          aria-hidden="true"
-                        />
-                        <span className={styles.pinLabel}>{pin.label}</span>
-                        <span className={styles.pinStatus}>{pin.status}</span>
-                        {pin.assigneeName && (
-                          <span className={styles.pinAssignee}>
-                            {pin.assigneeName}
-                          </span>
-                        )}
-                        {pin.locationName && (
-                          <span className={styles.pinLocation}>
-                            {pin.locationName}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                    {pins.length > 20 && (
-                      <li className={styles.pinListMore}>
-                        +{pins.length - 20} more
-                      </li>
-                    )}
-                  </ul>
-                )}
+                {/* Status breakdown — live from useCaseMapData M5 subscription.
+                    summary.byStatus provides per-lifecycle-status case counts
+                    that would drive the heatmap legend and cluster overlays when
+                    Mapbox GL is connected.  Rendered here as a fallback preview
+                    so operators can see fleet status distribution without a map. */}
+                {summary?.byStatus &&
+                  Object.values(summary.byStatus).some((count) => count > 0) && (
+                    <ul
+                      className={styles.pinList}
+                      aria-label="Fleet status breakdown"
+                      data-testid="m5-status-breakdown"
+                    >
+                      {Object.entries(summary.byStatus)
+                        .filter(([, count]) => count > 0)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([status, count]) => (
+                          <li
+                            key={status}
+                            className={styles.pinListItem}
+                            data-status={status}
+                          >
+                            <span
+                              className={styles.pinDot}
+                              data-status={status}
+                              aria-hidden="true"
+                            />
+                            <span className={styles.pinLabel}>{status}</span>
+                            <span
+                              className={styles.pinStatus}
+                              aria-label={`${count} case${count !== 1 ? "s" : ""}`}
+                            >
+                              {count}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
               </>
             )}
           </div>
@@ -441,8 +492,8 @@ export function M5MissionControl({
       >
         {`Mission Control. View: ${MAP_MODE_LABELS[view]}.`}
         {isLoading
-          ? " Loading mission data."
-          : ` ${totalMissionCases} case${totalMissionCases !== 1 ? "s" : ""}${org ? " in mission" : " total"}.`}
+          ? " Loading fleet data."
+          : ` ${totalMissionCases} case${totalMissionCases !== 1 ? "s" : ""} total.`}
         {org ? ` Organisation filter active.` : ""}
         {kit ? ` Kit filter active.` : ""}
         {isReplaying

@@ -1,0 +1,333 @@
+/**
+ * T4DossierShell.module.css
+ *
+ * Styles for the T4 Tabbed Dossier shell — the 6-tab case detail panel.
+ *
+ * Design-system compliance:
+ *   • Zero hex literals — all colors via CSS custom property tokens
+ *   • Inter Tight for UI labels and headings
+ *   • IBM Plex Mono for data / code / monospace content
+ *   • WCAG AA contrast in both light and dark themes
+ *   • Dark theme via :global(.theme-dark) selectors
+ */
+
+/* ── Root container ───────────────────────────────────────────────── */
+
+.dossier {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 0.5rem;
+  box-shadow: var(--elevation-2);
+  overflow: hidden;
+  height: 100%;
+  min-height: 0;
+  /* Establish stacking context so the tab bar drop-shadow stays contained */
+  isolation: isolate;
+}
+
+/* ── Tab navigation bar ───────────────────────────────────────────── */
+
+.tabBar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-shrink: 0;
+  background-color: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-default);
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Hide scrollbar but keep scrollability for narrow containers */
+  scrollbar-width: none; /* Firefox */
+}
+
+.tabBar::-webkit-scrollbar {
+  display: none; /* Chrome / Safari */
+}
+
+/* ── Tab button ───────────────────────────────────────────────────── */
+
+.tab {
+  /* Layout */
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.6875rem 1rem;
+  flex-shrink: 0;
+  position: relative;
+
+  /* Typography — Inter Tight per design system */
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+
+  /* Colors */
+  color: var(--ink-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+
+  /* Interaction */
+  cursor: pointer;
+  user-select: none;
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease,
+    background-color 0.14s ease;
+}
+
+.tab:hover {
+  color: var(--ink-primary);
+  background-color: var(--surface-hover);
+}
+
+.tab:focus-visible {
+  outline: none;
+  /* Inset focus ring so it doesn't bleed outside the tab bar */
+  box-shadow: inset 0 0 0 2px var(--border-brand);
+  z-index: 1;
+}
+
+/* Active (selected) tab */
+.tabActive {
+  color: var(--ink-brand);
+  border-bottom-color: var(--border-brand);
+  background-color: var(--surface-raised);
+  font-weight: 600;
+}
+
+/* Gated tab (feature flag required + disabled) */
+.tabGated {
+  color: var(--ink-disabled);
+  cursor: default;
+}
+
+.tabGated:hover {
+  color: var(--ink-disabled);
+  background-color: transparent;
+}
+
+/* Tab label text */
+.tabLabel {
+  display: inline;
+}
+
+/* Feature-flag gate badge ("FF") */
+.tabFfBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 9999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background-color: var(--signal-neutral-fill-subtle);
+  color: var(--signal-neutral-text-subtle);
+  border: 1px solid var(--signal-neutral-border);
+  /* Keep badge vertically centred with the label text */
+  line-height: 1.4;
+}
+
+/* ── Tab panel ────────────────────────────────────────────────────── */
+
+.tabPanel {
+  /* Panel fills remaining vertical space */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.25rem;
+  scroll-padding-top: 0.5rem;
+  /* Expose scrollbar (vs. hidden on tab bar) for content scroll UX */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.tabPanel::-webkit-scrollbar {
+  width: 0.375rem;
+}
+
+.tabPanel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabPanel::-webkit-scrollbar-thumb {
+  background-color: var(--border-default);
+  border-radius: 9999px;
+}
+
+/* Active panel — visible */
+.tabPanelActive {
+  display: block;
+}
+
+/* Inactive panels — hidden from layout and assistive tech */
+.tabPanelHidden {
+  display: none;
+}
+
+/**
+ * .tabPanelMap — Override for the Map tab panel.
+ *
+ * Removes the standard padding and sets overflow: hidden so DossierMapPanel
+ * can fill the cell edge-to-edge.  DossierMapPanel's .mapRoot uses
+ * height: 100% + flex layout to occupy the full available height.
+ *
+ * Also sets display: flex (needed because flex: 1 on .mapRoot requires
+ * a flex-parent to resolve height correctly).
+ */
+.tabPanelMap {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Tab placeholder (stub while real content sub-ACs are wired in) ── */
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: 2.5rem 1.25rem;
+  text-align: center;
+  color: var(--ink-tertiary);
+  min-height: 12rem;
+}
+
+.placeholderIcon {
+  width: 2.25rem;
+  height: 2.25rem;
+  opacity: 0.35;
+  color: var(--ink-tertiary);
+}
+
+.placeholderIcon > svg {
+  width: 100%;
+  height: 100%;
+}
+
+.placeholderTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.placeholderText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  max-width: 20rem;
+  line-height: 1.55;
+}
+
+.placeholderBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+.placeholderBadgeText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+}
+
+/* ── Feature-gate notice ──────────────────────────────────────────── */
+
+.gateNotice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: 2.5rem 1.25rem;
+  text-align: center;
+  min-height: 12rem;
+}
+
+.gateNoticeIcon {
+  width: 2rem;
+  height: 2rem;
+  color: var(--ink-tertiary);
+  opacity: 0.45;
+}
+
+.gateNoticeTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.gateNoticeText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  max-width: 20rem;
+  line-height: 1.55;
+}
+
+.gateNoticeCode {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.1875rem;
+  padding: 0.0625rem 0.3125rem;
+  color: var(--ink-secondary);
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied when html.theme-dark is active.
+   Token cascade handles most swaps; these rules address
+   elements needing additional visual polish in the dark palette.
+   ============================================================ */
+
+/* Panel container — slightly stronger border against dark background */
+:global(.theme-dark) .dossier {
+  border-color: var(--border-default);
+}
+
+/* Tab bar — increase separator contrast in dark mode */
+:global(.theme-dark) .tabBar {
+  border-bottom-color: var(--border-strong);
+}
+
+/* Active tab — surface-raised reads as elevated against sunken bar */
+:global(.theme-dark) .tabActive {
+  background-color: var(--surface-raised);
+}
+
+/* Scrollbar thumb in dark mode — use stronger border token */
+:global(.theme-dark) .tabPanel {
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+:global(.theme-dark) .tabPanel::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+}
+
+/* Gate notice code block — ensure legibility on dark sunken background */
+:global(.theme-dark) .gateNoticeCode {
+  border-color: var(--border-default);
+  background-color: var(--surface-sunken);
+}

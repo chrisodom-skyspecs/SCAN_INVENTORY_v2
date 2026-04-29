@@ -3,10 +3,24 @@
  * No hex literals — design-system CSS custom properties only.
  */
 
-.overview {
+/**
+ * .loadingWrapper — Full-height container for pre-shell loading / error states.
+ *
+ * When the case detail body has padding: 0; overflow: hidden (T1 override),
+ * the loading and not-found states render directly inside the body — not
+ * inside T1Shell.  This wrapper fills the body height so the shared
+ * .emptyState flex centering works correctly.
+ */
+.loadingWrapper {
+  height: 100%;
+  min-height: 8rem;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--ink-tertiary);
 }
 
 /* ── FedEx tracking banner ────────────────────────────────────────── */
@@ -98,3 +112,22 @@
   color: var(--signal-warning-text-subtle, var(--ink-secondary));
   font-style: italic;
 }
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   ============================================================ */
+
+/*
+ * Tracking banner — --border-subtle against --surface-sunken background
+ * is very low-contrast in dark mode; use --border-default for clarity.
+ */
+:global(.theme-dark) .trackingBanner {
+  border-color: var(--border-default);
+}
+
+/*
+ * Issue/damage count text — signal error subtle token is remapped in dark
+ * mode but we confirm readable via explicit selector for future maintenance.
+ * No color override needed; just documenting intent.
+ */

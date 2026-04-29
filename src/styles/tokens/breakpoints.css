@@ -1,0 +1,217 @@
+/**
+ * breakpoints.css — Responsive Breakpoint Tokens
+ *
+ * Canonical page-level responsive tier definitions for both
+ * the INVENTORY dashboard and SCAN mobile app.
+ *
+ * Tier definitions (mobile-first, three-tier system):
+ *   mobile  — base / default  (≤ 767px)  — phones portrait / landscape
+ *   tablet  — medium tier     (768px – 1023px) — tablet portrait, phablet
+ *   desktop — wide tier       (≥ 1024px) — tablet landscape, laptop, desktop
+ *
+ * These page-level tiers are separate from the SCAN device-level breakpoints
+ * defined in base.css §8 (--bp-sm: 390px / --bp-md: 640px / --bp-lg: 1024px),
+ * which target specific device widths for component-level adjustments.
+ *
+ * CSS custom properties are set on :root so they're readable by JS helpers
+ * via getComputedStyle(document.documentElement).  The -raw variants expose
+ * the unitless integer so TypeScript can read them without string parsing.
+ *
+ * ⚠ IMPORTANT: CSS custom properties CANNOT appear inside @media conditions.
+ *   @media (min-width: var(--bp-tablet-min)) is INVALID.
+ *   Use the hardcoded px values in media queries and the token vars in JS.
+ *
+ * Mobile-first usage pattern in component CSS:
+ *   .myComponent {
+ *     /∗ mobile styles — no @media wrapper needed ∗/
+ *     font-size: 0.875rem;
+ *   }
+ *   @media (min-width: 768px) {
+ *     .myComponent { /∗ tablet overrides ∗/ }
+ *   }
+ *   @media (min-width: 1024px) {
+ *     .myComponent { /∗ desktop overrides ∗/ }
+ *   }
+ *
+ * Responsive utility class naming convention:
+ *   .bp-mobile-only     — visible only on mobile (≤ 767px)
+ *   .bp-tablet-only     — visible only on tablet (768–1023px)
+ *   .bp-desktop-only    — visible only on desktop (≥ 1024px)
+ *   .bp-tablet-up       — visible on tablet and above (≥ 768px)
+ *   .bp-desktop-up      — alias for .bp-desktop-only (≥ 1024px)
+ *   .bp-tablet-down     — visible on mobile and tablet (≤ 1023px)
+ */
+
+
+/* ============================================================
+   §1  BREAKPOINT THRESHOLD TOKENS
+   ============================================================ */
+
+:root {
+  /* ── Mobile tier ─────────────────────────────────────────────
+     Mobile base: default layout; no @media wrapper needed.
+     The max threshold (767px) marks where tablet layout begins.
+     ──────────────────────────────────────────────────────────── */
+
+  /**
+   * Maximum width for the mobile tier.
+   * Components: single-column, full-bleed, stacked navigation.
+   * Content styled at :root / no @media = targets this tier.
+   */
+  --bp-mobile-max:     767px;
+  --bp-mobile-max-raw: 767;
+
+
+  /* ── Tablet tier ─────────────────────────────────────────────
+     @media (min-width: 768px) and (max-width: 1023px)
+     ──────────────────────────────────────────────────────────── */
+
+  /**
+   * Minimum width for the tablet tier.
+   * First @media (min-width: 768px) breakpoint in mobile-first CSS.
+   * Components: two-column grids, side-by-side card rows, expanded nav.
+   */
+  --bp-tablet-min:     768px;
+  --bp-tablet-min-raw: 768;
+
+  /**
+   * Maximum width for the tablet tier.
+   * Desktop layout begins at 1024px.
+   */
+  --bp-tablet-max:     1023px;
+  --bp-tablet-max-raw: 1023;
+
+
+  /* ── Desktop tier ────────────────────────────────────────────
+     @media (min-width: 1024px)
+     ──────────────────────────────────────────────────────────── */
+
+  /**
+   * Minimum width for the desktop tier.
+   * Corresponds to iPad landscape, Surface Go, and 13" laptops.
+   * Components: three-column layouts, full sidebar, expanded data tables.
+   */
+  --bp-desktop-min:     1024px;
+  --bp-desktop-min-raw: 1024;
+}
+
+
+/* ============================================================
+   §2  RESPONSIVE UTILITY CLASSES  (mobile-first visibility)
+
+   Apply these classes directly in JSX or via CSS Modules
+   composition to show/hide elements per responsive tier.
+
+   Pattern: elements are hidden by default and unhidden at the
+   appropriate breakpoint via @media (min-width: ...) rules,
+   except for "mobile only" which is visible by default and
+   hidden once the tablet breakpoint is reached.
+   ============================================================ */
+
+
+/* ── Mobile only — visible below 768px, hidden at tablet+ ─── */
+/**
+ * .bp-mobile-only
+ * Shows element on mobile (default/no @media — mobile-first).
+ * Hides it at the tablet breakpoint and above (≥ 768px).
+ *
+ * Use for: mobile-specific navigation, bottom sheets, compact controls.
+ */
+.bp-mobile-only {
+  display: revert; /* visible by default on mobile */
+}
+@media (min-width: 768px) {
+  .bp-mobile-only {
+    display: none;
+  }
+}
+
+
+/* ── Tablet only — hidden on mobile and desktop ──────────── */
+/**
+ * .bp-tablet-only
+ * Shows element only within the tablet tier (768px – 1023px).
+ * Hidden on mobile (below 768px) and desktop (at/above 1024px).
+ *
+ * Use for: tablet-specific layouts that don't suit mobile or desktop.
+ */
+.bp-tablet-only {
+  display: none; /* hidden on mobile */
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .bp-tablet-only {
+    display: revert;
+  }
+}
+
+
+/* ── Desktop only — hidden on mobile and tablet ─────────── */
+/**
+ * .bp-desktop-only
+ * Shows element only on desktop (≥ 1024px).
+ * Hidden on mobile and tablet.
+ *
+ * Use for: desktop-specific controls, expanded sidebars, wide layouts.
+ */
+.bp-desktop-only {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .bp-desktop-only {
+    display: revert;
+  }
+}
+
+
+/* ── Tablet and above — hidden on mobile only ────────────── */
+/**
+ * .bp-tablet-up
+ * Shows element on tablet and desktop (≥ 768px).
+ * Hidden on mobile only.
+ *
+ * Use for: layouts that work on both tablet and desktop but
+ *          need a different (or no) treatment on mobile.
+ */
+.bp-tablet-up {
+  display: none;
+}
+@media (min-width: 768px) {
+  .bp-tablet-up {
+    display: revert;
+  }
+}
+
+
+/* ── Desktop and above — alias for desktop-only ─────────── */
+/**
+ * .bp-desktop-up
+ * Shows element only on desktop (≥ 1024px).
+ * Alias for .bp-desktop-only; provided for naming consistency.
+ */
+.bp-desktop-up {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .bp-desktop-up {
+    display: revert;
+  }
+}
+
+
+/* ── Tablet and below — hidden on desktop ───────────────── */
+/**
+ * .bp-tablet-down
+ * Shows element on mobile and tablet (≤ 1023px).
+ * Hidden on desktop only.
+ *
+ * Use for: mobile/tablet-optimised controls that are replaced
+ *          by a richer desktop equivalent at ≥ 1024px.
+ */
+.bp-tablet-down {
+  display: revert; /* visible on mobile and tablet */
+}
+@media (min-width: 1024px) {
+  .bp-tablet-down {
+    display: none;
+  }
+}

@@ -242,7 +242,7 @@
 }
 
 .ctaButtonPrimary:hover {
-  background-color: var(--_b-600, #0055b3);
+  background-color: var(--_b-600);
 }
 
 .ctaButtonPrimary:focus-visible {
@@ -348,4 +348,33 @@
   font-size: 0.75rem;
   color: var(--signal-error-text-subtle);
   line-height: 1.45;
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied automatically when html.theme-dark is active.
+   Token cascade handles most color swaps; these selectors
+   address elements that need additional visual polish in
+   dark mode beyond what the token remapping provides.
+   ============================================================ */
+
+/* Note block — bump border visibility against dark sunken background */
+:global(.theme-dark) .noteBlock {
+  border-color: var(--border-default);
+}
+
+/* Error banner — use default border for better contrast on dark fill */
+:global(.theme-dark) .errorBanner {
+  border-color: var(--signal-error-border);
+}
+
+/* Primary CTA hover — brand-600 maps to a slightly brighter step in dark mode */
+:global(.theme-dark) .ctaButtonPrimary:hover {
+  background-color: var(--_b-400);
+}
+
+/* Secondary CTA hover — use card-selected for better dark-mode lift */
+:global(.theme-dark) .ctaButtonSecondary:hover {
+  background-color: var(--surface-selected);
 }

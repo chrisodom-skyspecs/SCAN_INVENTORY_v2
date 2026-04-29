@@ -1,0 +1,325 @@
+/**
+ * FedExTrackingStatus.module.css
+ *
+ * Styles for the pure-UI FedExTrackingStatus component.
+ *
+ * Design rules (enforced):
+ *   - No hex literals — CSS custom properties from the design token system only.
+ *   - IBM Plex Mono for tracking timestamps and data values.
+ *   - Inter Tight for labels, headings, carrier badges, and descriptions.
+ *   - WCAG AA contrast compliant in both light and dark themes.
+ *   - Touch targets ≥ 44×44 px (WCAG 2.5.5) for any interactive elements.
+ *   - Reduced motion: no animations when prefers-reduced-motion: reduce.
+ */
+
+/* ── Root container ──────────────────────────────────────────────────── */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  width: 100%;
+}
+
+/* ── Section 1: Status row (carrier badge + StatusPill) ──────────────── */
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Carrier label badge — uppercase, subtle, small cap style */
+.carrierBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1875rem 0.5rem;
+  background-color: var(--surface-raised);
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+/* ── Section 2: Estimated delivery row ───────────────────────────────── */
+
+.deliveryRow {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.deliveryIcon {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+  color: var(--ink-tertiary);
+}
+
+.deliveryLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+}
+
+.deliveryValue {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+/* ── Section 3: Last event ───────────────────────────────────────────── */
+
+.lastEventSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  /* Subtle visual separation from the status/delivery rows above */
+  padding-top: 0.125rem;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 0.125rem;
+}
+
+.lastEventHeading {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+/* Card container for the last event details */
+.lastEventCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  padding: 0.5rem 0.625rem;
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.375rem;
+}
+
+/* Event description — primary text, readable at a glance */
+.eventDescription {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* Meta row: timestamp + location side by side */
+.eventMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+
+/* Timestamp — monospace, muted */
+.eventTimestamp {
+  font-family: "IBM Plex Mono", "Menlo", "Courier New", monospace;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+
+/* Location chip — pill-shaped with icon */
+.eventLocation {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem 0.4375rem;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+}
+
+.locationPin {
+  width: 0.5625rem;
+  height: 0.6875rem;
+  flex-shrink: 0;
+  color: var(--ink-tertiary);
+}
+
+/* ── Tracking number row (current-state detail) ─────────────────────── */
+
+.trackingRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.trackingLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+}
+
+.trackingValue {
+  font-family: "IBM Plex Mono", "Menlo", "Courier New", monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  letter-spacing: 0.02em;
+  word-break: break-all;
+}
+
+/* ── Section 4: Tracking history timeline ───────────────────────────── */
+
+.historySection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-top: 0.125rem;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 0.125rem;
+}
+
+.historyHeading {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Vertical connecting line drawn behind the dots */
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.3125rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 1px;
+  background-color: var(--border-default);
+}
+
+.timelineItem {
+  display: flex;
+  gap: 0.625rem;
+  padding: 0.375rem 0;
+  position: relative;
+}
+
+.timelineDot {
+  flex-shrink: 0;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background-color: var(--surface-brand, var(--ink-brand));
+  border: 2px solid var(--surface-raised);
+  margin-top: 0.1875rem;
+  position: relative;
+  z-index: 1;
+}
+
+/* Mark the most-recent event with the success color */
+.timelineItem:first-child .timelineDot {
+  background-color: var(--signal-success-fill);
+}
+
+.timelineBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.timelineRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.timelineDesc {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.timelineTime {
+  font-family: "IBM Plex Mono", "Menlo", "Courier New", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+
+.timelineLoc {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+}
+
+/* ── Responsive: narrow viewport adjustments ─────────────────────────── */
+
+@media (max-width: 360px) {
+  .deliveryRow {
+    gap: 0.25rem;
+  }
+
+  .lastEventCard {
+    padding: 0.4375rem 0.5rem;
+  }
+
+  .eventDescription {
+    font-size: 0.75rem;
+  }
+
+  .timelineDesc {
+    font-size: 0.75rem;
+  }
+
+  .timelineItem {
+    gap: 0.5rem;
+  }
+}

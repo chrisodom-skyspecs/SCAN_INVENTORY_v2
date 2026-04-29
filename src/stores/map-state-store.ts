@@ -22,8 +22,8 @@
  *   queries, not here.
  */
 
-import type { MapUrlState } from "@/types/map";
-import { MAP_URL_STATE_DEFAULTS } from "@/types/map";
+import type { MapUrlState, LayerToggles } from "@/types/map";
+import { MAP_URL_STATE_DEFAULTS, DEFAULT_LAYER_TOGGLES } from "@/types/map";
 import { diffMapUrlState } from "@/lib/map-url-params";
 
 // ─── Ephemeral state ──────────────────────────────────────────────────────────
@@ -42,6 +42,17 @@ export interface MapEphemeralState {
   isLayerPanelOpen: boolean;
   /** Whether the filter drawer is open. */
   isFilterDrawerOpen: boolean;
+  /**
+   * Per-status-category layer visibility toggles.
+   *
+   * Controls which case status groups are rendered on the map independently.
+   * All four layers are visible by default; toggling one hides/shows only the
+   * matching status category without affecting the others.
+   *
+   * @see LayerToggles
+   * @see DEFAULT_LAYER_TOGGLES
+   */
+  layerToggles: LayerToggles;
 }
 
 export const DEFAULT_EPHEMERAL_STATE: MapEphemeralState = {
@@ -49,6 +60,7 @@ export const DEFAULT_EPHEMERAL_STATE: MapEphemeralState = {
   hoveredCaseId: null,
   isLayerPanelOpen: false,
   isFilterDrawerOpen: false,
+  layerToggles: { ...DEFAULT_LAYER_TOGGLES },
 };
 
 // ─── Combined state ───────────────────────────────────────────────────────────
@@ -178,7 +190,10 @@ export class MapStateStore {
   setEphemeral(patch: Partial<MapEphemeralState>): void {
     const next = { ...this._state.ephemeral, ...patch };
 
-    // Shallow-compare each field to avoid spurious emissions
+    // Shallow-compare each field to avoid spurious emissions.
+    // For nested objects (layerToggles), reference equality is sufficient
+    // because setEphemeral always receives a new object reference when the
+    // caller spreads: `setEphemeral({ layerToggles: { ...current, key: val } })`.
     const changed = (Object.keys(patch) as (keyof MapEphemeralState)[]).some(
       (k) => this._state.ephemeral[k] !== next[k]
     );
@@ -186,6 +201,42 @@ export class MapStateStore {
 
     this._state = { ...this._state, ephemeral: next };
     this._emit({}, true);
+  }
+
+  /**
+   * Toggle a single status-category layer on or off.
+   *
+   * Flips the boolean for `key` in `ephemeral.layerToggles` and emits.
+   * This is a convenience wrapper around `setEphemeral` so callers don't
+   * need to spread the current `layerToggles` themselves.
+   *
+   * @param key — one of "deployed" | "transit" | "flagged" | "hangar"
+   *
+   * @example
+   * store.toggleLayerVisibility("transit"); // hide transit layer
+   * store.toggleLayerVisibility("transit"); // show transit layer again
+   */
+  toggleLayerVisibility(key: keyof LayerToggles): void {
+    const current = this._state.ephemeral.layerToggles;
+    this.setEphemeral({
+      layerToggles: { ...current, [key]: !current[key] },
+    });
+  }
+
+  /**
+   * Set the entire layerToggles object (bulk update).
+   *
+   * Accepts a partial patch — only the provided keys are updated;
+   * unspecified keys retain their current values.
+   *
+   * @example
+   * store.setLayerToggles({ deployed: false, hangar: false });
+   */
+  setLayerToggles(patch: Partial<LayerToggles>): void {
+    const current = this._state.ephemeral.layerToggles;
+    this.setEphemeral({
+      layerToggles: { ...current, ...patch },
+    });
   }
 
   /**

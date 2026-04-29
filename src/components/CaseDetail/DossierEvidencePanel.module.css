@@ -1,0 +1,626 @@
+/**
+ * DossierEvidencePanel.module.css
+ *
+ * Evidence tab panel for the T4 Dossier (FF_INV_REDESIGN).
+ * No hex literals — CSS custom properties only.
+ * Inter Tight for UI typography; IBM Plex Mono for data/tabular content.
+ * WCAG AA contrast in both light and dark themes.
+ * prefers-reduced-motion respected in all transitions.
+ */
+
+/* ── Panel root ───────────────────────────────────────────────────── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+}
+
+/* ── Loading skeleton ─────────────────────────────────────────────── */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.skeletonHeader {
+  height: 2.5rem;
+  border-radius: 0.375rem;
+  background-color: var(--surface-sunken);
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+
+.skeletonSummary {
+  height: 4rem;
+  border-radius: 0.375rem;
+  background-color: var(--surface-sunken);
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+  animation-delay: 0.1s;
+}
+
+.skeletonGallery {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.skeletonPhoto {
+  height: 8rem;
+  border-radius: 0.375rem;
+  background-color: var(--surface-sunken);
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+
+.skeletonPhoto:nth-child(2) { animation-delay: 0.08s; }
+.skeletonPhoto:nth-child(3) { animation-delay: 0.16s; }
+.skeletonPhoto:nth-child(4) { animation-delay: 0.24s; }
+
+.skeletonCard {
+  height: 5rem;
+  border-radius: 0.375rem;
+  background-color: var(--surface-sunken);
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+
+.skeletonCard:nth-child(6) { animation-delay: 0.1s; }
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonHeader,
+  .skeletonSummary,
+  .skeletonPhoto,
+  .skeletonCard {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
+/* ── Inspection report header ─────────────────────────────────────── */
+
+.inspectionHeader {
+  padding: 0.75rem 0 0.25rem;
+}
+
+.inspectionMeta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.inspectionMetaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.noInspectionNote {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+  margin: 0;
+  padding: 0.5rem 0 0.75rem;
+  font-style: italic;
+}
+
+/* ── Damage summary strip ─────────────────────────────────────────── */
+
+.summaryStrip {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  margin-bottom: 0.875rem;
+}
+
+.summaryStatCell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1875rem;
+  padding: 0.625rem 0.5rem;
+  background-color: var(--surface-raised);
+  min-width: 0;
+}
+
+.summaryStatSep {
+  width: 1px;
+  background-color: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.summaryStatValue {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.summaryStatOk {
+  color: var(--signal-success-text-subtle);
+}
+
+.summaryStatDamaged {
+  color: var(--signal-error-text);
+}
+
+.summaryStatMissing {
+  color: var(--signal-warning-text-subtle, var(--ink-secondary));
+}
+
+.summaryStatLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+/* ── Photo gallery ────────────────────────────────────────────────── */
+
+.photoGallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+/* ── Photo card ───────────────────────────────────────────────────── */
+
+.photoCard {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background-color: var(--surface-raised);
+}
+
+/* Photo image wrapper — position: relative for annotation overlay */
+.photoWrap {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background-color: var(--surface-sunken);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Damage photo image */
+.photoImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Placeholder when photoUrl is null (deleted / invalid storage object) */
+.photoPlaceholder {
+  width: 100%;
+  height: 100%;
+  background-color: var(--surface-sunken);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--border-subtle) 0,
+    var(--border-subtle) 1px,
+    transparent 0,
+    transparent 50%
+  );
+  background-size: 10px 10px;
+}
+
+/* Container holding annotation pin dots — absolutely positioned over the image */
+.annotationOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;  /* purely decorative — never intercepts clicks */
+}
+
+/* Individual annotation pin dot — positioned via inline left/top */
+.annotationPin {
+  position: absolute;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  border: 1.5px solid var(--signal-error-border);
+  background-color: var(--signal-error-fill);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 1.5px var(--surface-raised);
+  pointer-events: none;
+}
+
+/* Severity badge overlaid in the bottom-left of the photo */
+.photoBadgeOverlay {
+  position: absolute;
+  bottom: 0.375rem;
+  left: 0.375rem;
+}
+
+/* Annotation count badge — bottom-right corner of the photo */
+.annotationCountBadge {
+  position: absolute;
+  bottom: 0.375rem;
+  right: 0.375rem;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.25rem;
+  border-radius: 9999px;
+  background-color: var(--ink-primary);
+  color: var(--surface-raised);
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  line-height: 1.125rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ── Photo card metadata section ──────────────────────────────────── */
+
+.photoMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem 0.625rem;
+}
+
+.photoMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.reporterAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.4375rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.reporterAvatarSmall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.375rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  margin-right: 0.25rem;
+  user-select: none;
+}
+
+.reporterName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photoItemLink {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-secondary);
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  line-height: 1.4;
+}
+
+.photoItemLinkLabel {
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.5625rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.photoNotes {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Annotation toggle button ─────────────────────────────────────── */
+
+.annotationToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.125rem 0;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-brand);
+  text-decoration: underline;
+  text-underline-offset: 0.125rem;
+  border-radius: 0.125rem;
+  transition: color 0.15s ease;
+}
+
+.annotationToggleBtn:hover {
+  color: var(--ink-brand);
+  text-decoration: none;
+}
+
+.annotationToggleBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.annotationToggleChevron {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.annotationToggleChevronOpen {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .annotationToggleChevron {
+    transition: none;
+  }
+}
+
+/* ── Annotation list ──────────────────────────────────────────────── */
+
+.annotationList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.annotationListItem {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--surface-sunken);
+}
+
+.annotationListItem:last-child {
+  border-bottom: none;
+}
+
+.annotationSwatch {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--signal-error-border);
+  background-color: var(--signal-error-fill);
+  flex-shrink: 0;
+}
+
+.annotationIndex {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+  min-width: 1.25rem;
+}
+
+.annotationLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.annotationCoords {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ── Severity badge ───────────────────────────────────────────────── */
+
+.severityBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 9999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.severity-minor {
+  color: var(--signal-warning-text-subtle, var(--ink-secondary));
+  background-color: var(--signal-warning-fill-subtle, var(--surface-sunken));
+  border-color: var(--signal-warning-border, var(--border-default));
+}
+
+.severity-moderate {
+  color: var(--signal-error-text-subtle);
+  background-color: var(--signal-error-fill-subtle);
+  border-color: var(--signal-error-border);
+}
+
+.severity-severe {
+  color: var(--signal-error-text);
+  background-color: var(--signal-error-fill);
+  border-color: var(--signal-error-border);
+}
+
+/* ── Damage item card ─────────────────────────────────────────────── */
+
+.damageItemList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.damageItemCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background-color: var(--surface-raised);
+}
+
+.damageItemHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.damageItemName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.damageItemMeta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.375rem 1rem;
+}
+
+.damageItemMetaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+/* Photos within a damage item card */
+.itemPhotoList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.photoCountNote {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  font-style: italic;
+}
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied automatically when html.theme-dark is active.
+   Token cascade handles most color swaps; these selectors
+   address elements that need additional visual polish in
+   dark mode beyond what the token remapping provides.
+   ============================================================ */
+
+/* Photo placeholder stripes — bump stripe color for dark-mode contrast */
+:global(.theme-dark) .photoPlaceholder {
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--border-default) 0,
+    var(--border-default) 1px,
+    transparent 0,
+    transparent 50%
+  );
+}
+
+/* Damage item card — bump border for better contrast on dark raised surface */
+:global(.theme-dark) .damageItemCard {
+  border-color: var(--border-default);
+}
+
+/* Photo card — bump border for better dark-mode contrast */
+:global(.theme-dark) .photoCard {
+  border-color: var(--border-default);
+}
+
+/* Summary strip — bump separator for dark-mode visibility */
+:global(.theme-dark) .summaryStrip {
+  border-color: var(--border-default);
+}
+
+:global(.theme-dark) .summaryStatSep {
+  background-color: var(--border-default);
+}
+
+/* Annotation list — bump border for dark-mode contrast */
+:global(.theme-dark) .annotationList {
+  border-color: var(--border-default);
+}
+
+:global(.theme-dark) .annotationListItem {
+  border-bottom-color: var(--border-default);
+}
+
+/* Toggle button hover — slightly stronger in dark mode */
+:global(.theme-dark) .annotationToggleBtn:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-brand);
+}

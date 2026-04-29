@@ -1,0 +1,158 @@
+/**
+ * ScanLogoutButton.module.css
+ *
+ * Styles for the SCAN app logout button in two variants:
+ *   "link"   — subtle footer link (default, used on SCAN landing page)
+ *   "header" — compact icon + text for the SCAN layout header
+ *
+ * Design constraints:
+ *   - Design tokens only — no hex literals
+ *   - Min-height 44px for all interactive elements (WCAG 2.5.5 / iOS HIG)
+ *   - -webkit-tap-highlight-color: transparent (suppress mobile tap flash)
+ *   - prefers-reduced-motion: no transitions
+ *   - WCAG AA contrast for both light and dark themes
+ */
+
+/* ── Form wrappers ────────────────────────────────────────────────── */
+
+.formLink {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+}
+
+.formHeader {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Link variant (landing page footer) ──────────────────────────── */
+
+.buttonLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+
+  /* Touch target */
+  min-height: 2.75rem; /* 44px */
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+
+  /* Typography */
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+
+  /* Colors */
+  color: var(--ink-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+
+  /* Transitions */
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.buttonLink:hover {
+  color: var(--ink-secondary);
+  background-color: var(--surface-hover);
+}
+
+.buttonLink:active {
+  opacity: 0.75;
+}
+
+.buttonLink:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.buttonLink:disabled,
+.buttonLink[aria-busy="true"] {
+  opacity: 0.55;
+  cursor: wait;
+  pointer-events: none;
+}
+
+/* ── Header variant (persistent SCAN header) ─────────────────────── */
+
+.buttonHeader {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+
+  /* Touch target */
+  min-height: 2.75rem; /* 44px */
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+
+  /* Typography */
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1;
+
+  /* Colors */
+  color: var(--ink-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
+  /* Transitions */
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.buttonHeader:hover {
+  color: var(--ink-primary);
+  background-color: var(--surface-hover);
+}
+
+.buttonHeader:active {
+  opacity: 0.75;
+}
+
+.buttonHeader:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.buttonHeader:disabled,
+.buttonHeader[aria-busy="true"] {
+  opacity: 0.55;
+  cursor: wait;
+  pointer-events: none;
+}
+
+/* ── Icon (header variant only) ──────────────────────────────────── */
+
+.icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+/* ── Label text ──────────────────────────────────────────────────── */
+
+.label {
+  /* Visible on both variants */
+  display: block;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .buttonLink,
+  .buttonHeader {
+    transition: none;
+  }
+}

@@ -39,6 +39,7 @@ import * as React from "react";
 const mockTriggerPrint  = vi.fn();
 const mockRegenerate    = vi.fn();
 const mockDownloadAsPng = vi.fn().mockResolvedValue(undefined);
+const mockDownloadAsPdf = vi.fn().mockResolvedValue(undefined);
 
 let mockQrState: {
   status: "idle" | "loading" | "ready" | "error";
@@ -55,6 +56,7 @@ vi.mock("@/hooks/use-print-label", () => ({
     triggerPrint: mockTriggerPrint,
     regenerate: mockRegenerate,
     downloadAsPng: mockDownloadAsPng,
+    downloadAsPdf: mockDownloadAsPdf,
   })),
 }));
 
@@ -84,6 +86,9 @@ afterEach(() => {
   vi.clearAllMocks();
   // Reset QR state between tests
   mockQrState = { status: "loading" };
+  // Reset mock implementations to default resolved values
+  mockDownloadAsPng.mockResolvedValue(undefined);
+  mockDownloadAsPdf.mockResolvedValue(undefined);
 });
 
 // ── Import after mocks are configured ────────────────────────────────────────
@@ -301,6 +306,14 @@ describe("LabelPreviewModal — QR loading state", () => {
     expect(downloadBtn.getAttribute("aria-disabled")).toBe("true");
   });
 
+  it("disables the Download PDF button while loading", () => {
+    mockQrState = { status: "loading" };
+    renderModal();
+    const pdfBtn = screen.getByTestId("label-preview-download-pdf");
+    expect(pdfBtn.hasAttribute("disabled")).toBe(true);
+    expect(pdfBtn.getAttribute("aria-disabled")).toBe("true");
+  });
+
   it("does not show the error state while loading", () => {
     mockQrState = { status: "loading" };
     renderModal();
@@ -358,6 +371,13 @@ describe("LabelPreviewModal — QR error state", () => {
     const downloadBtn = screen.getByTestId("label-preview-download-png");
     expect(downloadBtn.hasAttribute("disabled")).toBe(true);
     expect(downloadBtn.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("disables the Download PDF button in the error state", () => {
+    renderModal();
+    const pdfBtn = screen.getByTestId("label-preview-download-pdf");
+    expect(pdfBtn.hasAttribute("disabled")).toBe(true);
+    expect(pdfBtn.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("does not show the loading state in the error state", () => {
@@ -502,6 +522,66 @@ describe("LabelPreviewModal — QR ready state", () => {
     // At least one SVG should be present (QR code in CaseLabel)
     const svgs = document.querySelectorAll("svg");
     expect(svgs.length).toBeGreaterThan(0);
+  });
+
+  it("renders the Download PDF button when QR is ready", () => {
+    renderModal();
+    expect(screen.getByTestId("label-preview-download-pdf")).toBeTruthy();
+  });
+
+  it("enables the Download PDF button when QR is ready", () => {
+    renderModal();
+    const pdfBtn = screen.getByTestId("label-preview-download-pdf");
+    expect(pdfBtn.hasAttribute("disabled")).toBe(false);
+    expect(pdfBtn.getAttribute("aria-disabled")).toBe("false");
+  });
+
+  it("the Download PDF button shows 'Download PDF' text", () => {
+    renderModal();
+    const pdfBtn = screen.getByTestId("label-preview-download-pdf");
+    expect(pdfBtn.textContent).toContain("Download PDF");
+  });
+
+  it("calls downloadAsPdf when the Download PDF button is clicked", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("label-preview-download-pdf"));
+    await act(async () => {});
+    expect(mockDownloadAsPdf).toHaveBeenCalledOnce();
+  });
+
+  it("passes caseData fields to downloadAsPdf", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("label-preview-download-pdf"));
+    await act(async () => {});
+    expect(mockDownloadAsPdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label:        CASE_DATA.label,
+        status:       CASE_DATA.status,
+        templateName: CASE_DATA.templateName,
+        assigneeName: CASE_DATA.assigneeName,
+      }),
+      expect.any(String), // size
+      expect.any(String), // filename
+    );
+  });
+
+  it("calls onBeforeExportPdf before downloadAsPdf when provided", async () => {
+    const calls: string[] = [];
+    const onBeforeExportPdf = vi.fn(() => calls.push("before"));
+    mockDownloadAsPdf.mockImplementationOnce(async () => { calls.push("pdf"); });
+
+    renderModal({ onBeforeExportPdf });
+    fireEvent.click(screen.getByTestId("label-preview-download-pdf"));
+    await act(async () => {});
+
+    expect(calls[0]).toBe("before");
+    expect(onBeforeExportPdf).toHaveBeenCalledOnce();
+  });
+
+  it("the Download PDF button is labelled accessibly", () => {
+    renderModal();
+    const pdfBtn = screen.getByTestId("label-preview-download-pdf");
+    expect(pdfBtn.getAttribute("aria-label")).toBe("Download label as PDF file");
   });
 });
 

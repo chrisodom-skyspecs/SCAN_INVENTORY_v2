@@ -1,0 +1,193 @@
+/**
+ * ConnectionIndicator.module.css — Live WebSocket status dot
+ *
+ * Renders a 8px circular dot that signals Convex connection health.
+ *
+ * States (set via data-status attribute on both .wrapper and .dot):
+ *   connected     → green fill, gentle outer ring pulse animation
+ *   connecting    → amber fill, slow pulse
+ *   reconnecting  → amber fill, fast pulse
+ *   disconnected  → red fill, no animation (solid dot)
+ *
+ * Animation:
+ *   Two keyframe sequences for the dot pulse:
+ *     @keyframes connPulseSlow   — 2s cycle  (connected state)
+ *     @keyframes connPulseFast   — 0.9s cycle (reconnecting state)
+ *   Both animate box-shadow from a colored ring → transparent to simulate
+ *   an expanding "live" ring similar to a Figma prototype active indicator.
+ *
+ * Reduced motion (@prefers-reduced-motion: reduce):
+ *   Animation is removed; dots show as solid colored circles only.
+ *
+ * Design tokens only — no hex literals.
+ */
+
+/* ── Wrapper ─────────────────────────────────────────────────────── */
+
+.wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+  /* Offset any line-height alignment issues inside flex rows */
+  line-height: 1;
+}
+
+/* ── Dot ─────────────────────────────────────────────────────────── */
+
+/**
+ * Base dot — 8px circle, transitions color between states.
+ */
+.dot {
+  display: inline-block;
+  width: 0.5rem;   /* 8px */
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  /* Smooth color transitions when status changes */
+  transition:
+    background-color 300ms ease,
+    box-shadow 300ms ease;
+}
+
+/* ── State: connected ────────────────────────────────────────────── */
+
+/**
+ * Connected: green pulsing dot
+ * Uses --signal-success-fill for the dot, --signal-success-border for the ring.
+ * Slow 2-second pulse — conveys "alive and healthy" without being distracting.
+ */
+.dot[data-status="connected"] {
+  background-color: var(--signal-success-fill);
+  animation: connPulseSlow 2s ease-in-out infinite;
+}
+
+/* ── State: connecting ───────────────────────────────────────────── */
+
+/**
+ * Connecting: amber slow-pulse dot
+ * Uses --signal-warning-fill. Same animation speed as connected but amber
+ * so it's visually distinct before the first successful handshake.
+ */
+.dot[data-status="connecting"] {
+  background-color: var(--signal-warning-fill);
+  animation: connPulseSlow 2s ease-in-out infinite;
+}
+
+/* ── State: reconnecting ─────────────────────────────────────────── */
+
+/**
+ * Reconnecting: amber fast-pulse dot
+ * Same color as connecting but faster pulse (0.9s) to signal urgency.
+ */
+.dot[data-status="reconnecting"] {
+  background-color: var(--signal-warning-fill);
+  animation: connPulseFast 0.9s ease-in-out infinite;
+}
+
+/* ── State: disconnected ─────────────────────────────────────────── */
+
+/**
+ * Disconnected: red solid dot (no animation)
+ * Uses --signal-error-fill. Solid conveys "stopped" without animation noise.
+ */
+.dot[data-status="disconnected"] {
+  background-color: var(--signal-error-fill);
+  /* No animation — a static red dot signals a persistent failure */
+}
+
+/* ── Optional label ──────────────────────────────────────────────── */
+
+.label {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;  /* 10px — compact mono label */
+  font-weight: 500;
+  color: var(--ink-secondary);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  user-select: none;
+  line-height: 1;
+}
+
+/* ── Keyframe animations ─────────────────────────────────────────── */
+
+/**
+ * Slow pulse — 2s cycle
+ * Used for: connected, connecting
+ * Animates box-shadow from colored ring to transparent to create an
+ * expanding "live broadcast" pulse ring without moving the dot itself.
+ */
+@keyframes connPulseSlow {
+  0% {
+    box-shadow: 0 0 0 0 var(--signal-success-fill);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 4px transparent;
+    opacity: 0.85;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    opacity: 1;
+  }
+}
+
+/**
+ * Override: connecting state uses warning color for the ring, not success.
+ * We re-apply the keyframe with the correct shadow color via data-status.
+ */
+.dot[data-status="connecting"] {
+  animation-name: connPulseSlowWarning;
+}
+
+@keyframes connPulseSlowWarning {
+  0% {
+    box-shadow: 0 0 0 0 var(--signal-warning-fill);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 4px transparent;
+    opacity: 0.85;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    opacity: 1;
+  }
+}
+
+/**
+ * Fast pulse — 0.9s cycle
+ * Used for: reconnecting
+ * Same ring animation but shorter cycle to convey urgency.
+ */
+@keyframes connPulseFast {
+  0% {
+    box-shadow: 0 0 0 0 var(--signal-warning-fill);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 4px transparent;
+    opacity: 0.75;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    opacity: 1;
+  }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────── */
+
+/**
+ * When prefers-reduced-motion is active, remove all pulse animations.
+ * The dot still shows the correct color — only the animation is removed.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .dot[data-status="connected"],
+  .dot[data-status="connecting"],
+  .dot[data-status="reconnecting"],
+  .dot[data-status="disconnected"] {
+    animation: none;
+    box-shadow: none;
+  }
+}

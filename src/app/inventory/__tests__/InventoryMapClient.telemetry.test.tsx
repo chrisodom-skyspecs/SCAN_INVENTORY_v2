@@ -31,6 +31,7 @@ import React from "react";
 import { render } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { MapView } from "@/types/map";
+import { MAP_URL_STATE_DEFAULTS } from "@/types/map";
 import { TelemetryEventName } from "@/types/telemetry.types";
 
 // ─── Mock next/navigation (required by useMapParams → useMapUrlState) ─────────
@@ -94,6 +95,23 @@ vi.mock("@/hooks/use-case-templates", () => ({
   useCaseTemplates: () => ({ kits: [] }),
 }));
 
+// ─── Mock useKindeUser (not under test here) ──────────────────────────────────
+
+vi.mock("@/hooks/use-kinde-user", () => ({
+  useKindeUser: () => ({
+    id: "test_user_001",
+    name: "Operator",
+    isLoading: false,
+    isAuthenticated: true,
+  }),
+}));
+
+// ─── Mock useDefaultLayoutOnCaseChange (not under test here) ─────────────────
+
+vi.mock("@/hooks/use-default-layout-on-case-change", () => ({
+  useDefaultLayoutOnCaseChange: () => undefined,
+}));
+
 // ─── Stub child map / panel components (avoid complex render deps) ────────────
 
 vi.mock("@/components/Map/M1FleetOverview", () => ({
@@ -124,10 +142,16 @@ import { InventoryMapClient } from "../InventoryMapClient";
 /**
  * Render the component with a given view and return the unmount helper.
  * Updates the mock view before rendering so useMapParams returns it.
+ * initialState is seeded with the same view so the server-decoded prop
+ * matches the mocked URL state.
  */
 function renderWithView(view: MapView) {
   _mockView = view;
-  return render(<InventoryMapClient initialView={view} />);
+  return render(
+    <InventoryMapClient
+      initialState={{ ...MAP_URL_STATE_DEFAULTS, view }}
+    />
+  );
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -185,7 +209,7 @@ describe("InventoryMapClient — map mode telemetry", () => {
 
     mockTrackEvent.mockClear(); // ignore the initial-render event
     _mockView = "M2";
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     expect(mockTrackEvent).toHaveBeenCalledOnce();
     expect(mockTrackEvent).toHaveBeenCalledWith(
@@ -202,7 +226,7 @@ describe("InventoryMapClient — map mode telemetry", () => {
 
     mockTrackEvent.mockClear();
     _mockView = "M4";
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     expect(mockTrackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -219,7 +243,7 @@ describe("InventoryMapClient — map mode telemetry", () => {
 
     mockTrackEvent.mockClear(); // clear initial event
     // Re-render with the same view (e.g., unrelated state update)
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     expect(mockTrackEvent).not.toHaveBeenCalled();
   });
@@ -232,7 +256,7 @@ describe("InventoryMapClient — map mode telemetry", () => {
     // M1 → M2
     mockTrackEvent.mockClear();
     _mockView = "M2";
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     expect(mockTrackEvent).toHaveBeenCalledWith(
       expect.objectContaining({ mapView: "M2", previousMapView: "M1" })
@@ -241,7 +265,7 @@ describe("InventoryMapClient — map mode telemetry", () => {
     // M2 → M3
     mockTrackEvent.mockClear();
     _mockView = "M3";
-    rerender(<InventoryMapClient initialView="M1" />);
+    rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
 
     expect(mockTrackEvent).toHaveBeenCalledWith(
       expect.objectContaining({ mapView: "M3", previousMapView: "M2" })
@@ -261,7 +285,7 @@ describe("InventoryMapClient — map mode telemetry", () => {
     for (let i = 1; i < views.length; i++) {
       mockTrackEvent.mockClear();
       _mockView = views[i];
-      rerender(<InventoryMapClient initialView="M1" />);
+      rerender(<InventoryMapClient initialState={{ ...MAP_URL_STATE_DEFAULTS, view: "M1" }} />);
       if (mockTrackEvent.mock.calls.length > 0) {
         capturedEvents.push(mockTrackEvent.mock.calls[0][0] as { mapView: MapView; previousMapView: MapView | null });
       }

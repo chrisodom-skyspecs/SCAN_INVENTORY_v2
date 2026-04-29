@@ -51,9 +51,14 @@ import { CaseDetailPanel } from "@/components/CaseDetail";
 import { useMapParams } from "@/hooks/use-map-params";
 import { useMissions } from "@/hooks/use-missions";
 import { useCaseTemplates } from "@/hooks/use-case-templates";
+import { useKindeUser } from "@/hooks/use-kinde-user";
+import { useDefaultLayoutOnCaseChange } from "@/hooks/use-default-layout-on-case-change";
+import { LayerEngineProvider } from "@/providers/layer-engine-provider";
+import { MapManifestHoverProvider } from "@/providers/map-manifest-hover-provider";
 import { trackEvent } from "@/lib/telemetry.lib";
 import { TelemetryEventName } from "@/types/telemetry.types";
-import type { LayerId, MapView } from "@/types/map";
+import type { LayerId, MapUrlState, MapView } from "@/types/map";
+import { MAP_URL_STATE_DEFAULTS } from "@/types/map";
 import styles from "./InventoryMapClient.module.css";
 
 // ─── Feature flags ────────────────────────────────────────────────────────────
@@ -82,8 +87,22 @@ const FF_AUDIT_HASH_CHAIN =
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface InventoryMapClientProps {
-  /** Server-resolved initial view — prevents flash before URL param is read. */
-  initialView?: MapView;
+  /**
+   * Full MapUrlState decoded server-side from URL search params by the codec
+   * (sanitizeMapDeepLink).
+   *
+   * Passed from the Server Component (page.tsx) so that all 8 URL params are
+   * available to initialize map state on the client's very first render —
+   * before useSearchParams() is called and before React hydration completes.
+   *
+   * Every field falls back to MAP_URL_STATE_DEFAULTS when the corresponding
+   * URL param is absent or invalid (sanitized by the codec before arriving here).
+   *
+   * After hydration, useMapParams() provides the live/reactive URL state and
+   * takes over as the authoritative source; initialState is used only for the
+   * pre-hydration initial render.
+   */
+  initialState?: MapUrlState;
 }
 
 // ─── M5 locked stub ───────────────────────────────────────────────────────────
@@ -176,13 +195,21 @@ function M5LockedStub() {
  * required since the map canvas loads independently.
  */
 export function InventoryMapClient({
-  initialView = "M1",
+  initialState,
 }: InventoryMapClientProps) {
   // ── URL state ────────────────────────────────────────────────────────────────
   //
-  // activeCaseId, caseWindow, panelOpen, setActiveCaseId, setCaseWindow, and
-  // setPanelOpen are all derived from URL params via useMapParams.
-  // No local state is used for any of these.
+  // All map params are derived exclusively from the URL via useMapParams().
+  // No local state is used for activeCaseId, caseWindow, panelOpen, or view.
+  //
+  // useMapParams() calls useSearchParams() internally and decodes the full
+  // MapUrlState from the URL on every render.  It is the live/reactive source
+  // of truth after React hydration.
+  //
+  // initialState (decoded server-side before this component first renders)
+  // provides fallback values for the pre-hydration render — ensuring that
+  // all 8 URL params initialize correctly even before useSearchParams() fires
+  // on the client.  After hydration, useMapParams() values take precedence.
   const {
     view,
     activeCaseId,
@@ -194,8 +221,46 @@ export function InventoryMapClient({
     setActiveCaseId,
     setCaseWindow,
     setPanelOpen,
+    setParams,
   } = useMapParams();
-  const activeView: MapView = view ?? initialView;
+
+  // Resolve active map view:
+  //   1. `view` from useMapParams() — the live URL-derived value (post-hydration)
+  //   2. `initialState.view` — the server-decoded value (pre-hydration seed)
+  //   3. MAP_URL_STATE_DEFAULTS.view ("M1") — absolute fallback
+  //
+  // In practice (1) is always a valid MapView after React hydration, but
+  // (2) ensures the first SSR render uses the full codec-decoded URL state
+  // (all 8 params) rather than a hardcoded "M1" fallback.
+  const activeView: MapView =
+    view ?? initialState?.view ?? MAP_URL_STATE_DEFAULTS.view;
+
+  // ── Kinde user identity ───────────────────────────────────────────────────────
+  //
+  // userId is passed to useDefaultLayoutOnCaseChange to scope localStorage reads.
+  // Empty string ("") is passed while Kinde is still loading — the hook handles
+  // this gracefully (treats it as "no preference stored").
+  const { id: userId } = useKindeUser({ fallbackName: "Operator" });
+
+  // ── Default layout on case selection / status change ─────────────────────────
+  //
+  // When a case is selected (or its Convex status changes in real time), and
+  // the user has no explicit map mode / case layout stored in localStorage,
+  // automatically switch the dashboard to the recommended view derived from
+  // getDefaultLayout(caseStatus).
+  //
+  // Examples:
+  //   transit_out case selected → switches to M3 (Transit Tracker) + T4 (Shipping)
+  //   deployed case selected    → switches to M2 (Site Detail) + T3 (Inspection)
+  //   hangar case selected      → keeps M1 (Fleet Overview) + T1 (Summary)
+  //
+  // The auto-switch is suppressed when the user has previously called setMapMode
+  // or setCaseLayout (which writes to localStorage via useLayoutPreferences).
+  useDefaultLayoutOnCaseChange({
+    activeCaseId,
+    userId,
+    setParams,
+  });
 
   // ── Map mode telemetry ────────────────────────────────────────────────────────
   //
@@ -531,6 +596,8 @@ export function InventoryMapClient({
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
+    <LayerEngineProvider storageKey="inv-layer-visibility">
+    <MapManifestHoverProvider>
     <div
       className={styles.root}
       data-panel-open={isPanelOpen ? "true" : "false"}
@@ -579,6 +646,8 @@ export function InventoryMapClient({
         </aside>
       )}
     </div>
+    </MapManifestHoverProvider>
+    </LayerEngineProvider>
   );
 }
 

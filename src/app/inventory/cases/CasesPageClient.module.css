@@ -1,0 +1,28 @@
+/**
+ * CasesPageClient.module.css — Layout host for the /inventory/cases page.
+ *
+ * This module provides the full-height root container that stretches the
+ * CaseStatusTable to fill the AppShell main content area.
+ *
+ * CaseStatusTable internally uses:
+ *   - display: flex; flex-direction: column; height: 100%; overflow: hidden
+ *
+ * So the root here needs to pass available height down to it.  The AppShell
+ * main content area is already sized correctly (height: 100% with no overflow),
+ * so .root just needs to fill it and remove default <main> padding/margin.
+ *
+ * All design-system tokens (colors, typography) live inside CaseStatusTable
+ * and its CSS module.  This file introduces no visual styles.
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  /* Reset <main> default margin/padding from browser UA stylesheet */
+  margin: 0;
+  padding: 0;
+  /* Ensure background matches the surface tokens used by CaseStatusTable */
+  background-color: var(--surface-base);
+}

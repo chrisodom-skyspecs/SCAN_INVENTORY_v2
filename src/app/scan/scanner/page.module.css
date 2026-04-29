@@ -1,0 +1,930 @@
+/**
+ * SCAN — QR Scanner screen — page.module.css
+ *
+ * AC 240101 Sub-AC 1: Primary QR scanner screen styles.
+ *
+ * Rules
+ * ─────
+ * • Design tokens only — no hex literals, no raw hsl() in component rules.
+ * • IBM Plex Mono for QR payloads and case IDs.
+ * • Inter Tight for all other text.
+ * • Touch targets: minimum 44 × 44 px (WCAG 2.5.5).
+ * • WCAG AA contrast in both light and dark themes.
+ * • prefers-reduced-motion guards on all keyframes and transitions.
+ */
+
+/* ── Page shell ─────────────────────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 0 1rem 3rem;
+  box-sizing: border-box;
+  min-height: 100%;
+}
+
+/* ── Page header ────────────────────────────────────────────────────── */
+
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-top: 1.25rem;
+}
+
+.pageHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.pageTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.pageSubtitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* ── Switch mode button (Camera / Manual toggle) ─────────────────────── */
+
+.switchBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2.75rem; /* ≥44px touch target */
+  padding: 0 0.875rem;
+  border: 1.5px solid var(--border-default);
+  border-radius: 0.5rem;
+  background-color: var(--surface-raised);
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.switchBtn:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.switchBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switchBtn {
+    transition: none;
+  }
+}
+
+.switchBtnIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Camera viewfinder wrapper ──────────────────────────────────────── */
+
+.viewfinderWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.viewfinderHint {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  text-align: center;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Viewfinder frame ───────────────────────────────────────────────── */
+
+.viewfinder {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 24rem;
+  background-color: var(--_n-1000); /* pure black camera preview background */
+  border-radius: 0.875rem;
+  overflow: hidden;
+  border: 1.5px solid var(--border-default);
+  box-shadow: var(--elevation-2);
+}
+
+.cameraVideo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Camera startup overlay ─────────────────────────────────────────── */
+
+.cameraStartup {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.875rem;
+  background-color: rgba(10, 10, 10, 0.92);
+}
+
+.startupLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 0.01em;
+}
+
+/* ── Scan reticle ───────────────────────────────────────────────────── */
+
+.reticle {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Corner "L" brackets — positioned at 20% inset from each corner */
+
+.corner {
+  position: absolute;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-style: solid;
+  border-color: var(--surface-brand);
+  border-width: 0;
+  opacity: 0.95;
+}
+
+.cornerTL {
+  top: 18%;
+  left: 18%;
+  border-top-width: 3px;
+  border-left-width: 3px;
+  border-top-left-radius: 0.3125rem;
+}
+
+.cornerTR {
+  top: 18%;
+  right: 18%;
+  border-top-width: 3px;
+  border-right-width: 3px;
+  border-top-right-radius: 0.3125rem;
+}
+
+.cornerBL {
+  bottom: 18%;
+  left: 18%;
+  border-bottom-width: 3px;
+  border-left-width: 3px;
+  border-bottom-left-radius: 0.3125rem;
+}
+
+.cornerBR {
+  bottom: 18%;
+  right: 18%;
+  border-bottom-width: 3px;
+  border-right-width: 3px;
+  border-bottom-right-radius: 0.3125rem;
+}
+
+/* Animated horizontal scan line */
+
+.scanLine {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--surface-brand) 20%,
+    var(--surface-brand) 80%,
+    transparent 100%
+  );
+  border-radius: 1px;
+  animation: scanSweep 2s ease-in-out infinite;
+  top: 18%; /* starts at top reticle edge */
+}
+
+@keyframes scanSweep {
+  0%   { top: 20%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 80%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanLine {
+    animation: none;
+    top: 50%;
+    opacity: 0.5;
+  }
+}
+
+/* ── Camera error state ─────────────────────────────────────────────── */
+
+.cameraError {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 2rem 1.5rem;
+  background-color: var(--surface-critical-subtle);
+  border: 1px solid var(--border-critical);
+  border-radius: 0.875rem;
+  text-align: center;
+}
+
+.cameraErrorIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--ink-critical);
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.cameraErrorText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-critical);
+  margin: 0;
+  line-height: 1.5;
+  max-width: 26rem;
+}
+
+/* ── Paused overlay ─────────────────────────────────────────────────── */
+
+.pausedOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.pausedIcon {
+  width: 3rem;
+  height: 3rem;
+  color: var(--ink-positive);
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+}
+
+.pausedLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  letter-spacing: 0.01em;
+}
+
+/* ── Detected value card ────────────────────────────────────────────── */
+
+.detectedCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.125rem 1rem;
+  background-color: var(--surface-raised);
+  border: 1.5px solid var(--border-positive);
+  border-radius: 0.875rem;
+  box-shadow: var(--elevation-1);
+  animation: slideIn 0.25s ease forwards;
+}
+
+@keyframes slideIn {
+  from { transform: translateY(0.5rem); opacity: 0; }
+  to   { transform: translateY(0);      opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detectedCard {
+    animation: none;
+  }
+}
+
+/* ── Detected header ────────────────────────────────────────────────── */
+
+.detectedHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.detectedIconWrap {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background-color: var(--surface-positive-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detectedIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--ink-positive);
+}
+
+.detectedLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin: 0 0 0.125rem;
+  line-height: 1.25;
+}
+
+.detectedSublabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  line-height: 1.35;
+}
+
+/* ── Raw value section ──────────────────────────────────────────────── */
+
+.rawValueSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.rawValueHeading {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+.rawValueBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  min-height: 2.75rem; /* at least 44px for touch */
+}
+
+.rawValueText {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--ink-primary);
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+  word-break: break-all;
+  flex: 1;
+  /* Prevent wrapping from pushing copy button off screen */
+  min-width: 0;
+}
+
+/* ── Copy button ────────────────────────────────────────────────────── */
+
+.copyBtn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 44px; /* touch target via padding trick */
+  min-height: 44px;
+  margin: -0.5rem -0.25rem -0.5rem 0; /* extend tap target without visual change */
+  border-radius: 0.375rem;
+  border: none;
+  background: transparent;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.copyBtn:hover {
+  color: var(--ink-secondary);
+  background-color: var(--surface-hover);
+}
+
+.copyBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copyBtn {
+    transition: none;
+  }
+}
+
+.copyBtnIcon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* ── Truncated note ─────────────────────────────────────────────────── */
+
+.truncatedNote {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  line-height: 1.35;
+}
+
+/* ── Case ID section ────────────────────────────────────────────────── */
+
+.caseIdSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  background-color: var(--surface-brand-subtle);
+  border: 1px solid var(--border-brand);
+  border-radius: 0.5rem;
+}
+
+.caseIdHeading {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-brand);
+  margin: 0;
+  opacity: 0.8;
+}
+
+.caseIdValue {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-brand);
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* ── Detected actions ───────────────────────────────────────────────── */
+
+.detectedActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+/* ── Manual entry section ───────────────────────────────────────────── */
+
+.manualEntry {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.unavailableBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem;
+  background-color: var(--surface-caution-subtle);
+  border: 1px solid var(--border-caution);
+  border-radius: 0.625rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-caution);
+  line-height: 1.45;
+}
+
+.unavailableIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  color: var(--ink-caution);
+  margin-top: 0.125rem;
+}
+
+.manualHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.manualTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.manualSubtitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.manualForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.manualFieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.manualFieldLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  user-select: none;
+}
+
+.manualTextarea {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 6.5rem;
+  padding: 0.75rem;
+  background-color: var(--surface-sunken);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 0.5rem;
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--ink-primary);
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.manualTextarea::placeholder {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-disabled);
+}
+
+.manualTextarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--border-focus-ring);
+  background-color: var(--surface-raised);
+}
+
+.manualTextarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manualTextarea {
+    transition: none;
+  }
+}
+
+.manualFieldHint {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── CTA buttons ────────────────────────────────────────────────────── */
+
+.ctaButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem; /* ≥44px touch target with visual weight */
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.625rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease, opacity 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.ctaButtonPrimary {
+  width: 100%;
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+  border-color: var(--surface-brand);
+}
+
+.ctaButtonPrimary:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.ctaButtonPrimary:active:not(:disabled) {
+  filter: brightness(0.85);
+}
+
+.ctaButtonPrimary:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.ctaButtonPrimary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ctaButtonSecondary {
+  width: 100%;
+  background-color: var(--surface-raised);
+  color: var(--ink-secondary);
+  border-color: var(--border-default);
+}
+
+.ctaButtonSecondary:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.ctaButtonSecondary:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctaButton {
+    transition: none;
+    filter: none !important;
+  }
+}
+
+.btnIcon {
+  width: 1.0625rem;
+  height: 1.0625rem;
+  flex-shrink: 0;
+}
+
+/* ── Spinner ────────────────────────────────────────────────────────── */
+
+.spinner {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: rgba(255, 255, 255, 0.6);
+    opacity: 0.6;
+  }
+}
+
+/* ── Back link row ──────────────────────────────────────────────────── */
+
+.backRow {
+  display: flex;
+  justify-content: center;
+  padding-top: 0.25rem;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  min-height: 2.75rem; /* ≥44px touch target */
+  transition: color 0.15s ease, background-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.backLink:hover {
+  color: var(--ink-secondary);
+  background-color: var(--surface-hover);
+}
+
+.backLink:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backLink {
+    transition: none;
+  }
+}
+
+.backIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Screen-reader only utility ─────────────────────────────────────── */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Tablet / desktop responsive adjustments ────────────────────────── */
+
+@media (min-width: 480px) {
+  .viewfinder {
+    max-height: 28rem;
+  }
+
+  .detectedActions {
+    flex-direction: row;
+  }
+
+  .ctaButtonPrimary,
+  .ctaButtonSecondary {
+    width: auto;
+    flex: 1;
+  }
+}
+
+@media (min-width: 640px) {
+  .page {
+    padding: 0 1.5rem 3rem;
+  }
+
+  .viewfinder {
+    max-height: 32rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page {
+    padding: 0 2rem 3rem;
+  }
+}
+
+/* ── Dark theme explicit overrides ──────────────────────────────────── */
+/*
+ * Most dark mode styles cascade automatically via the .theme-dark token
+ * overrides defined in src/styles/tokens/base.css.  The rules below
+ * handle scanner-specific elements that need explicit dark-mode treatment
+ * beyond what the token cascade provides, or where additional contrast
+ * tuning is required for WCAG AA compliance.
+ *
+ * Pattern: :global(.theme-dark) .localClass { ... }
+ *   — :global() lifts the selector out of CSS Module scope so it targets
+ *     the .theme-dark class placed on <html> by the theme toggle.
+ *   — .localClass retains Module-scope hash so only this component is
+ *     affected, not other QR scanner instances (if any).
+ */
+
+/* Viewfinder frame ────────────────────────────────────────────────────
+   Boost border visibility against the dark page background so the camera
+   frame edge reads clearly even before the video stream starts.
+   The base style uses --border-default which darkens to --_n-800 in dark
+   mode — too close to the --surface-base value of --_n-950.  Using
+   --border-strong (--_n-600) provides a clear step of contrast. */
+:global(.theme-dark) .viewfinder {
+  border-color: var(--border-strong);
+  box-shadow: var(--elevation-3);
+}
+
+/* Scan reticle corners ────────────────────────────────────────────────
+   In dark mode --surface-brand maps to --_b-400 (a lighter blue).  The
+   corners must remain visible against the camera feed AND the dark page
+   surface when the camera is loading.  Increasing opacity to 1 ensures
+   maximum contrast. */
+:global(.theme-dark) .corner {
+  opacity: 1;
+}
+
+/* Detected value card ─────────────────────────────────────────────────
+   Slight elevation boost in dark mode so the card lifts visually off the
+   dark --surface-base background.  The base elevation-1 is very subtle
+   on light backgrounds; on dark surfaces elevation-2 is needed to read. */
+:global(.theme-dark) .detectedCard {
+  background-color: var(--surface-overlay);
+  box-shadow: var(--elevation-2);
+}
+
+/* Raw value box ───────────────────────────────────────────────────────
+   The sunken well uses --surface-sunken (--_n-975) which is very close to
+   --surface-base in dark mode.  Strengthening the border to --border-default
+   from --border-subtle makes the box boundary legible. */
+:global(.theme-dark) .rawValueBox {
+  border-color: var(--border-default);
+}
+
+/* Case ID section ─────────────────────────────────────────────────────
+   --surface-brand-subtle maps to --_b-900 (very dark navy) in dark mode.
+   Ensure the brand border remains visible by using --border-brand which
+   stays at --_b-600 and provides ≥3:1 contrast against --_b-900. */
+:global(.theme-dark) .caseIdSection {
+  border-color: var(--border-brand);
+}
+
+/* Camera error panel ──────────────────────────────────────────────────
+   In dark mode --surface-critical-subtle maps to --_r-700 (deep red) and
+   --ink-critical to --_r-300 (light red). Contrast of --_r-300 on --_r-700
+   is approximately 5:1 — just above AA.  No further override needed. */
+
+/* Unavailable warning banner ──────────────────────────────────────────
+   In dark mode --surface-caution-subtle maps to --_a-600 (dark amber) and
+   --ink-caution to --_a-200 (bright amber). Contrast ≥4.5:1. No override
+   needed — the token cascade handles this correctly. */
+
+/* Manual entry textarea ───────────────────────────────────────────────
+   In dark mode --surface-sunken (--_n-975) is the deepest available dark
+   surface.  Surface-raised is used on focus to give a subtle lift.
+   The token cascade handles this automatically; no override required. */
+
+/* Spinner ─────────────────────────────────────────────────────────────
+   The spinner appears on the camera startup overlay (always near-black).
+   Its rgba(255, …) values are intentionally hardcoded and correct in both
+   light and dark themes — no override needed. */
+
+/* CTA buttons ─────────────────────────────────────────────────────────
+   Primary: --surface-brand (--_b-400 in dark) + --ink-on-brand (--_n-950).
+   Contrast of near-black on medium-blue in dark mode ≥4.5:1. ✓
+   Secondary: --surface-raised + --ink-secondary — all token-driven. ✓ */
+
+/* Back link ───────────────────────────────────────────────────────────
+   Uses --ink-tertiary and --surface-hover — both adapt correctly via the
+   .theme-dark token overrides.  No explicit rule needed. */

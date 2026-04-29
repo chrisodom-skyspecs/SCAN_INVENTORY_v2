@@ -50,6 +50,37 @@ export type ShipmentStatus =
   | "delivered"
   | "exception";
 
+// ─── Carrier event type ───────────────────────────────────────────────────────
+
+/**
+ * A single FedEx scan / tracking event.
+ *
+ * Shared by `ShipmentRecord.lastEvent`, `CaseCarrierStatus.lastCarrierEvent`,
+ * and the `lastCarrierEvent` / `lastEvent` fields in the Convex schema.
+ *
+ * Note: this is NOT the same as `FedExTrackingEvent` from convex/fedexClient.ts
+ * (which is a server-only type).  `CarrierTrackingEvent` is a plain-object type
+ * safe for client serialization and use in both Convex and browser contexts.
+ */
+export interface CarrierTrackingEvent {
+  /** ISO 8601 timestamp of the scan event (as returned by FedEx). */
+  timestamp: string;
+  /**
+   * Short FedEx event type code.
+   * Examples: "PU" = Picked Up, "IT" = In Transit, "OD" = Out for Delivery,
+   *           "DL" = Delivered, "SE" = Exception.
+   */
+  eventType: string;
+  /** Human-readable description of the event (e.g., "Package picked up"). */
+  description: string;
+  /** Location where the event occurred. */
+  location: {
+    city?: string;
+    state?: string;
+    country?: string;
+  };
+}
+
 /**
  * A normalised projection of a single shipment record.
  * All Convex ID fields are coerced to plain strings so this type is safe to
@@ -93,6 +124,14 @@ export interface ShipmentRecord {
   // ── Timestamps ────────────────────────────────────────────────────────────
   /** ISO date string for the FedEx estimated delivery date. */
   estimatedDelivery?: string;
+
+  /**
+   * Most recent FedEx scan event for this shipment.
+   * Populated by `updateShipmentStatus` on each FedEx tracking poll.
+   * Undefined when no tracking events have occurred yet (label_created, no scan).
+   */
+  lastEvent?: CarrierTrackingEvent;
+
   /** Epoch ms when the shipment was recorded by the SCAN app operator. */
   shippedAt?: number;
   /** Epoch ms when FedEx confirmed delivery. Populated by updateShipmentStatus. */
@@ -100,6 +139,79 @@ export interface ShipmentRecord {
   /** Epoch ms when this row was created. */
   createdAt: number;
   /** Epoch ms when this row was last updated. */
+  updatedAt: number;
+}
+
+// ─── CaseCarrierStatus ────────────────────────────────────────────────────────
+
+/**
+ * FedEx carrier tracking summary denormalized on a case record.
+ *
+ * This is the return type of `getCaseCarrierStatus` (convex/shipping.ts) and
+ * the value shape returned by `useCaseCarrierStatus` (src/hooks/use-shipment-status.ts).
+ *
+ * All three carrier tracking fields (`carrierStatus`, `estimatedDelivery`,
+ * `lastCarrierEvent`) are read directly from the `cases` document in a single
+ * O(1) `ctx.db.get(caseId)` call — no join to the `shipments` table required.
+ *
+ * These fields are written by `updateShipmentStatus` (internal mutation in
+ * convex/shipping.ts) on each FedEx tracking poll.  Convex re-evaluates all
+ * subscribed `getCaseCarrierStatus` queries within ~100–300 ms of any
+ * `updateShipmentStatus` call, satisfying the ≤ 2-second real-time fidelity
+ * requirement for the T3/T4/M4 tracking views.
+ *
+ * Use cases:
+ *   - T3 Inspection panel: "In Transit — Out for Delivery" banner
+ *   - T4 Shipping panel: carrier status badge and estimated delivery chip
+ *   - M4 Logistics map: carrier status for in-transit pin tooltips
+ *   - SCAN app shipping screen: live carrier status after manual refresh
+ */
+export interface CaseCarrierStatus {
+  /** Convex document ID of the case (plain string). */
+  caseId: string;
+  /** Human-readable case label (e.g., "CASE-001"). */
+  caseLabel: string;
+  /** Current case lifecycle status (e.g., "transit_out", "transit_in"). */
+  caseStatus: string;
+
+  // ── Denormalized tracking identifier (from cases row) ─────────────────────
+  /**
+   * FedEx tracking number.  Undefined when the case has never been shipped
+   * or before the SCAN app operator enters a tracking number.
+   */
+  trackingNumber?: string;
+  /**
+   * Carrier name — always "FedEx" at current implementation.
+   * Undefined when the case has never been shipped.
+   */
+  carrier?: string;
+
+  // ── Carrier tracking status (denormalized from FedEx via updateShipmentStatus) ─
+  /**
+   * Normalized FedEx carrier tracking status.
+   * Values: "label_created" | "picked_up" | "in_transit" | "out_for_delivery"
+   *        | "delivered" | "exception"
+   * Undefined until the first FedEx tracking poll completes.
+   */
+  carrierStatus?: string;
+
+  /**
+   * Estimated delivery date as an ISO 8601 date-time string.
+   * Sourced from the FedEx Track API on each tracking refresh.
+   * Undefined when FedEx has not yet provided an ETA.
+   */
+  estimatedDelivery?: string;
+
+  /**
+   * Most recent FedEx scan / tracking event for this case.
+   * Undefined when no FedEx scan events have been recorded yet.
+   */
+  lastCarrierEvent?: CarrierTrackingEvent;
+
+  // ── Timestamps ────────────────────────────────────────────────────────────
+  /** Epoch ms when the shipment was recorded by the SCAN app operator. */
+  shippedAt?: number;
+  /** Epoch ms when the case record was last mutated. */
   updatedAt: number;
 }
 
@@ -124,6 +236,11 @@ export interface RawShipmentRow {
   currentLat?: number;
   currentLng?: number;
   estimatedDelivery?: string;
+  /**
+   * Most recent FedEx scan event — matches the `lastEvent` field in the schema.
+   * Populated by `updateShipmentStatus` on each FedEx tracking poll.
+   */
+  lastEvent?: CarrierTrackingEvent;
   shippedAt?: number;
   deliveredAt?: number;
   createdAt: number;
@@ -243,6 +360,7 @@ export function projectShipment(row: RawShipmentRow): ShipmentRecord {
     currentLat:       row.currentLat,
     currentLng:       row.currentLng,
     estimatedDelivery: row.estimatedDelivery,
+    lastEvent:        row.lastEvent,
     shippedAt:        row.shippedAt,
     deliveredAt:      row.deliveredAt,
     createdAt:        row.createdAt,

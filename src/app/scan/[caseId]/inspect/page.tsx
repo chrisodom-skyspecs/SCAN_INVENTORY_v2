@@ -8,6 +8,17 @@
  * detail view (/scan/[caseId]), or navigates here directly after starting
  * an inspection via the Check In flow.
  *
+ * Role gating
+ * ───────────
+ * Inspection requires the `technician` role (or `admin`).  Pilots do NOT
+ * have the INSPECTION_START, INSPECTION_UPDATE_ITEM, or INSPECTION_COMPLETE
+ * operations in the RBAC permission matrix (convex/rbac.ts).
+ *
+ * The ScanRoleGate client component reads the user's role from the Kinde
+ * JWT access token and renders an "Access Restricted" view for pilots before
+ * the ScanInspectClient is mounted — preventing any mutation attempt.  The
+ * Convex mutations themselves also enforce RBAC server-side as defence-in-depth.
+ *
  * What happens on each checklist item update
  * ──────────────────────────────────────────
  * The ScanInspectClient calls `api.scan.updateChecklistItem` via
@@ -45,6 +56,7 @@
 
 import type { Metadata } from "next";
 import { ScanInspectClient } from "./ScanInspectClient";
+import { ScanRoleGate } from "@/components/ScanRoleGate";
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 
@@ -60,9 +72,17 @@ interface PageProps {
 
 /**
  * Server component: resolves async params, renders the interactive
- * checklist inspection client.
+ * checklist inspection client wrapped in a role gate.
+ *
+ * The ScanRoleGate ensures only technicians (and admins) can reach
+ * ScanInspectClient.  Pilots see an "Access Restricted" view with a
+ * "Back to Case" navigation link instead.
  */
 export default async function ScanInspectPage({ params }: PageProps) {
   const { caseId } = await params;
-  return <ScanInspectClient caseId={caseId} />;
+  return (
+    <ScanRoleGate require="technician" caseId={caseId}>
+      <ScanInspectClient caseId={caseId} />
+    </ScanRoleGate>
+  );
 }

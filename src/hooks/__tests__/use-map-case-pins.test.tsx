@@ -116,11 +116,14 @@ describe("normaliseM1Pins", () => {
 
   it("preserves status for all CaseStatus values", () => {
     const statuses = [
+      "hangar",
       "assembled",
+      "transit_out",
       "deployed",
-      "in_field",
-      "shipping",
-      "returned",
+      "flagged",
+      "transit_in",
+      "received",
+      "archived",
     ] as const;
 
     for (const status of statuses) {
@@ -196,8 +199,8 @@ describe("useMapCasePins", () => {
 
   it("returns normalised pins and summary when data is available", () => {
     const casePins = [
-      makeCasePin("id1", { status: "in_field", lat: 40.0, lng: -75.0 }),
-      makeCasePin("id2", { status: "deployed", lat: 41.0, lng: -76.0 }),
+      makeCasePin("id1", { status: "deployed", lat: 40.0, lng: -75.0 }),
+      makeCasePin("id2", { status: "flagged",  lat: 41.0, lng: -76.0 }),
     ];
     mockUseQuery.mockReturnValue(makeM1Response(casePins));
 
@@ -206,11 +209,11 @@ describe("useMapCasePins", () => {
     expect(result.current.isLoading).toBe(false);
     expect(result.current.pins).toHaveLength(2);
     expect(result.current.pins[0].caseId).toBe("id1");
-    expect(result.current.pins[0].status).toBe("in_field");
+    expect(result.current.pins[0].status).toBe("deployed");
     expect(result.current.pins[1].caseId).toBe("id2");
     expect(result.current.summary?.total).toBe(2);
-    expect(result.current.summary?.byStatus["in_field"]).toBe(1);
     expect(result.current.summary?.byStatus["deployed"]).toBe(1);
+    expect(result.current.summary?.byStatus["flagged"]).toBe(1);
   });
 
   it("returns isLoading=false and empty pins when data is an empty fleet", () => {
@@ -277,11 +280,11 @@ describe("useMapCasePins", () => {
   it("forwards status filter to useQuery", () => {
     mockUseQuery.mockReturnValue(undefined);
 
-    renderHook(() => useMapCasePins({ status: ["in_field", "deployed"] }));
+    renderHook(() => useMapCasePins({ status: ["deployed", "flagged"] }));
 
     expect(mockUseQuery).toHaveBeenCalledWith(
       MOCK_QUERY_REF,
-      expect.objectContaining({ status: ["in_field", "deployed"] })
+      expect.objectContaining({ status: ["deployed", "flagged"] })
     );
   });
 
@@ -372,14 +375,14 @@ describe("useMapCasePins", () => {
     const casePins = [
       makeCasePin("s1", { status: "assembled" }),
       makeCasePin("s2", { status: "assembled" }),
-      makeCasePin("s3", { status: "shipping" }),
+      makeCasePin("s3", { status: "transit_out" }),
     ];
     mockUseQuery.mockReturnValue(makeM1Response(casePins));
 
     const { result } = renderHook(() => useMapCasePins());
 
     expect(result.current.summary?.byStatus["assembled"]).toBe(2);
-    expect(result.current.summary?.byStatus["shipping"]).toBe(1);
+    expect(result.current.summary?.byStatus["transit_out"]).toBe(1);
   });
 
   // ── All combined args ────────────────────────────────────────────────────
@@ -390,7 +393,7 @@ describe("useMapCasePins", () => {
     renderHook(() =>
       useMapCasePins({
         bounds: { swLat: 30, swLng: -100, neLat: 50, neLng: -80 },
-        status: ["in_field"],
+        status: ["deployed"],
         assigneeId: "tech_01",
         missionId: "mission_01",
       })
@@ -403,7 +406,7 @@ describe("useMapCasePins", () => {
         swLng: -100,
         neLat: 50,
         neLng: -80,
-        status: ["in_field"],
+        status: ["deployed"],
         assigneeId: "tech_01",
         missionId: "mission_01",
       })

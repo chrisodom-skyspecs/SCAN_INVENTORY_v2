@@ -64,8 +64,21 @@
  */
 
 import { mutation, query } from "./_generated/server";
+import type { Auth, UserIdentity } from "convex/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+
+async function requireAuth(ctx: { auth: Auth }): Promise<UserIdentity> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error(
+      "[AUTH_REQUIRED] Unauthenticated. Provide a valid Kinde access token."
+    );
+  }
+  return identity;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -299,6 +312,7 @@ function buildDamageReport(
 export const getDamageReportsByCase = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args): Promise<DamageReport[]> => {
+    await requireAuth(ctx);
     // Load damaged manifest items and damage events in parallel.
     const [caseDoc, itemRows, eventRows] = await Promise.all([
       ctx.db.get(args.caseId),
@@ -390,6 +404,7 @@ export const getDamageReportsByCase = query({
 export const getDamageReportEvents = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args): Promise<DamageReportEvent[]> => {
+    await requireAuth(ctx);
     const eventRows = await ctx.db
       .query("events")
       .withIndex("by_case_timestamp", (q) => q.eq("caseId", args.caseId))
@@ -464,6 +479,7 @@ export const getDamageReportEventsByRange = query({
     toTimestamp: v.number(),
   },
   handler: async (ctx, args): Promise<DamageReportEvent[]> => {
+    await requireAuth(ctx);
     // Guard: empty range — return immediately without hitting the DB.
     if (args.fromTimestamp > args.toTimestamp) return [];
 
@@ -522,6 +538,7 @@ export const getDamageReportEventsByRange = query({
 export const getDamageReportSummary = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args): Promise<DamageReportSummary> => {
+    await requireAuth(ctx);
     const itemRows = await ctx.db
       .query("manifestItems")
       .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
@@ -582,15 +599,19 @@ export const listAllDamageReports = query({
   args: {
     caseStatus: v.optional(
       v.union(
+        v.literal("hangar"),
         v.literal("assembled"),
+        v.literal("transit_out"),
         v.literal("deployed"),
-        v.literal("in_field"),
-        v.literal("shipping"),
-        v.literal("returned")
+        v.literal("flagged"),
+        v.literal("transit_in"),
+        v.literal("received"),
+        v.literal("archived")
       )
     ),
   },
   handler: async (ctx, args): Promise<DamageReport[]> => {
+    await requireAuth(ctx);
     // Load cases, all damaged manifest items, and damage events in parallel.
     const [caseRows, itemRows, eventRows] = await Promise.all([
       // Load cases — filtered by status if provided, otherwise all cases.
@@ -731,6 +752,7 @@ export const getDamagePhotoReportsByRange = query({
     toTimestamp: v.number(),
   },
   handler: async (ctx, args): Promise<DamagePhotoReport[]> => {
+    await requireAuth(ctx);
     // Guard: empty range — return immediately without hitting the DB.
     if (args.fromTimestamp > args.toTimestamp) return [];
 
@@ -844,6 +866,7 @@ export const submitDamagePhoto = mutation({
   args: {
     /** Convex ID of the case being photographed. */
     caseId:          v.id("cases"),
+    // Note: requireAuth is called inside handler below
 
     /**
      * Convex file storage ID for the uploaded damage photo.
@@ -904,6 +927,7 @@ export const submitDamagePhoto = mutation({
   },
 
   handler: async (ctx, args): Promise<SubmitDamagePhotoResult> => {
+    await requireAuth(ctx);
     const now = args.reportedAt;
 
     // ── Verify case exists ────────────────────────────────────────────────────
@@ -1076,6 +1100,7 @@ export const submitDamagePhoto = mutation({
 export const generateDamagePhotoUploadUrl = mutation({
   args: {},
   handler: async (ctx): Promise<string> => {
+    await requireAuth(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -1112,6 +1137,7 @@ export const generateDamagePhotoUploadUrl = mutation({
 export const getDamagePhotoReports = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args): Promise<DamagePhotoReport[]> => {
+    await requireAuth(ctx);
     const rows = await ctx.db
       .query("damage_reports")
       .withIndex("by_case_reported_at", (q) => q.eq("caseId", args.caseId))
@@ -1131,5 +1157,181 @@ export const getDamagePhotoReports = query({
       reportedByName:  row.reportedByName,
       notes:           row.notes,
     }));
+  },
+});
+
+// ─── getDamagePhotoReportsWithUrls ───────────────────────────────────────────
+
+/**
+ * A single damage photo report with a server-resolved temporary download URL.
+ *
+ * Extends DamagePhotoReport with `photoUrl` — the resolved temporary download
+ * URL produced by `ctx.storage.getUrl(photoStorageId)`.  This URL is safe to
+ * use directly in an `<img src={...} />` element without any additional fetch.
+ *
+ * `photoUrl` is `null` when the storage object has been deleted or the ID is
+ * invalid; components should fall back to a placeholder in that case.
+ *
+ * URLs expire after ~1 hour.  Because Convex re-runs subscribed queries whenever
+ * the `damage_reports` table changes, URLs are refreshed automatically as part
+ * of the real-time subscription — no manual refetch required.
+ */
+export interface DamagePhotoReportWithUrl extends DamagePhotoReport {
+  /**
+   * Temporary download URL resolved server-side via ctx.storage.getUrl().
+   * Null when the storage object cannot be resolved (deleted or invalid ID).
+   */
+  photoUrl: string | null;
+}
+
+/**
+ * Subscribe to all damage photo reports for a case, with server-resolved URLs.
+ *
+ * Returns every row from the `damage_reports` table for the given case with
+ * `photoUrl` pre-resolved server-side via `ctx.storage.getUrl()`.  Photos are
+ * sorted by reportedAt descending (most recent photo first).
+ *
+ * The resolved URL is ready to use directly in `<img src={photoUrl} />` on the
+ * client without any additional fetch.  It is a temporary signed URL valid for
+ * approximately 1 hour.
+ *
+ * URL resolution strategy:
+ *   Storage IDs are resolved in parallel via Promise.all to avoid sequential
+ *   await chains (N+1 storage lookups).  For cases with many photos, this keeps
+ *   query latency proportional to the single slowest getUrl() call.
+ *
+ * Real-time fidelity (≤ 2 seconds):
+ *   Convex re-evaluates this query and pushes the diff to all subscribers within
+ *   ~100–300 ms whenever `submitDamagePhoto` inserts a new `damage_reports` row.
+ *   The T3 inspection panel receives the new photo (with resolved URL and
+ *   annotation data) without any user action — satisfying the ≤ 2-second
+ *   real-time fidelity SLA.
+ *
+ * Returns an empty array when no photos have been submitted for the case.
+ * Returns an empty array when the caseId is invalid.
+ *
+ * Client usage:
+ *   const photos = useQuery(api.damageReports.getDamagePhotoReportsWithUrls, {
+ *     caseId,
+ *   });
+ *   if (photos === undefined) return <PhotoSkeleton />;
+ *   return photos.map((photo) => (
+ *     <img src={photo.photoUrl ?? "/placeholder.png"} alt="Damage evidence" />
+ *   ));
+ */
+export const getDamagePhotoReportsWithUrls = query({
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, args): Promise<DamagePhotoReportWithUrl[]> => {
+    await requireAuth(ctx);
+
+    // Load all damage_reports rows for this case, ordered newest-first.
+    // The compound index by_case_reported_at handles both the equality predicate
+    // and the descending sort in O(log n + |results|).
+    const rows = await ctx.db
+      .query("damage_reports")
+      .withIndex("by_case_reported_at", (q) => q.eq("caseId", args.caseId))
+      .order("desc")
+      .collect();
+
+    // Resolve all storage IDs to download URLs in parallel.
+    // Promise.all avoids sequential awaits — URL resolution is O(1) latency-wise
+    // (bounded by the slowest single getUrl() call, not N × getUrl()).
+    const resolved = await Promise.all(
+      rows.map(async (row) => {
+        const photoUrl = await ctx.storage.getUrl(row.photoStorageId);
+        return {
+          id:             row._id.toString(),
+          caseId:         row.caseId.toString(),
+          photoStorageId: row.photoStorageId,
+          photoUrl,                                              // null if deleted
+          annotations:    (row.annotations ?? []) as DamagePhotoAnnotation[],
+          severity:       row.severity,
+          reportedAt:     row.reportedAt,
+          manifestItemId: row.manifestItemId?.toString(),
+          templateItemId: row.templateItemId,
+          reportedById:   row.reportedById,
+          reportedByName: row.reportedByName,
+          notes:          row.notes,
+        };
+      })
+    );
+
+    return resolved;
+  },
+});
+
+// ─── getDamagePhotoReportsByRangeWithUrls ────────────────────────────────────
+
+/**
+ * Subscribe to damage photo reports within a timestamp range, with resolved URLs.
+ *
+ * Timestamp-range companion to `getDamagePhotoReportsWithUrls`.  Returns
+ * `damage_reports` rows whose `reportedAt` falls within the inclusive
+ * [fromTimestamp, toTimestamp] window (epoch ms), each with `photoUrl` resolved
+ * server-side.  Results are sorted by reportedAt descending.
+ *
+ * Index path: `damage_reports.by_case_reported_at` — the compound index on
+ * ["caseId", "reportedAt"] enables an O(log n + |range|) seek.
+ *
+ * Convex re-runs this query and pushes the diff to all subscribers within
+ * ~100–300 ms whenever `submitDamagePhoto` inserts a new row whose `reportedAt`
+ * falls inside the subscribed window.
+ *
+ * Returns an empty array when:
+ *   • No photos exist within the window for the case.
+ *   • The caseId is invalid.
+ *   • fromTimestamp > toTimestamp (empty range guard).
+ *
+ * Client usage:
+ *   const photos = useQuery(
+ *     api.damageReports.getDamagePhotoReportsByRangeWithUrls,
+ *     { caseId, fromTimestamp: shiftStart, toTimestamp: shiftEnd },
+ *   );
+ */
+export const getDamagePhotoReportsByRangeWithUrls = query({
+  args: {
+    caseId:        v.id("cases"),
+    fromTimestamp: v.number(),
+    toTimestamp:   v.number(),
+  },
+  handler: async (ctx, args): Promise<DamagePhotoReportWithUrl[]> => {
+    await requireAuth(ctx);
+
+    // Guard: empty range — return immediately without hitting storage.
+    if (args.fromTimestamp > args.toTimestamp) return [];
+
+    const rows = await ctx.db
+      .query("damage_reports")
+      .withIndex("by_case_reported_at", (q) => q.eq("caseId", args.caseId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("reportedAt"), args.fromTimestamp),
+          q.lte(q.field("reportedAt"), args.toTimestamp),
+        )
+      )
+      .order("desc")
+      .collect();
+
+    const resolved = await Promise.all(
+      rows.map(async (row) => {
+        const photoUrl = await ctx.storage.getUrl(row.photoStorageId);
+        return {
+          id:             row._id.toString(),
+          caseId:         row.caseId.toString(),
+          photoStorageId: row.photoStorageId,
+          photoUrl,
+          annotations:    (row.annotations ?? []) as DamagePhotoAnnotation[],
+          severity:       row.severity,
+          reportedAt:     row.reportedAt,
+          manifestItemId: row.manifestItemId?.toString(),
+          templateItemId: row.templateItemId,
+          reportedById:   row.reportedById,
+          reportedByName: row.reportedByName,
+          notes:          row.notes,
+        };
+      })
+    );
+
+    return resolved;
   },
 });

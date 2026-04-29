@@ -19,9 +19,11 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  width: 100%;
   max-width: 42rem;
   margin: 0 auto;
   padding: 0 1rem 4rem;
+  box-sizing: border-box;
 }
 
 /* ── Page header ────────────────────────────────────────────────────── */
@@ -633,6 +635,42 @@
   margin: 0;
   max-width: 28rem;
   line-height: 1.5;
+}
+
+/* ── Tablet / desktop responsive adjustments ────────────────────────── */
+
+@media (min-width: 640px) {
+  .page {
+    padding: 0 1.5rem 4rem;
+  }
+
+  /* Status grid: try 2-up and then auto-fill on wider displays */
+  .statusGrid {
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  }
+
+  /* Submit row: constrain buttons to content width on wider screens */
+  .submitRow {
+    justify-content: flex-end;
+  }
+
+  .submitRow > * {
+    flex: 0 1 auto;
+    min-width: 10rem;
+  }
+
+  /* Success actions: switch to horizontal row */
+  .successActions {
+    flex-direction: row;
+    justify-content: center;
+    max-width: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page {
+    padding: 0 2rem 4rem;
+  }
 }
 
 /* ── Success view ───────────────────────────────────────────────────── */

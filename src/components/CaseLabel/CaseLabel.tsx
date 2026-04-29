@@ -51,6 +51,7 @@
 
 import * as React from "react";
 import { StatusPill, type StatusKind } from "../StatusPill";
+import "./CaseLabel.print.css";
 import styles from "./CaseLabel.module.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -118,6 +119,13 @@ export interface CaseLabelData {
   locationName?: string;
 
   /**
+   * Case creation date (ISO 8601 string or Date object, optional).
+   * Rendered in the metadata fields as "Created YYYY-MM-DD".
+   * Typically sourced from the Convex `cases._creationTime` field.
+   */
+  createdAt?: string | Date;
+
+  /**
    * Short operational note (optional).
    * Clamped to 2 lines on the label — keep under 120 characters.
    */
@@ -165,15 +173,30 @@ export interface CaseLabelProps {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Format a Date as ISO date (YYYY-MM-DD) for the printed-at field.
+ * Format a Date as ISO date (YYYY-MM-DD).
  * Intentionally does not use locale formatting so it reads unambiguously
  * on labels that may be scanned internationally.
  */
-function formatPrintDate(date: Date): string {
+function formatIsoDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+/** @deprecated Use formatIsoDate directly. Kept for backward compat. */
+const formatPrintDate = formatIsoDate;
+
+/**
+ * Coerce a `createdAt` value (ISO string or Date) to a formatted "YYYY-MM-DD"
+ * string suitable for display on a printed label. Returns `undefined` when the
+ * input is falsy or cannot be parsed into a valid date.
+ */
+function formatCreatedAt(createdAt: string | Date | undefined): string | undefined {
+  if (!createdAt) return undefined;
+  const d = createdAt instanceof Date ? createdAt : new Date(createdAt);
+  if (isNaN(d.getTime())) return undefined;
+  return formatIsoDate(d);
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -324,6 +347,15 @@ export function CaseLabel({
                 <div className={styles.field}>
                   <dt className={styles.fieldLabel}>Location</dt>
                   <dd className={styles.fieldValue}>{data.locationName}</dd>
+                </div>
+              )}
+
+              {formatCreatedAt(data.createdAt) && (
+                <div className={styles.field}>
+                  <dt className={styles.fieldLabel}>Created</dt>
+                  <dd className={styles.fieldValue}>
+                    {formatCreatedAt(data.createdAt)}
+                  </dd>
                 </div>
               )}
 

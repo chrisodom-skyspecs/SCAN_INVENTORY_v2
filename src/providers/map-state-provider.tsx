@@ -47,16 +47,19 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import type { MapUrlState } from "@/types/map";
 import { MAP_URL_STATE_DEFAULTS } from "@/types/map";
 import {
+  decodeMapUrlState,
   mergeMapUrlState,
   sanitizeMapDeepLink,
 } from "@/lib/map-url-params";
@@ -151,19 +154,27 @@ export function MapStateProvider({
   children,
   defaultPathname = "/inventory",
 }: MapStateProviderProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // ── URL state: derived from URL on each render ──────────────────────
-  // `useSearchParams()` returns a stable reference that only changes when
-  // the URL query string changes.  Memoising with it as a dependency means
-  // `urlState` is recomputed only when the URL actually changes.
+  // ── URL state: owned locally, initialised from the URL at mount ─────
   //
-  // `sanitizeMapDeepLink` is used instead of `decodeMapUrlState` so that:
-  //   • Invalid / malformed params are sanitized before hydration.
-  //   • Dev-mode warnings surface URL-tampering or stale bookmarks.
-  const urlState = useMemo(() => {
+  // Sub-AC 3 (AC 110103): The write path uses window.history.replaceState
+  // instead of router.replace so that map state changes don't trigger a
+  // Next.js navigation event.  Because history.replaceState does NOT update
+  // useSearchParams(), the URL state must be held in a local useState so
+  // that React re-renders are triggered by the write path.
+  //
+  // Read path:
+  //   On mount, state is initialised by decoding the URL params from
+  //   useSearchParams() via sanitizeMapDeepLink.
+  //   A popstate listener (registered in a useEffect below) re-hydrates
+  //   state when the browser Back/Forward buttons are pressed.
+  //
+  // Write path:
+  //   setUrlState() → encodes via mergeMapUrlState → history.replaceState
+  //   → setUrlStateInternal() to trigger React re-renders.
+  const [urlState, setUrlStateInternal] = useState<MapUrlState>(() => {
     const { state, warnings } = sanitizeMapDeepLink(searchParams);
     if (process.env.NODE_ENV === "development" && warnings.length > 0) {
       warnings.forEach((w) =>
@@ -171,8 +182,32 @@ export function MapStateProvider({
       );
     }
     return state;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams.toString()]);
+  });
+
+  // ── Popstate listener (browser back/forward navigation) ─────────────
+  // history.replaceState / pushState entries (written by setUrlState) do
+  // NOT go through the Next.js router, so useSearchParams() is not updated
+  // when the user presses Back or Forward.  This effect re-reads
+  // window.location.search directly in the popstate handler.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    function handlePopstate(): void {
+      const params = new URLSearchParams(window.location.search);
+      const { state, warnings } = sanitizeMapDeepLink(params);
+
+      if (process.env.NODE_ENV === "development" && warnings.length > 0) {
+        warnings.forEach((w) =>
+          console.warn("[MapStateProvider] popstate sanitization:", w)
+        );
+      }
+
+      setUrlStateInternal(state);
+    }
+
+    window.addEventListener("popstate", handlePopstate);
+    return () => window.removeEventListener("popstate", handlePopstate);
+  }, []);
 
   // ── Ephemeral state ─────────────────────────────────────────────────
   const [ephemeral, dispatchEphemeral] = useReducer(
@@ -181,12 +216,9 @@ export function MapStateProvider({
   );
 
   // ── Stable refs for mutable-but-non-reactive values ────────────────
-  // Using refs for router, pathname, and urlState lets all callbacks stay
-  // stable across renders.  The values they close over are always current
-  // because the ref is updated synchronously on every render.
-  const routerRef = useRef(router);
-  routerRef.current = router;
-
+  // Using refs for pathname and urlState lets all callbacks stay stable
+  // across renders.  The values they close over are always current because
+  // the ref is updated synchronously on every render.
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
 
@@ -199,6 +231,8 @@ export function MapStateProvider({
   urlStateRef.current = urlState;
 
   // ── setUrlState ─────────────────────────────────────────────────────
+  // Sub-AC 3: encode via mergeMapUrlState → write via history.replaceState
+  // (no navigation side-effects) → update local React state.
   const setUrlState = useCallback(
     (
       patch: Partial<MapUrlState>,
@@ -206,7 +240,11 @@ export function MapStateProvider({
     ): void => {
       const { replace = true, pathname: pathnameOverride } = options;
 
+      // ── Encode ──────────────────────────────────────────────────────
+      // mergeMapUrlState wraps encodeMapUrlState; only non-default params
+      // are included, keeping the URL minimal and shareable.
       const merged = mergeMapUrlState(urlStateRef.current, patch);
+
       const resolvedPathname =
         pathnameOverride ??
         pathnameRef.current ??
@@ -215,11 +253,20 @@ export function MapStateProvider({
       const qs = merged.toString();
       const url = qs ? `${resolvedPathname}?${qs}` : resolvedPathname;
 
-      if (replace) {
-        routerRef.current.replace(url);
-      } else {
-        routerRef.current.push(url);
+      // ── Write to browser history (no navigation side-effects) ────────
+      if (typeof window !== "undefined") {
+        if (replace) {
+          window.history.replaceState(null, "", url);
+        } else {
+          window.history.pushState(null, "", url);
+        }
       }
+
+      // ── Update React state ───────────────────────────────────────────
+      // history.replaceState does not update useSearchParams(), so we
+      // propagate the change through local state to trigger re-renders.
+      const newState = decodeMapUrlState(merged);
+      setUrlStateInternal(newState);
     },
     // No deps: all values are accessed via refs which are always current.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,11 +288,17 @@ export function MapStateProvider({
       const resolvedPathname =
         pathnameRef.current ?? defaultPathnameRef.current;
 
-      if (replace) {
-        routerRef.current.replace(resolvedPathname);
-      } else {
-        routerRef.current.push(resolvedPathname);
+      // Write bare pathname (no query string = all defaults)
+      if (typeof window !== "undefined") {
+        if (replace) {
+          window.history.replaceState(null, "", resolvedPathname);
+        } else {
+          window.history.pushState(null, "", resolvedPathname);
+        }
       }
+
+      // Reset local state to defaults
+      setUrlStateInternal(MAP_URL_STATE_DEFAULTS);
     },
     // No deps: all values accessed via stable refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -33,15 +33,18 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useQuery } from "convex/react";
-import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import {
   useFedExTracking,
   type ShipmentRecord,
   type LiveTrackingResult,
 } from "../../../../hooks/use-fedex-tracking";
+import { useScanCaseDetail } from "../../../../hooks/use-scan-queries";
 import { useShipCase } from "../../../../hooks/use-scan-mutations";
+import { useKindeUser } from "../../../../hooks/use-kinde-user";
+import { useServerStateReconciliation } from "../../../../hooks/use-server-state-reconciliation";
 import { StatusPill } from "../../../../components/StatusPill";
+import { ReconciliationBanner } from "../../../../components/ReconciliationBanner";
 import { trackEvent } from "../../../../lib/telemetry.lib";
 import { TelemetryEventName } from "../../../../types/telemetry.types";
 import styles from "./page.module.css";
@@ -179,6 +182,14 @@ function TrackingEntryForm({
   //   depend on.  shipCase satisfies the ≤ 2-second real-time fidelity requirement
   //   for ALL dashboard query families simultaneously.
   const shipCase = useShipCase();
+  const { id: userId, name: userName } = useKindeUser();
+
+  // ── Sub-AC 2c: Server-state reconciliation ───────────────────────────────
+  // The optimistic update in useShipCase() predicts the new case status
+  // (transit_out for outbound-eligible statuses; transit_in otherwise).
+  // If another user concurrently changed the case status, the server may
+  // have derived a different transit direction.  Divergence is surfaced here.
+  const reconciliation = useServerStateReconciliation();
 
   const [trackingNumber, setTrackingNumber] = useState("");
   const [originName, setOriginName] = useState("");
@@ -205,6 +216,19 @@ function TrackingEntryForm({
       setIsSubmitting(true);
       setSubmitError(null);
 
+      // ── Sub-AC 2c: Track optimistic prediction before mutation ──────────────
+      // The optimistic update in useShipCase() predicts one of:
+      //   "transit_out" — if the case was in hangar/assembled/received
+      //   "transit_in"  — if the case was in any other status
+      //
+      // We record the carrier as "FedEx" (always for this form) and the
+      // tracking number so we can detect if the server normalised either.
+      const mutationId = `ship-${tn}-${Date.now()}`;
+      reconciliation.trackMutation(mutationId, {
+        trackingNumber: tn,
+        carrier:        "FedEx",
+      });
+
       try {
         // shipCase writes through Convex to both the cases table (denormalized
         // tracking fields) and the shipments table (full record), then appends
@@ -219,16 +243,23 @@ function TrackingEntryForm({
         //   • INVENTORY dashboard subscriptions (cases + shipments table reads):
         //     M1 fleet overview, M4 logistics map, T3/T4 case detail panels
         //
-        // Hard-coded placeholder user — replace with Kinde auth context
-        await shipCase({
-          caseId,
+        const result = await shipCase({
+          caseId:         caseId as Id<"cases">,
           trackingNumber: tn,
-          userId: "scan-user",
-          userName: "Field Technician",
+          userId,
+          userName,
           carrier: "FedEx",
           originName: originName.trim() || undefined,
           destinationName: destinationName.trim() || undefined,
           notes: notes.trim() || undefined,
+        });
+
+        // ── Sub-AC 2c: Confirm against server result ────────────────────────
+        // result.trackingNumber is the normalised tracking number the server
+        // stored; result.carrier is what the server persisted.
+        reconciliation.confirmMutation(mutationId, {
+          trackingNumber: result.trackingNumber,
+          carrier:        result.carrier,
         });
 
         // ── Telemetry: FedEx label generation / shipment recorded (spec §23) ──
@@ -244,7 +275,7 @@ function TrackingEntryForm({
           success: true,
           carrier: "FedEx",
           trackingNumber: tn,
-          initiatingUserId: "scan-user",
+          initiatingUserId: userId,
         });
 
         // The Convex reactive subscription (`listShipmentsByCase`) will update
@@ -252,6 +283,9 @@ function TrackingEntryForm({
         // show the confirmation briefly before Convex flips the UI.
         onSuccess();
       } catch (err) {
+        // ── Sub-AC 2c: Cancel pending record — Convex rolled back ──────────
+        reconciliation.cancelMutation(mutationId);
+
         setSubmitError(
           err instanceof Error
             ? err.message
@@ -261,7 +295,7 @@ function TrackingEntryForm({
         setIsSubmitting(false);
       }
     },
-    [caseId, shipCase, trackingNumber, originName, destinationName, notes, onSuccess]
+    [caseId, shipCase, trackingNumber, originName, destinationName, notes, onSuccess, userId, userName, reconciliation]
   );
 
   return (
@@ -386,6 +420,21 @@ function TrackingEntryForm({
             </svg>
             <span>{submitError}</span>
           </div>
+        )}
+
+        {/* ── Reconciliation banners (Sub-AC 2c) ──────────────────────── */}
+        {reconciliation.isStale && !reconciliation.hasDivergence && (
+          <ReconciliationBanner
+            stale
+            staleSince={reconciliation.staleSince}
+            onDismiss={reconciliation.dismiss}
+          />
+        )}
+        {reconciliation.hasDivergence && (
+          <ReconciliationBanner
+            divergedFields={reconciliation.divergedFields}
+            onDismiss={reconciliation.dismiss}
+          />
         )}
 
         {/* Submit */}
@@ -757,7 +806,10 @@ function ShipmentHistory({ shipments, activeId }: ShipmentHistoryProps) {
  */
 export function ScanShipmentClient({ caseId }: ScanShipmentClientProps) {
   // ── Case document ─────────────────────────────────────────────────────────
-  const caseDoc = useQuery(api.cases.getCaseById, { caseId });
+  // useScanCaseDetail delegates to useCaseById via the SCAN query layer.
+  // The subscription re-evaluates within ~100–300 ms whenever the case row
+  // changes (e.g., after shipCase flips status to transit_out/transit_in).
+  const caseDoc = useScanCaseDetail(caseId);
 
   // ── FedEx tracking hook ───────────────────────────────────────────────────
   // `hasTracking` — true when at least one shipment with a non-empty

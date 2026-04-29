@@ -10,6 +10,36 @@
   gap: 0;
 }
 
+/* ── Panel summary badges — from useCaseShipmentAndCustody ─────────── */
+/*
+ * Sub-AC 3: Row of lightweight aggregate badges showing total shipments,
+ * total custody handoffs, and the current custodian name.  These values
+ * come from the combined `api["queries/shipment"].getCaseShipmentAndCustody`
+ * subscription and update in real-time without manual refresh.
+ */
+
+.panelSummaryBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-bottom: 0.25rem;
+}
+
+.summaryBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 9999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background-color: var(--surface-sunken);
+  color: var(--ink-secondary);
+  border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
 /* ── Inspection summary banner ────────────────────────────────────── */
 
 .inspectionSummary {
@@ -374,4 +404,53 @@
   font-weight: 500;
   color: var(--ink-primary);
   letter-spacing: 0.02em;
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   ============================================================ */
+
+/*
+ * Inspection summary card — on dark surfaces, --border-subtle is very
+ * close in value to --surface-raised making the card edge invisible.
+ */
+:global(.theme-dark) .inspectionSummary {
+  border-color: var(--border-default);
+}
+
+/*
+ * Summary badge chips — sunken bg + subtle border in dark mode needs a lift.
+ */
+:global(.theme-dark) .summaryBadge {
+  border-color: var(--border-default);
+}
+
+/*
+ * Event timeline connector line — border-default provides better contrast
+ * against the dark raised surface.
+ */
+:global(.theme-dark) .eventTimeline::before {
+  background-color: var(--border-strong);
+}
+
+/*
+ * Event dot halo ring — surface-raised in dark mode is --_n-900 which
+ * correctly separates the dot from the timeline line.  No override needed.
+ */
+
+/*
+ * Shipment history item cards — border-subtle is 4 lightness points from
+ * surface-raised in dark mode; use border-default for visible card edges.
+ */
+:global(.theme-dark) .historyItem {
+  border-color: var(--border-default);
+}
+
+/*
+ * Damage section — signal-error tokens remap automatically; confirm
+ * the divider within the damage list is visible.
+ */
+:global(.theme-dark) .damageItem {
+  border-bottom-color: var(--border-strong);
 }

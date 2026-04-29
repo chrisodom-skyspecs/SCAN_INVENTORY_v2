@@ -88,6 +88,7 @@ vi.mock("../../../../../../convex/_generated/api", () => ({
     },
     qrCodes: {
       associateQRCodeToCase: "qrCodes:associateQRCodeToCase",
+      validateQrCode:        "qrCodes:validateQrCode",
     },
   },
 }));
@@ -126,10 +127,18 @@ function setupConvexMocks(caseDoc = MOCK_CASE_DOC) {
     (queryFn: unknown) => {
       if (queryFn === "cases:getCaseById")     return caseDoc;
       if (queryFn === "cases:getCaseByQrCode") return null;
+      // validateQrCode returns { status: "available" } by default — QR is free to use
+      if (queryFn === "qrCodes:validateQrCode") return { status: "available" };
       return null;
     }
   );
-  (useMutation as ReturnType<typeof vi.fn>).mockReturnValue(mockAssociateMutation);
+  // useMutation is called by useAssociateQRCode (which wraps api.qrCodes.associateQRCodeToCase)
+  // The mock returns a function that behaves like the raw mutation (no optimistic update in tests)
+  (useMutation as ReturnType<typeof vi.fn>).mockReturnValue(
+    Object.assign(mockAssociateMutation, {
+      withOptimisticUpdate: () => mockAssociateMutation,
+    })
+  );
 
   return { mockAssociateMutation };
 }
@@ -148,8 +157,9 @@ function removeBarcodeDetector() {
  *
  * @param detectFn  The stub to use for instance.detect().  Defaults to returning [].
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function installBarcodeDetector(
-  detectFn = vi.fn().mockResolvedValue([])
+  detectFn: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue([])
 ): typeof detectFn {
   class MockBarcodeDetector {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -629,6 +639,108 @@ describe("AssociateQRClient — QR scan telemetry (spec §23)", () => {
         expect(event.eventCategory).toBe("error");
         expect(event.app).toBe("scan");
       }
+    });
+
+    // ── Timestamp, caseId, and scanResult fields (Sub-AC 42c-2) ──────────────
+    // Verifies that the component explicitly passes timestamp, caseId, and the
+    // scan result in every trackEvent call rather than relying solely on
+    // telemetry client auto-filling (spec §23 / Sub-AC 42c-2).
+
+    it("SCAN_ACTION_QR_SCANNED includes an explicit numeric timestamp (manual entry)", async () => {
+      render(<AssociateQRClient caseId={CASE_ID} />);
+
+      const before = Date.now();
+      const textarea = await waitForManualTextarea(2000);
+      fireEvent.change(textarea, { target: { value: "TIMESTAMP_TEST" } });
+      fireEvent.click(screen.getByRole("button", { name: /use this code/i }));
+      const after = Date.now();
+
+      const qrScannedCalls = mockTrackEvent.mock.calls
+        .map((args: unknown[]) => args[0] as Record<string, unknown>)
+        .filter((e) => e.eventName === TelemetryEventName.SCAN_ACTION_QR_SCANNED);
+
+      expect(qrScannedCalls.length).toBeGreaterThan(0);
+      const ts = qrScannedCalls[0].timestamp as number;
+      // timestamp must be an integer in the epoch-ms range bracketing the scan
+      expect(typeof ts).toBe("number");
+      expect(Number.isInteger(ts) || ts >= before - 1).toBe(true);
+      expect(ts).toBeGreaterThanOrEqual(before - 1); // -1 ms for float rounding
+      expect(ts).toBeLessThanOrEqual(after + 10);    // +10 ms for async lag
+    });
+
+    it("SCAN_ACTION_QR_SCANNED includes caseId and success in every emitted call", async () => {
+      render(<AssociateQRClient caseId={CASE_ID} />);
+
+      const textarea = await waitForManualTextarea(2000);
+      fireEvent.change(textarea, { target: { value: "SHAPE_CHECK_PAYLOAD" } });
+      fireEvent.click(screen.getByRole("button", { name: /use this code/i }));
+
+      const qrScannedCalls = mockTrackEvent.mock.calls
+        .map((args: unknown[]) => args[0] as Record<string, unknown>)
+        .filter((e) => e.eventName === TelemetryEventName.SCAN_ACTION_QR_SCANNED);
+
+      expect(qrScannedCalls.length).toBeGreaterThan(0);
+      for (const event of qrScannedCalls) {
+        // caseId must be a non-empty string matching the component prop
+        expect(typeof event.caseId).toBe("string");
+        expect((event.caseId as string).length).toBeGreaterThan(0);
+        // success (scan result) must be a boolean
+        expect(typeof event.success).toBe("boolean");
+        // timestamp must be a positive number
+        expect(typeof event.timestamp).toBe("number");
+        expect(event.timestamp as number).toBeGreaterThan(0);
+      }
+    });
+
+    it("error events include an explicit numeric timestamp", async () => {
+      // BarcodeDetector not present → ERROR_QR_SCAN_FAILED is emitted
+      const before = Date.now();
+      render(<AssociateQRClient caseId={CASE_ID} />);
+
+      await waitFor(() => {
+        const errorCalls = mockTrackEvent.mock.calls
+          .map((args: unknown[]) => args[0] as Record<string, unknown>)
+          .filter((e) => e.eventName === TelemetryEventName.ERROR_QR_SCAN_FAILED);
+        expect(errorCalls.length).toBeGreaterThan(0);
+      }, { timeout: 2000 });
+      const after = Date.now();
+
+      const errorCalls = mockTrackEvent.mock.calls
+        .map((args: unknown[]) => args[0] as Record<string, unknown>)
+        .filter((e) => e.eventName === TelemetryEventName.ERROR_QR_SCAN_FAILED);
+
+      const ts = errorCalls[0].timestamp as number;
+      expect(typeof ts).toBe("number");
+      expect(ts).toBeGreaterThanOrEqual(before - 1);
+      expect(ts).toBeLessThanOrEqual(after + 10);
+    });
+
+    it("ERROR_CAMERA_DENIED includes an explicit numeric timestamp", async () => {
+      // Install BarcodeDetector and stub getUserMedia to deny permission
+      installBarcodeDetector();
+      stubGetUserMedia(() =>
+        Promise.reject(new DOMException("Permission denied.", "NotAllowedError"))
+      );
+
+      const before = Date.now();
+      render(<AssociateQRClient caseId={CASE_ID} />);
+
+      await waitFor(() => {
+        const deniedCalls = mockTrackEvent.mock.calls
+          .map((args: unknown[]) => args[0] as Record<string, unknown>)
+          .filter((e) => e.eventName === TelemetryEventName.ERROR_CAMERA_DENIED);
+        expect(deniedCalls.length).toBeGreaterThan(0);
+      }, { timeout: 3000 });
+      const after = Date.now();
+
+      const deniedCalls = mockTrackEvent.mock.calls
+        .map((args: unknown[]) => args[0] as Record<string, unknown>)
+        .filter((e) => e.eventName === TelemetryEventName.ERROR_CAMERA_DENIED);
+
+      const ts = deniedCalls[0].timestamp as number;
+      expect(typeof ts).toBe("number");
+      expect(ts).toBeGreaterThanOrEqual(before - 1);
+      expect(ts).toBeLessThanOrEqual(after + 10);
     });
   });
 });

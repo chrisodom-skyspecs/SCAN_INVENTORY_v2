@@ -101,6 +101,8 @@ export interface LabelPreviewCaseData {
   assigneeName?: string;
   /** Last known location name (optional). */
   locationName?: string;
+  /** Case creation date — shown in metadata as "YYYY-MM-DD" (optional). */
+  createdAt?: string | Date;
   /** Short operational note (optional, clamped to 2 lines on the label). */
   notes?: string;
 }
@@ -129,6 +131,11 @@ export interface LabelPreviewModalProps {
    * Use for analytics or download tracking.
    */
   onBeforeDownload?: () => void;
+  /**
+   * Callback fired just before the PDF download is triggered.
+   * Use for analytics or download tracking.
+   */
+  onBeforeExportPdf?: () => void;
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -176,6 +183,29 @@ function DownloadIcon({ className }: { className?: string }) {
   );
 }
 
+/** Minimal inline PDF file SVG icon (screen-only, aria-hidden). */
+function PdfIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+      focusable="false"
+    >
+      {/* Document outline with folded corner */}
+      <path
+        fillRule="evenodd"
+        d="M4 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.414A2 2 0 0 0 13.414 4L10 .586A2 2 0 0 0 8.586 0H4zm4 1.5v3A1.5 1.5 0 0 0 9.5 7H13v6a.5.5 0 0 1-.5.5h-9A.5.5 0 0 1 3 13V3a.5.5 0 0 1 .5-.5H8z"
+        clipRule="evenodd"
+      />
+      {/* "PDF" label abbreviation lines */}
+      <path d="M5 9.5a.5.5 0 0 1 .5-.5H7a1 1 0 0 1 0 2H5.5A.5.5 0 0 1 5 10.5V9.5z" />
+    </svg>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
@@ -192,6 +222,7 @@ export function LabelPreviewModal({
   initialSize = "4x6",
   onBeforePrint,
   onBeforeDownload,
+  onBeforeExportPdf,
 }: LabelPreviewModalProps) {
   // ── SSR guard — portal requires document.body ─────────────────────
   // Declare before any hooks because hooks must execute in the same order
@@ -204,6 +235,8 @@ export function LabelPreviewModal({
   // ── Download state ────────────────────────────────────────────────
   /** True while the PNG canvas render + blob creation is in progress. */
   const [isDownloading, setIsDownloading] = React.useState(false);
+  /** True while the PDF canvas render + PDF assembly is in progress. */
+  const [isExportingPdf, setIsExportingPdf] = React.useState(false);
 
   // ── Refs ─────────────────────────────────────────────────────────
   const dialogRef = React.useRef<HTMLDialogElement>(null);
@@ -211,7 +244,7 @@ export function LabelPreviewModal({
   const closeButtonRef = React.useRef<HTMLButtonElement>(null);
 
   // ── QR code generation ───────────────────────────────────────────
-  const { qrState, triggerPrint, regenerate, downloadAsPng } = usePrintLabel(caseId);
+  const { qrState, triggerPrint, regenerate, downloadAsPng, downloadAsPdf } = usePrintLabel(caseId);
 
   // ── Mount detection (client-only) ─────────────────────────────────
   // We cannot render a portal during SSR because document.body doesn't exist.
@@ -291,6 +324,7 @@ export function LabelPreviewModal({
       missionName: caseData.missionName,
       assigneeName: caseData.assigneeName,
       locationName: caseData.locationName,
+      createdAt: caseData.createdAt,
       notes: caseData.notes,
     };
   }, [qrState, caseData]);
@@ -320,6 +354,7 @@ export function LabelPreviewModal({
           missionName:  caseData.missionName,
           assigneeName: caseData.assigneeName,
           locationName: caseData.locationName,
+          createdAt:    caseData.createdAt,
           notes:        caseData.notes,
         },
         size,
@@ -329,6 +364,36 @@ export function LabelPreviewModal({
       setIsDownloading(false);
     }
   }, [qrState.status, isDownloading, onBeforeDownload, downloadAsPng, caseData, size]);
+
+  // ── Export PDF handler ────────────────────────────────────────────
+  /**
+   * Renders the current label to an offscreen canvas, wraps it in a minimal
+   * single-page PDF, and triggers a PDF file download. Disabled while the
+   * QR code is loading or a previous export is in progress.
+   */
+  const handleExportPdf = React.useCallback(async () => {
+    if (qrState.status !== "ready" || isExportingPdf) return;
+    onBeforeExportPdf?.();
+    setIsExportingPdf(true);
+    try {
+      await downloadAsPdf(
+        {
+          label:        caseData.label,
+          status:       caseData.status,
+          templateName: caseData.templateName,
+          missionName:  caseData.missionName,
+          assigneeName: caseData.assigneeName,
+          locationName: caseData.locationName,
+          createdAt:    caseData.createdAt,
+          notes:        caseData.notes,
+        },
+        size,
+        `${caseData.label}-label`,
+      );
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }, [qrState.status, isExportingPdf, onBeforeExportPdf, downloadAsPdf, caseData, size]);
 
   // ── Portal gate ───────────────────────────────────────────────────
   // Return null on the server and on the first client render to avoid
@@ -458,7 +523,7 @@ export function LabelPreviewModal({
           Cancel
         </button>
 
-        {/* Right side: Download PNG + Print */}
+        {/* Right side: Download PNG + Download PDF + Print */}
         <div className={styles.footerActions}>
           <button
             type="button"
@@ -475,6 +540,23 @@ export function LabelPreviewModal({
           >
             <DownloadIcon className={styles.downloadIcon} />
             {isDownloading ? "Downloading…" : "Download PNG"}
+          </button>
+
+          <button
+            type="button"
+            className={styles.pdfButton}
+            onClick={handleExportPdf}
+            disabled={qrState.status !== "ready" || isExportingPdf}
+            aria-disabled={qrState.status !== "ready" || isExportingPdf}
+            aria-label={
+              isExportingPdf
+                ? "Exporting PDF…"
+                : "Download label as PDF file"
+            }
+            data-testid="label-preview-download-pdf"
+          >
+            <PdfIcon className={styles.pdfIcon} />
+            {isExportingPdf ? "Exporting…" : "Download PDF"}
           </button>
 
           <button

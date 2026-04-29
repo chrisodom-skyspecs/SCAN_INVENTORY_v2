@@ -52,7 +52,7 @@ interface CaseDoc {
   _creationTime: number;
   label: string;
   qrCode: string;
-  status: "assembled" | "deployed" | "in_field" | "shipping" | "returned";
+  status: "hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "transit_in" | "received" | "archived";
   templateId?: ConvexId<"caseTemplates">;
   missionId?: ConvexId<"missions">;
   lat?: number;
@@ -129,11 +129,14 @@ interface ShipmentDoc {
 // ─── Seeded dataset factory ───────────────────────────────────────────────────
 
 const CASE_STATUSES: CaseDoc["status"][] = [
+  "hangar",
   "assembled",
+  "transit_out",
   "deployed",
-  "in_field",
-  "shipping",
-  "returned",
+  "flagged",
+  "transit_in",
+  "received",
+  "archived",
 ];
 
 const MISSION_STATUSES: MissionDoc["status"][] = [
@@ -262,11 +265,11 @@ function buildSeedDataset(caseCount = 250) {
     });
   }
 
-  // Build inspections — one per "in_field" or "deployed" case
+  // Build inspections — one per "deployed" or "flagged" case
   const inspections: InspectionDoc[] = [];
   let inspIdx = 1;
   for (const c of cases) {
-    if (c.status === "in_field" || c.status === "deployed") {
+    if (c.status === "deployed" || c.status === "flagged") {
       const inspStatus =
         INSPECTION_STATUSES[inspIdx % INSPECTION_STATUSES.length];
       const totalItems = 10;
@@ -294,11 +297,11 @@ function buildSeedDataset(caseCount = 250) {
     }
   }
 
-  // Build shipments — one per "shipping" case
+  // Build shipments — one per "transit_out" or "transit_in" case
   const shipments: ShipmentDoc[] = [];
   let shipIdx = 1;
   for (const c of cases) {
-    if (c.status === "shipping") {
+    if (c.status === "transit_out" || c.status === "transit_in") {
       const shipStatus =
         SHIPMENT_STATUSES[shipIdx % SHIPMENT_STATUSES.length];
       shipments.push({
@@ -655,9 +658,9 @@ describe("GET /api/cases/map?mode=M3 — response shape", () => {
   it("cases is an array", () =>
     expect(Array.isArray(response.cases)).toBe(true));
 
-  it("only returns in_field or deployed cases", () => {
+  it("only returns deployed or flagged cases", () => {
     for (const pin of response.cases) {
-      expect(["in_field", "deployed"]).toContain(pin.status);
+      expect(["deployed", "flagged"]).toContain(pin.status);
     }
   });
 

@@ -1,0 +1,151 @@
+name: Latency Benchmark
+
+# ── Trigger ────────────────────────────────────────────────────────────────────
+# Runs automatically on every pull request that targets the main branches.
+# Also supports manual dispatch for on-demand debugging.
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: "Number of p50 measurement iterations (default: 101)"
+        required: false
+        default: "101"
+
+# ── Permissions ────────────────────────────────────────────────────────────────
+# Read-only repository access is sufficient — no deployment or write operations.
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  latency-benchmark:
+    name: "p50 Latency Benchmark (<200 ms)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # ── 2. Node.js setup ─────────────────────────────────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      # ── 3. Install dependencies ───────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 4. Create results directory ───────────────────────────────────────────
+      - name: Create results directory
+        run: mkdir -p test-results
+
+      # ── 5. Run latency benchmarks ─────────────────────────────────────────────
+      #
+      # Runs the three latency-specific test files:
+      #   • convex-endpoint-latency.test.ts     — pure-computation benchmarks
+      #   • convex-endpoint-latency.bench.test.ts — async mock-ctx benchmarks
+      #   • route.latency.test.ts               — wired Next.js route handler
+      #
+      # Each test asserts:  expect(p50).toBeLessThan(200)
+      #
+      # The job FAILS automatically if any p50 assertion fails (vitest exits 1).
+      # `set -o pipefail` propagates the vitest exit code through the tee pipe.
+      #
+      # Reporters:
+      #   --reporter=verbose   → stdout, captured by tee → latency-output.txt
+      #   --reporter=json      → written to latency-results.json via --outputFile
+      - name: Run latency benchmarks
+        id: benchmark
+        run: |
+          set -o pipefail
+          npx vitest run \
+            --reporter=verbose \
+            --reporter=json \
+            --outputFile.json=test-results/latency-results.json \
+            src/lib/__tests__/convex-endpoint-latency.test.ts \
+            src/lib/__tests__/convex-endpoint-latency.bench.test.ts \
+            "src/app/api/cases/map/__tests__/route.latency.test.ts" \
+            2>&1 | tee test-results/latency-output.txt
+
+      # ── 6. Generate structured p50 summary ───────────────────────────────────
+      #
+      # Runs even when the benchmark step fails so we always produce artifacts.
+      # Parses [latency] lines from the captured output and vitest JSON results.
+      # Writes:
+      #   test-results/latency-summary.json — structured JSON (primary artifact)
+      #   test-results/latency-report.md    — Markdown table
+      - name: Generate p50 summary
+        if: always()
+        run: node scripts/parse-latency-results.mjs
+
+      # ── 7. Write GitHub Job Summary ───────────────────────────────────────────
+      #
+      # Embeds the Markdown report directly into the workflow run summary page,
+      # visible in the GitHub Actions UI without downloading any artifact.
+      - name: Write job summary
+        if: always()
+        run: |
+          if [ -f test-results/latency-report.md ]; then
+            cat test-results/latency-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ⚠️ Latency Benchmark" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "latency-report.md was not generated — check the benchmark step output." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # ── 8. Upload CI artifacts ────────────────────────────────────────────────
+      #
+      # Always uploads the results directory so failures can be diagnosed.
+      # Artifacts are retained for 30 days per the project's CI retention policy.
+      #
+      # Artifact contents:
+      #   latency-output.txt          — full vitest verbose output
+      #   latency-results.json        — vitest structured test results
+      #   latency-summary.json        — parsed p50 values, pass/fail per endpoint
+      #   latency-report.md           — human-readable Markdown table
+      - name: Upload latency results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: latency-benchmark-results-${{ github.run_number }}
+          path: test-results/
+          retention-days: 30
+          if-no-files-found: warn
+
+      # ── 9. Fail fast — surface the p50 budget breach clearly ─────────────────
+      #
+      # If the benchmark step succeeded but the summary script detected that
+      # p50 values extracted from the log exceed the 200 ms threshold, exit
+      # non-zero so the job is marked as failed.  (This is a belt-and-suspenders
+      # check: vitest should have already exited non-zero in step 5.)
+      - name: Check p50 threshold
+        if: always()
+        run: |
+          if [ -f test-results/latency-summary.json ]; then
+            node -e "
+              const s = JSON.parse(require('fs').readFileSync('test-results/latency-summary.json', 'utf8'));
+              if (!s.overall_passed) {
+                const failing = (s.failing_benchmarks ?? []).join(', ') || 'unknown — check latency-output.txt';
+                console.error('');
+                console.error('ERROR: p50 latency budget breached (threshold: ' + s.threshold_ms + ' ms)');
+                console.error('Failing benchmarks: ' + failing);
+                console.error('Download the latency-benchmark-results artifact for full details.');
+                console.error('');
+                process.exit(1);
+              }
+              console.log('All p50 latency benchmarks passed (threshold: ' + s.threshold_ms + ' ms)');
+            "
+          else
+            echo "WARNING: latency-summary.json not found — skipping threshold check."
+          fi

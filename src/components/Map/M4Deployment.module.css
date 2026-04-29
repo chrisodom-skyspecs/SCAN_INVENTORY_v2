@@ -204,8 +204,140 @@
   font-size: 0.6875rem;
 }
 
-/* ── Map canvas ───────────────────────────────────────────────────────── */
+/* ── Split-pane body ──────────────────────────────────────────────────── */
 
+/**
+ * .splitBody — horizontal flex container that holds the map pane (left)
+ * and the manifest panel slot (right).
+ *
+ * Fills all remaining height below the toolbar.
+ * On narrow viewports (≤ 768 px) the panes stack vertically so both remain
+ * accessible without horizontal scrolling.
+ */
+.splitBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+/* ── Left pane: map canvas ────────────────────────────────────────────── */
+
+/**
+ * .mapPane — holds the Mapbox canvas / shipment pin list.
+ * Takes all remaining horizontal space (flex: 1) so the manifest panel
+ * width is determined by .manifestPane alone.
+ */
+.mapPane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Right pane: manifest panel slot ─────────────────────────────────── */
+
+/**
+ * .manifestPane — reserved slot for the case manifest (T2Manifest or
+ * CaseDetailPanel content passed via the `manifestPanel` prop).
+ *
+ * Width is fixed at var(--m4-manifest-pane-width, 22rem) so the map does
+ * not reflow when the manifest content changes.
+ *
+ * The pane is separated from the map by a 1px divider using
+ * var(--border-default).
+ */
+.manifestPane {
+  width: var(--m4-manifest-pane-width, 22rem);
+  flex-shrink: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-left: 1px solid var(--border-default);
+  background: var(--surface-raised);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Responsive: stack panes on narrow viewports ──────────────────────── */
+
+@media (max-width: 768px) {
+  .splitBody {
+    flex-direction: column;
+  }
+
+  .mapPane {
+    /* On mobile the map takes roughly half the body height */
+    flex: 1 1 50%;
+    min-height: 12rem;
+  }
+
+  .manifestPane {
+    width: 100%;
+    flex-shrink: 0;
+    border-left: none;
+    border-top: 1px solid var(--border-default);
+    /* Manifest pane is scrollable on mobile; fixed height lets map stay visible */
+    max-height: 50vh;
+  }
+}
+
+/* ── Manifest panel empty state ───────────────────────────────────────── */
+
+/**
+ * Shown inside .manifestPane when no `manifestPanel` prop is provided
+ * (no case is currently selected).
+ * Uses only design tokens — no hex literals.
+ */
+.manifestEmpty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem 1.25rem;
+  text-align: center;
+  color: var(--ink-tertiary);
+}
+
+.manifestEmptyIcon {
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--ink-subtle, var(--ink-tertiary));
+  user-select: none;
+}
+
+.manifestEmptyTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.manifestEmptyHint {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  max-width: 16rem;
+  line-height: 1.5;
+}
+
+/* Compact density — tighten manifest empty state padding */
+[data-density="compact"] .manifestEmpty {
+  padding: 1.25rem 1rem;
+  gap: 0.375rem;
+}
+
+/* ── Map canvas (legacy name kept for mapContainer / mapPlaceholder) ──── */
+
+/* .mapCanvas was renamed .mapPane — alias kept so existing JS references
+   (if any) still resolve without a breaking change.  New code should use
+   .mapPane instead. */
 .mapCanvas {
   flex: 1;
   min-height: 0;
@@ -346,6 +478,34 @@
   background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
   font-size: 0.8125rem;
+  cursor: default;
+  /* Transition for map-hover highlight */
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.pinListItem:hover {
+  background: var(--surface-hover);
+}
+
+/**
+ * Map ↔ manifest hover highlight state.
+ *
+ * Applied when `data-map-hover="highlighted"` — the corresponding ManifestPanel
+ * is being hovered, so this pin highlights to indicate it is the linked element.
+ *
+ * Matches the ManifestPanel .panel[data-map-hover="highlighted"] style for
+ * visual symmetry: brand-accent border + subtle brand background tint.
+ */
+.pinListItem[data-map-hover="highlighted"] {
+  background: var(--surface-brand-subtle);
+  border-color: var(--border-brand);
+  box-shadow: 0 0 0 1px var(--border-brand);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pinListItem {
+    transition: none;
+  }
 }
 
 /* Status-colored pin dot */
@@ -357,8 +517,12 @@
   background: var(--ink-tertiary);
 }
 
-.pinDot[data-status="in_field"] {
-  background: var(--status-in-field, var(--ink-success));
+.pinDot[data-status="deployed"] {
+  background: var(--status-deployed, var(--ink-brand));
+}
+
+.pinDot[data-status="flagged"] {
+  background: var(--status-flagged, var(--ink-error));
 }
 
 .pinLabel {
@@ -415,3 +579,37 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK MODE OVERRIDES
+   Applied when .theme-dark is set on <html> (see src/styles/tokens/base.css §3).
+   Surface / ink / border tokens cascade automatically.
+   This block handles cases that cannot be expressed via token substitution:
+     1. filterSelect dropdown-arrow SVG (hardcoded stroke color in data URI)
+     2. timePicker color-scheme — browser-native calendar picker in dark mode.
+     3. manifestPane border — uses --border-default which already re-maps in dark.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Dropdown arrow — light version for dark backgrounds.
+ * Overrides the light-theme stroke='%23666' with '%23aaa' (light gray).
+ * WCAG: %23aaa on hsl(210,20%,4%) ≈ 8.8:1 ✓
+ */
+:global(.theme-dark) .filterSelect {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23aaa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/**
+ * DateTime-local input — dark color-scheme.
+ * Instructs the browser's native date/time picker UI to render in dark mode.
+ */
+:global(.theme-dark) .timePicker {
+  color-scheme: dark;
+}
+
+/**
+ * Manifest pane empty state — the emoji/icon placeholder uses a soft
+ * color that's already handled by --ink-subtle → --ink-tertiary fallback.
+ * The manifestPane border uses --border-default → remapped in .theme-dark.
+ * No additional overrides needed — tokens handle all structural elements.
+ */

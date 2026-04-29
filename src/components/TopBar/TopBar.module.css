@@ -1,0 +1,302 @@
+/**
+ * TopBar.module.css — INVENTORY dashboard 52px top bar
+ *
+ * Fixed-height header rendered as a full-width strip across the top of the
+ * INVENTORY dashboard shell.  Three horizontal regions:
+ *
+ *   [logo area]  ←  [center slot (flex: 1)]  →  [right controls]
+ *
+ * Dimensions:
+ *   Height: var(--shell-topbar-height) = 52px / 3.25rem  (§6 of base.css)
+ *
+ * Design tokens only — no hex literals in this file.
+ * Typography: Inter Tight (UI labels), IBM Plex Mono (product badge).
+ * WCAG AA contrast: all text tokens verified for ≥ 4.5:1 in light and dark.
+ */
+
+/* ── Root bar ──────────────────────────────────────────────────────── */
+
+/**
+ * .topBar — the outermost element of the 52px header strip.
+ *
+ * Uses flexbox to distribute the three regions horizontally.
+ * The height is locked to --shell-topbar-height so a single token
+ * change resizes the entire shell consistently.
+ *
+ * background / border / shadow are provided by the AppShell grid container
+ * (AppShell.module.css → .topBar) when this component is used inside AppShell.
+ * When used standalone (e.g. in tests or Storybook), the local defaults
+ * in .topBar-standalone below apply.
+ */
+.topBar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--shell-topbar-height, 3.25rem);   /* 52px */
+  padding-inline: 1rem;                          /* 16px horizontal breathing room */
+  gap: 0.75rem;                                  /* gap between the three regions */
+
+  /*
+   * Default surface — visible when TopBar is rendered outside AppShell
+   * (e.g. in isolation tests, Storybook).  AppShell.module.css provides
+   * an equivalent background via its .topBar grid area selector.
+   */
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-default);
+  box-shadow: var(--elevation-1);
+
+  /* Clip any child overflow (e.g. avatar badge slightly exceeding bar) */
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* ── Logo area (left) ──────────────────────────────────────────────── */
+
+/**
+ * .logoArea — flex container for logomark + wordmark + product badge.
+ *
+ * flex-shrink: 0 prevents the wordmark from collapsing on narrow viewports.
+ * user-select: none keeps accidental double-click text selection off the brand mark.
+ */
+.logoArea {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;        /* 8px between logo elements */
+  flex-shrink: 0;
+  user-select: none;
+  text-decoration: none;
+}
+
+/* ── SVG logomark ──────────────────────────────────────────────────── */
+
+/**
+ * .logoMark — geometric diamond shape.
+ *
+ * 24×24px square container; the SVG path renders inside via viewBox scaling.
+ * color: var(--surface-brand) applies the brand fill via currentColor in the SVG.
+ */
+.logoMark {
+  width: 1.5rem;   /* 24px */
+  height: 1.5rem;
+  flex-shrink: 0;
+  color: var(--surface-brand);
+}
+
+.logoMarkShape {
+  fill: currentColor;
+}
+
+/* ── Wordmark text ─────────────────────────────────────────────────── */
+
+/**
+ * .wordmark — inline flex container for "Sky" + "Specs" text pair.
+ *
+ * The two spans are aligned on the baseline so the combined string reads as
+ * a single wordmark with two-toned color treatment.
+ */
+.wordmark {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+}
+
+/**
+ * .wordmarkSky — "Sky" portion in brand color.
+ * .wordmarkSpecs — "Specs" portion in primary ink.
+ *
+ * Both use Inter Tight 700 at 1rem / 16px with tight letter-spacing.
+ */
+.wordmarkSky {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--surface-brand);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.wordmarkSpecs {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+/* ── Product badge ─────────────────────────────────────────────────── */
+
+/**
+ * .productBadge — "INVENTORY" label in IBM Plex Mono.
+ *
+ * Rendered as an all-caps monospaced badge chip positioned after the wordmark.
+ * Visually distinct from the wordmark text to signal "app context" vs. "brand".
+ *
+ * font-size: 0.5625rem (9px) — compact enough for the 52px bar height.
+ * Padding and border-radius match the existing wordmarkProduct in InventoryNavbar.
+ */
+.productBadge {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;   /* 9px */
+  font-weight: 600;
+  color: var(--ink-brand);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  padding: 0.125rem 0.375rem;    /* 2px 6px */
+  border-radius: 0.25rem;        /* 4px */
+  background: var(--surface-brand-subtle);
+  border: 1px solid var(--border-brand);
+
+  /* Vertical alignment within the flex row */
+  align-self: center;
+}
+
+/* ── Center slot ───────────────────────────────────────────────────── */
+
+/**
+ * .centerSlot — flexible middle region for injected content.
+ *
+ * flex: 1 makes this region fill all available horizontal space between the
+ * logo and the right controls, keeping both ends anchored at their edges.
+ *
+ * min-width: 0 prevents the flex blowout bug where a long child (e.g. a wide
+ * search input) could push the right controls off-screen.
+ *
+ * display: flex + justify-content: center visually centers injected content
+ * within the available space.
+ */
+.centerSlot {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Right area ────────────────────────────────────────────────────── */
+
+/**
+ * .rightArea — flex group anchored to the right edge of the bar.
+ *
+ * Contains: ConnectionIndicator · NotificationBell · Avatar.
+ * gap: 0.25rem (4px) — tight cluster of controls consistent with InventoryNavbar.
+ *
+ * flex-shrink: 0 prevents the right controls from collapsing as the center
+ * slot expands to fill available space.
+ */
+.rightArea {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;   /* 4px between controls */
+  flex-shrink: 0;
+}
+
+/* ── Live indicator wrapper ────────────────────────────────────────── */
+
+/**
+ * .liveIndicator — wraps ConnectionIndicator.
+ *
+ * A small right margin visually separates the dot from the bell button.
+ */
+.liveIndicator {
+  margin-right: 0.125rem;   /* 2px extra breathing room */
+}
+
+/* ── Notification bell wrapper ─────────────────────────────────────── */
+
+/**
+ * .notificationBell — wraps NotificationBell.
+ *
+ * No overrides needed — NotificationBell.module.css handles internal sizing.
+ * The bell button is 36×36px, matching the avatar height.
+ */
+.notificationBell {
+  /* Intentionally empty — NotificationBell.module.css owns its layout */
+}
+
+/* ── Avatar circle ─────────────────────────────────────────────────── */
+
+/**
+ * .avatar — circular user identity element (presentational, not a button).
+ *
+ * 30×30px circle with brand-subtle background and initials text inside.
+ * This is the static / layout-only version of the avatar.
+ * The interactive dropdown trigger (button variant) lives in InventoryNavbar.
+ *
+ * Dimensions match the existing .userAvatar in InventoryNavbar.module.css:
+ *   width:  1.875rem (30px)
+ *   height: 1.875rem (30px)
+ */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.875rem;    /* 30px */
+  height: 1.875rem;
+  border-radius: 50%;
+  background: var(--surface-brand-subtle);
+  border: 1px solid var(--border-brand);
+  flex-shrink: 0;
+  overflow: hidden;
+  /* Visual only — not a focusable element in this layout-only variant */
+  cursor: default;
+  user-select: none;
+}
+
+/**
+ * .avatarInitials — 1–2 capital letters inside the avatar circle.
+ *
+ * Inter Tight 700 at 11px with tight letter-spacing.
+ * Color: --ink-brand ensures WCAG AA contrast against --surface-brand-subtle.
+ */
+.avatarInitials {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;   /* 11px */
+  font-weight: 700;
+  color: var(--ink-brand);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+/* ── Dark theme ────────────────────────────────────────────────────── */
+
+/*
+ * All colors above reference semantic tokens that are already overridden
+ * by .theme-dark in base.css §3.  No additional rules are needed here —
+ * the dark theme is fully covered by the semantic token layer.
+ */
+
+/* ── Reduced motion ────────────────────────────────────────────────── */
+
+/*
+ * TopBar itself has no keyframe animations.  The ConnectionIndicator pulse
+ * animation is suppressed by its own reduced-motion block in
+ * ConnectionIndicator.module.css.  No override needed here.
+ */
+
+/* ── Responsive adjustments ────────────────────────────────────────── */
+
+/**
+ * On narrow viewports (≤ 480px), hide the wordmark text to save horizontal
+ * space while keeping the logomark and product badge visible.
+ *
+ * The full wordmark is restored at ≥ 481px.
+ */
+@media (max-width: 480px) {
+  .wordmark {
+    display: none;
+  }
+
+  /* On very small screens, also hide the product badge to just show the logo */
+  .productBadge {
+    display: none;
+  }
+
+  /* Tighten horizontal padding on narrow screens */
+  .topBar {
+    padding-inline: 0.75rem;   /* 12px */
+  }
+}

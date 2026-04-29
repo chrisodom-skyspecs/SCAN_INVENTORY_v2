@@ -34,6 +34,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 
 // Re-export types so consumers can import them from the hook module.
 export type {
@@ -138,6 +139,6 @@ export function useActiveMissions() {
 export function useMissionById(missionId: string | null) {
   return useQuery(
     api.missions.getMissionById,
-    missionId !== null ? { missionId } : "skip",
+    missionId !== null ? { missionId: missionId as Id<"missions"> } : "skip",
   );
 }

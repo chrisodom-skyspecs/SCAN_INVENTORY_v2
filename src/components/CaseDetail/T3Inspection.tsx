@@ -13,7 +13,11 @@
 "use client";
 
 import { useChecklistWithInspection } from "../../hooks/use-checklist";
-import { useDamageReportsByCase } from "../../hooks/use-damage-reports";
+import {
+  useDamageReportsByCase,
+  useDamagePhotoReportsWithUrls,
+} from "../../hooks/use-damage-reports";
+import type { DamagePhotoReportWithUrl } from "../../../convex/damageReports";
 import {
   useCaseShippingLayout,
   getTrackingUrl,
@@ -21,6 +25,9 @@ import {
 import type { CaseShippingLayout } from "../../hooks/use-shipment-status";
 import { StatusPill } from "../StatusPill";
 import CustodySection from "./CustodySection";
+import { LabelManagementPanel } from "../LabelManagementPanel";
+import { useCurrentUser } from "../../hooks/use-current-user";
+import { OPERATIONS } from "../../../convex/rbac";
 import shared from "./shared.module.css";
 import styles from "./T3Inspection.module.css";
 import type { ChecklistWithInspection, ManifestItemStatus } from "../../../convex/checklists";
@@ -163,6 +170,11 @@ function formatDate(epochMs: number): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function T3Inspection({ caseId, onNavigateToShipping }: T3InspectionProps) {
+  // Permission check — only admin/technician can manage QR labels.
+  // Called unconditionally (hook rules) before any early returns.
+  const { can } = useCurrentUser();
+  const canManageLabels = can(OPERATIONS.QR_CODE_GENERATE);
+
   // useChecklistWithInspection is a real-time subscription via Convex.
   // The server-side query loads manifestItems + inspections in a single
   // Promise.all and returns a consistent snapshot. Convex re-runs it whenever
@@ -184,10 +196,32 @@ export default function T3Inspection({ caseId, onNavigateToShipping }: T3Inspect
   // shown in the Issues section reflects SCAN submissions in real-time.
   const damageReports = useDamageReportsByCase(caseId);
 
+  // useDamagePhotoReportsWithUrls subscribes to
+  // api["queries/damage"].getDamagePhotoReportsWithUrls — a URL-resolved
+  // variant of getDamagePhotoReports that calls ctx.storage.getUrl() server-side
+  // before returning results.  This gives us ready-to-render photo URLs and full
+  // annotation pin data (x, y, label, color) so the Issues section can display
+  // annotated photo thumbnails in real-time.
+  //
+  // Convex re-runs this query within ~100–300 ms of any submitDamagePhoto
+  // call from the SCAN app — new photos appear in the T3 panel without a
+  // manual page reload, satisfying the ≤ 2-second real-time fidelity SLA.
+  const damagePhotos = useDamagePhotoReportsWithUrls(caseId);
+
   // Build templateItemId → DamageReport lookup for O(1) access in render.
   const damageByTemplateId = new Map(
     (damageReports ?? []).map((r) => [r.templateItemId, r])
   );
+
+  // Build templateItemId → DamagePhotoReportWithUrl[] lookup so each issue
+  // item can display its associated annotated photo thumbnails.
+  const photosByTemplateId = new Map<string, DamagePhotoReportWithUrl[]>();
+  for (const photo of damagePhotos ?? []) {
+    if (!photo.templateItemId) continue;
+    const existing = photosByTemplateId.get(photo.templateItemId) ?? [];
+    existing.push(photo);
+    photosByTemplateId.set(photo.templateItemId, existing);
+  }
 
   if (data === undefined) {
     return (
@@ -346,6 +380,13 @@ export default function T3Inspection({ caseId, onNavigateToShipping }: T3Inspect
                   ? damageByTemplateId.get(item.templateItemId)
                   : undefined;
 
+                // Annotated photos for this item — resolved URLs from the
+                // useDamagePhotoReportsWithUrls subscription.  undefined while
+                // loading; empty array when no photos have been submitted yet.
+                const itemPhotos = item.status === "damaged"
+                  ? (photosByTemplateId.get(item.templateItemId) ?? [])
+                  : [];
+
                 return (
                   <li key={item._id} className={styles.issueItem}>
                     <div className={styles.issueItemHeader}>
@@ -364,8 +405,88 @@ export default function T3Inspection({ caseId, onNavigateToShipping }: T3Inspect
                       )}
                       <span className={styles.issueName}>{item.name}</span>
                     </div>
-                    {/* Photo evidence indicator */}
-                    {damageReport && damageReport.photoStorageIds.length > 0 && (
+
+                    {/*
+                      ── Annotated photo thumbnails ─────────────────────────
+                      Real-time via useDamagePhotoReportsWithUrls:
+                        - Photos appear within ~100–300 ms of SCAN submission
+                        - Each thumbnail shows annotation pin dots overlaid
+                        - photoUrl is null when storage object is unavailable
+                          (deleted or ID invalid) — placeholder shown instead
+                      Convex subscription automatically refreshes both the
+                      photo list and the resolved URLs when rows change.
+                    */}
+                    {itemPhotos.length > 0 && (
+                      <div
+                        className={styles.photoStrip}
+                        role="list"
+                        aria-label={`${itemPhotos.length} damage photo${itemPhotos.length !== 1 ? "s" : ""} for ${item.name}`}
+                      >
+                        {itemPhotos.map((photo) => (
+                          <div
+                            key={photo.id}
+                            className={styles.photoThumb}
+                            role="listitem"
+                            aria-label={`Damage photo — severity: ${photo.severity}`}
+                          >
+                            {photo.photoUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={photo.photoUrl}
+                                alt={`Damage evidence for ${item.name}${photo.notes ? `: ${photo.notes}` : ""}`}
+                                className={styles.photoImg}
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div
+                                className={styles.photoImgPlaceholder}
+                                aria-label="Photo unavailable"
+                              />
+                            )}
+
+                            {/* Annotation pin dots — one per annotation placed in SCAN markup */}
+                            {photo.annotations.length > 0 && (
+                              <div
+                                className={styles.annotationDots}
+                                aria-label={`${photo.annotations.length} annotation pin${photo.annotations.length !== 1 ? "s" : ""}`}
+                                aria-hidden="true"
+                              >
+                                {photo.annotations.map((ann, idx) => (
+                                  <span
+                                    key={idx}
+                                    className={styles.annotationDot}
+                                    style={{
+                                      left:  `${ann.x * 100}%`,
+                                      top:   `${ann.y * 100}%`,
+                                      // Use annotation color when provided, fall back
+                                      // to token.  No hex literals in JSX style per
+                                      // design token rules — the fallback is a CSS var.
+                                      background: ann.color ?? "var(--signal-error-fill)",
+                                      borderColor: ann.color ?? "var(--signal-error-border)",
+                                    }}
+                                    title={ann.label}
+                                  />
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Annotation count badge on the thumbnail */}
+                            {photo.annotations.length > 0 && (
+                              <span
+                                className={styles.annotationCount}
+                                aria-label={`${photo.annotations.length} annotation${photo.annotations.length !== 1 ? "s" : ""}`}
+                              >
+                                {photo.annotations.length}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Photo count line — shown when photos haven't loaded yet
+                        OR when we fall back to the manifest item photo IDs */}
+                    {damageReport && damageReport.photoStorageIds.length > 0 && itemPhotos.length === 0 && (
                       <p className={styles.issuePhotos}>
                         {damageReport.photoStorageIds.length} photo{damageReport.photoStorageIds.length !== 1 ? "s" : ""}
                         {damageReport.reportedByName && (
@@ -373,6 +494,7 @@ export default function T3Inspection({ caseId, onNavigateToShipping }: T3Inspect
                         )}
                       </p>
                     )}
+
                     {item.notes && (
                       <p className={styles.issueNote}>{item.notes}</p>
                     )}
@@ -381,6 +503,20 @@ export default function T3Inspection({ caseId, onNavigateToShipping }: T3Inspect
               })}
             </ul>
           </section>
+        </>
+      )}
+
+      {/*
+        ── QR Label Management — operator-permission-gated ──────────────
+        Sub-AC 2c: LabelManagementPanel mounted in the T3 Inspection layout.
+        Rendered only for admin/technician (qrCode:generate permission).
+        Pilots — who scan QR codes but do not generate them — will not see
+        this panel.
+      */}
+      {canManageLabels && (
+        <>
+          <hr className={shared.divider} />
+          <LabelManagementPanel caseId={caseId} />
         </>
       )}
     </div>

@@ -115,6 +115,41 @@ const serverEnvSchema = z.object({
     .string()
     .url("KINDE_POST_LOGIN_REDIRECT_URL must be a valid URL"),
 
+  /**
+   * Fallback post-login redirect destination for SCAN app users. Optional.
+   * Used by /api/auth/scan-login when no deeper URL is available from the
+   * middleware (e.g. direct hit on /scan with no caseId).
+   * Defaults to KINDE_SITE_URL + /scan when not set.
+   * Development: http://localhost:3000/scan
+   * Production:  https://inventory.skyspecsops.com/scan
+   */
+  KINDE_SCAN_POST_LOGIN_REDIRECT_URL: z
+    .string()
+    .url("KINDE_SCAN_POST_LOGIN_REDIRECT_URL must be a valid URL")
+    .optional(),
+
+  /**
+   * Regex pattern used as an open-redirect guard for post-login redirect URLs.
+   * Optional. When set, the Kinde SDK validates post_login_redirect_url values
+   * against this pattern before honouring them.
+   * Example: ^(http://localhost:3000|https://inventory\.skyspecsops\.com)/(inventory|scan)(/.*)?$
+   */
+  KINDE_POST_LOGIN_ALLOWED_URL_REGEX: z.string().optional(),
+
+  /**
+   * Kinde Management API client ID (Machine-to-Machine application). Optional.
+   * Required only when server-side Kinde Management API calls are needed
+   * (e.g. user listing, role assignment). Create a separate M2M application
+   * in the Kinde dashboard with access to the Management API.
+   */
+  KINDE_MANAGEMENT_CLIENT_ID: z.string().optional(),
+
+  /**
+   * Kinde Management API client secret (Machine-to-Machine application). Optional.
+   * Must be set together with KINDE_MANAGEMENT_CLIENT_ID.
+   */
+  KINDE_MANAGEMENT_CLIENT_SECRET: z.string().optional(),
+
   // ── FedEx Tracking API ──────────────────────────────────────────────────
   /** OAuth 2.0 client ID from the FedEx Developer Portal. Required. */
   FEDEX_CLIENT_ID: z

@@ -25,23 +25,29 @@ afterEach(() => cleanup());
 
 describe("StatusPill — label rendering", () => {
   const cases: Array<[StatusKind, string]> = [
-    ["assembled", "Assembled"],
-    ["deployed", "Deployed"],
-    ["in_field", "In Field"],
-    ["shipping", "Shipping"],
-    ["returned", "Returned"],
-    ["pending", "Pending"],
+    // Case lifecycle
+    ["hangar",      "In Hangar"],
+    ["assembled",   "Assembled"],
+    ["transit_out", "Transit Out"],
+    ["deployed",    "Deployed"],
+    ["flagged",     "Flagged"],
+    ["transit_in",  "Transit In"],
+    ["received",    "Received"],
+    ["archived",    "Archived"],
+    // Inspection
+    ["pending",     "Pending"],
     ["in_progress", "In Progress"],
-    ["completed", "Completed"],
-    ["flagged", "Flagged"],
-    ["label_created", "Label Created"],
-    ["picked_up", "Picked Up"],
-    ["in_transit", "In Transit"],
+    ["completed",   "Completed"],
+    // Shipment
+    ["label_created",    "Label Created"],
+    ["picked_up",        "Picked Up"],
+    ["in_transit",       "In Transit"],
     ["out_for_delivery", "Out for Delivery"],
-    ["delivered", "Delivered"],
-    ["exception", "Exception"],
-    ["planning", "Planning"],
-    ["active", "Active"],
+    ["delivered",        "Delivered"],
+    ["exception",        "Exception"],
+    // Mission
+    ["planning",  "Planning"],
+    ["active",    "Active"],
     ["cancelled", "Cancelled"],
   ];
 
@@ -70,9 +76,9 @@ describe("StatusPill — accessibility", () => {
   });
 
   it("has a descriptive aria-label", () => {
-    render(<StatusPill kind="shipping" />);
+    render(<StatusPill kind="transit_out" />);
     const el = screen.getByRole("status");
-    expect(el.getAttribute("aria-label")).toBe("Status: Shipping");
+    expect(el.getAttribute("aria-label")).toBe("Status: Transit Out");
   });
 
   it("aria-label uses the custom label when provided", () => {
@@ -109,8 +115,8 @@ describe("StatusPill — signal class assignment", () => {
     expect(screen.getByRole("status").className).toContain("signalSuccess");
   });
 
-  it('maps "shipping" to warning signal', () => {
-    render(<StatusPill kind="shipping" />);
+  it('maps "transit_out" to warning signal', () => {
+    render(<StatusPill kind="transit_out" />);
     expect(screen.getByRole("status").className).toContain("signalWarning");
   });
 
@@ -124,8 +130,8 @@ describe("StatusPill — signal class assignment", () => {
     expect(screen.getByRole("status").className).toContain("signalInfo");
   });
 
-  it('maps "returned" to neutral signal', () => {
-    render(<StatusPill kind="returned" />);
+  it('maps "received" to neutral signal', () => {
+    render(<StatusPill kind="received" />);
     expect(screen.getByRole("status").className).toContain("signalNeutral");
   });
 });

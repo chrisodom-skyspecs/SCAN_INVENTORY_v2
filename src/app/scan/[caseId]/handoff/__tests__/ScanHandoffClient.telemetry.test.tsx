@@ -110,7 +110,14 @@ vi.mock("../../../../../../convex/_generated/api", () => ({
     },
     custody: {
       getLatestCustodyRecord: "custody:getLatestCustodyRecord",
-      handoffCustody:         "custody:handoffCustody",
+    },
+    custodyHandoffs: {
+      handoffCustody: "custodyHandoffs:handoffCustody",
+    },
+    // users namespace required by UserSelector component (api.users.listUsers)
+    users: {
+      listUsers:      "users:listUsers",
+      getCurrentUser: "users:getCurrentUser",
     },
   },
 }));
@@ -119,6 +126,74 @@ vi.mock("../../../../../../convex/_generated/api", () => ({
 
 vi.mock("../../../../../hooks/use-custody", () => ({
   useLatestCustodyRecord: vi.fn(() => null),
+}));
+
+// ─── Mock Kinde auth (browser client) ────────────────────────────────────────
+// Returns the placeholder "scan-user" identity expected by telemetry assertions.
+
+vi.mock("@kinde-oss/kinde-auth-nextjs", () => ({
+  useKindeBrowserClient: () => ({
+    user: {
+      id:          "scan-user",
+      given_name:  "Field",
+      family_name: "Technician",
+      email:       "field.technician@skyspecs.com",
+    },
+    isAuthenticated: true,
+    isLoading:       false,
+  }),
+}));
+
+// ─── Mock UserSelector ────────────────────────────────────────────────────────
+// The real UserSelector is a combobox that loads users from Convex.
+// In tests we replace it with two plain text inputs so tests can set
+// recipientId and recipientName via getByLabelText.
+
+vi.mock("../../../../../components/UserSelector", () => ({
+  UserSelector: ({
+    id,
+    value,
+    onChange,
+    disabled,
+  }: {
+    id?: string;
+    value: { userId: string; userName: string } | null;
+    onChange: (val: { userId: string; userName: string } | null) => void;
+    disabled?: boolean;
+    placeholder?: string;
+    "aria-describedby"?: string;
+  }) => (
+    <div>
+      <label htmlFor={`${id}-userId`}>Recipient User ID</label>
+      <input
+        id={`${id}-userId`}
+        type="text"
+        value={value?.userId ?? ""}
+        disabled={disabled}
+        onChange={(e) =>
+          onChange(
+            e.target.value
+              ? { userId: e.target.value, userName: value?.userName ?? "" }
+              : null
+          )
+        }
+      />
+      <label htmlFor={`${id}-userName`}>Recipient Display Name</label>
+      <input
+        id={`${id}-userName`}
+        type="text"
+        value={value?.userName ?? ""}
+        disabled={disabled}
+        onChange={(e) =>
+          onChange(
+            e.target.value
+              ? { userId: value?.userId ?? "", userName: e.target.value }
+              : null
+          )
+        }
+      />
+    </div>
+  ),
 }));
 
 // ─── Mock use-scan-mutations ──────────────────────────────────────────────────
@@ -152,7 +227,7 @@ const MOCK_CASE = {
   _id:           CASE_ID,
   _creationTime: 1_700_000_000_000,
   label:         "CASE-HND-001",
-  status:        "in_field" as const,
+  status:        "deployed" as const,
   locationName:  "Site Beta",
   assigneeId:    FROM_USER_ID,
   assigneeName:  FROM_USER_NAME,

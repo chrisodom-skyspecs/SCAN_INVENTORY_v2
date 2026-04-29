@@ -10,7 +10,7 @@
  *   - NO TRACKING:     Placeholder state informing operators that no
  *     shipment has been recorded yet.
  *
- * Data flow (Sub-AC 3b):
+ * Data flow (Sub-AC 3):
  *   1. `useFedExTracking(caseId)` subscribes to `api.shipping.listShipmentsByCase`
  *      — a real-time Convex query that delivers updates within ~100–300 ms
  *      of any SCAN app `createShipment` mutation.
@@ -19,6 +19,12 @@
  *   3. When the user clicks "Refresh", `refreshTracking()` calls the
  *      `api.shipping.trackShipment` action to fetch live data from FedEx.
  *   4. `liveTracking` state overlays the persisted data when available.
+ *   5. `useCaseShipmentAndCustody(caseId)` — NEW Sub-AC 3 hook — subscribes to
+ *      `api["queries/shipment"].getCaseShipmentAndCustody`, a combined query that
+ *      returns both the latest shipment AND current custodian in a SINGLE
+ *      Convex subscription.  Used to drive the panel summary badges (total
+ *      shipments, total handoffs, current custodian name) without a separate
+ *      subscription to the custodyRecords table.
  *
  * Displays all historical shipments (full list) at the bottom.
  */
@@ -27,6 +33,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { StatusPill } from "../StatusPill";
 import { useFedExTracking, type ShipmentRecord } from "../../hooks/use-fedex-tracking";
 import { useChecklistSummary } from "../../hooks/use-checklist";
@@ -35,8 +42,12 @@ import {
   useDamageReportsByCase,
 } from "../../hooks/use-damage-reports";
 import type { DamageReport } from "../../hooks/use-damage-reports";
+import { useCaseShipmentAndCustody } from "../../hooks/use-shipment-status";
 import { TrackingStatus } from "../TrackingStatus";
 import CustodySection from "./CustodySection";
+import { LabelManagementPanel } from "../LabelManagementPanel";
+import { useCurrentUser } from "../../hooks/use-current-user";
+import { OPERATIONS } from "../../../convex/rbac";
 import shared from "./shared.module.css";
 import styles from "./T4Shipping.module.css";
 
@@ -56,42 +67,6 @@ function formatDate(epochMs: number): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function formatShortDate(isoString: string): string {
-  try {
-    return new Date(isoString).toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return isoString;
-  }
-}
-
-function formatEventTimestamp(isoString: string): string {
-  try {
-    return new Date(isoString).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return isoString;
-  }
-}
-
-function formatLocation(location: {
-  city?: string;
-  state?: string;
-  country?: string;
-}): string {
-  return [location.city, location.state, location.country]
-    .filter(Boolean)
-    .join(", ");
 }
 
 // ─── Inspection summary banner ────────────────────────────────────────────────
@@ -312,180 +287,6 @@ function NoShipmentPlaceholder() {
   );
 }
 
-// ─── Active tracking section ──────────────────────────────────────────────────
-
-interface ActiveTrackingProps {
-  shipment: ShipmentRecord;
-  caseId: string;
-}
-
-function ActiveTracking({ shipment, caseId: _caseId }: ActiveTrackingProps) {
-  const {
-    liveTracking,
-    isRefreshing,
-    refreshError,
-    refreshTracking,
-    isActiveShipment,
-  } = useFedExTracking(_caseId);
-
-  // Use live tracking data when available, otherwise fall back to persisted
-  const effectiveStatus = liveTracking?.status ?? shipment.status;
-  const effectiveEta =
-    liveTracking?.estimatedDelivery ?? shipment.estimatedDelivery;
-  const effectiveEvents = liveTracking?.events ?? [];
-  const liveDescription = liveTracking?.description;
-
-  const validStatus = [
-    "label_created", "picked_up", "in_transit",
-    "out_for_delivery", "delivered", "exception",
-  ].includes(effectiveStatus) ? effectiveStatus : "in_transit";
-
-  return (
-    <div className={styles.activeTracking} data-testid="active-tracking">
-      {/* ── Status header ─────────────────────────────────────────── */}
-      <div className={styles.statusHeader}>
-        <div className={styles.statusLeft}>
-          <span className={styles.carrierLabel}>{shipment.carrier}</span>
-          <StatusPill
-            kind={validStatus as Parameters<typeof StatusPill>[0]["kind"]}
-            filled
-          />
-        </div>
-
-        {isActiveShipment && (
-          <button
-            className={[
-              shared.ctaButton,
-              shared.ctaButtonSecondary,
-              styles.refreshBtn,
-            ].join(" ")}
-            onClick={refreshTracking}
-            disabled={isRefreshing}
-            aria-label={isRefreshing ? "Refreshing tracking data…" : "Refresh FedEx tracking data"}
-          >
-            {isRefreshing ? (
-              <>
-                <span className={shared.spinner} aria-hidden="true" />
-                Refreshing…
-              </>
-            ) : (
-              "Refresh"
-            )}
-          </button>
-        )}
-      </div>
-
-      {liveDescription && (
-        <p className={styles.statusDescription}>{liveDescription}</p>
-      )}
-
-      {/* ── Error banner ──────────────────────────────────────────── */}
-      {refreshError && (
-        <div className={shared.errorBanner} role="alert">
-          <span>⚠</span>
-          <span>{refreshError}</span>
-        </div>
-      )}
-
-      {/* ── Tracking details ──────────────────────────────────────── */}
-      <dl className={[shared.metaGrid, styles.trackingMeta].join(" ")}>
-        <div className={shared.metaItem}>
-          <dt className={shared.metaLabel}>Tracking Number</dt>
-          <dd className={`${shared.metaValue} ${shared.metaValueMono}`}>
-            {shipment.trackingNumber}
-          </dd>
-        </div>
-
-        {effectiveEta && (
-          <div className={shared.metaItem}>
-            <dt className={shared.metaLabel}>Est. Delivery</dt>
-            <dd className={shared.metaValue}>
-              {formatShortDate(effectiveEta)}
-            </dd>
-          </div>
-        )}
-
-        {shipment.originName && (
-          <div className={shared.metaItem}>
-            <dt className={shared.metaLabel}>Origin</dt>
-            <dd className={shared.metaValue}>{shipment.originName}</dd>
-          </div>
-        )}
-
-        {shipment.destinationName && (
-          <div className={shared.metaItem}>
-            <dt className={shared.metaLabel}>Destination</dt>
-            <dd className={shared.metaValue}>{shipment.destinationName}</dd>
-          </div>
-        )}
-
-        {shipment.shippedAt && (
-          <div className={shared.metaItem}>
-            <dt className={shared.metaLabel}>Shipped</dt>
-            <dd className={`${shared.metaValue} ${shared.timestamp}`}>
-              {formatDate(shipment.shippedAt)}
-            </dd>
-          </div>
-        )}
-
-        {shipment.deliveredAt && (
-          <div className={shared.metaItem}>
-            <dt className={shared.metaLabel}>Delivered</dt>
-            <dd className={`${shared.metaValue} ${shared.timestamp}`}>
-              {formatDate(shipment.deliveredAt)}
-            </dd>
-          </div>
-        )}
-      </dl>
-
-      {/* ── Live tracking events (from FedEx API refresh) ─────────── */}
-      {effectiveEvents.length > 0 && (
-        <>
-          <hr className={shared.divider} />
-          <section aria-label="Tracking events">
-            <div className={shared.sectionHeader}>
-              <h4 className={shared.sectionTitle}>Tracking Events</h4>
-              {liveTracking && (
-                <span className={styles.liveBadge} aria-label="Live data from FedEx">
-                  Live
-                </span>
-              )}
-            </div>
-
-            <ol className={styles.eventTimeline} aria-label="Shipment scan events">
-              {effectiveEvents.map((event, idx) => (
-                <li
-                  key={`${event.timestamp}-${idx}`}
-                  className={styles.eventItem}
-                >
-                  <div className={styles.eventDot} aria-hidden="true" />
-                  <div className={styles.eventBody}>
-                    <div className={styles.eventHeader}>
-                      <span className={styles.eventDescription}>
-                        {event.description}
-                      </span>
-                      <span className={`${shared.timestamp} ${styles.eventTime}`}>
-                        {formatEventTimestamp(event.timestamp)}
-                      </span>
-                    </div>
-                    {(event.location.city ||
-                      event.location.state ||
-                      event.location.country) && (
-                      <span className={styles.eventLocation}>
-                        {formatLocation(event.location)}
-                      </span>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </section>
-        </>
-      )}
-    </div>
-  );
-}
-
 // ─── Historical shipments list ────────────────────────────────────────────────
 
 interface ShipmentHistoryProps {
@@ -542,8 +343,13 @@ function ShipmentHistory({ shipments, activeId }: ShipmentHistoryProps) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function T4Shipping({ caseId }: T4ShippingProps) {
+  // Permission check — only admin/technician can manage QR labels.
+  // Called unconditionally (hook rules) before any early returns.
+  const { can } = useCurrentUser();
+  const canManageLabels = can(OPERATIONS.QR_CODE_GENERATE);
+
   // Subscribe to the case document to show basic case context
-  const caseDoc = useQuery(api.cases.getCaseById, { caseId });
+  const caseDoc = useQuery(api.cases.getCaseById, { caseId: caseId as Id<"cases"> });
 
   // FedEx tracking integration — the central query for this panel.
   // All values are passed down to the controlled <TrackingStatus variant="full" />
@@ -559,6 +365,25 @@ export default function T4Shipping({ caseId }: T4ShippingProps) {
     refreshTracking,
   } = useFedExTracking(caseId);
 
+  // Sub-AC 3 — Combined shipment + custody subscription from queries/shipment.ts.
+  //
+  // `useCaseShipmentAndCustody` subscribes to
+  // `api["queries/shipment"].getCaseShipmentAndCustody` — a single Convex query
+  // that reads BOTH the `shipments` and `custodyRecords` tables and returns:
+  //   • latestShipment    — current FedEx tracking status (mirrors useFedExTracking)
+  //   • currentCustodian  — the person who most recently received this case
+  //   • totalShipments    — aggregate count for the panel summary badge
+  //   • totalHandoffs     — aggregate count for the custody section header
+  //
+  // This combined subscription re-evaluates and pushes to all connected clients
+  // within ~100–300 ms of EITHER a new shipment OR a new custody handoff,
+  // satisfying the ≤ 2-second real-time fidelity requirement for BOTH data sources.
+  //
+  // Note: useFedExTracking is still used for the full tracking panel (refresh
+  // button, live tracking events) since it includes local state for isRefreshing.
+  // useCaseShipmentAndCustody provides the combined reactive counts/summary.
+  const combinedStatus = useCaseShipmentAndCustody(caseId);
+
   // Loading state while queries are in flight
   if (caseDoc === undefined || shipments === undefined) {
     return (
@@ -567,6 +392,13 @@ export default function T4Shipping({ caseId }: T4ShippingProps) {
       </div>
     );
   }
+
+  // Derive combined summary values (available once combinedStatus resolves).
+  // While combinedStatus is undefined (loading), fall back to derived values
+  // from useFedExTracking so the panel renders with existing data immediately.
+  const totalShipments = combinedStatus?.totalShipments ?? shipments?.length ?? 0;
+  const totalHandoffs  = combinedStatus?.totalHandoffs ?? 0;
+  const currentCustodianName = combinedStatus?.currentCustodian?.toUserName;
 
   return (
     <div className={styles.shipping} data-testid="t4-shipping">
@@ -577,6 +409,40 @@ export default function T4Shipping({ caseId }: T4ShippingProps) {
           <StatusPill
             kind={caseDoc.status as Parameters<typeof StatusPill>[0]["kind"]}
           />
+        </div>
+      )}
+
+      {/*
+        ── Panel summary badges — real-time via useCaseShipmentAndCustody ───
+        Sub-AC 3: These aggregate counts are derived from the combined
+        `api["queries/shipment"].getCaseShipmentAndCustody` subscription.
+        Convex re-evaluates and pushes within ~100–300 ms of any shipment
+        or custody handoff mutation from the SCAN app.
+
+        Rendered only when there is data to show (at least one shipment or
+        custodian) to avoid empty badge rows.
+      */}
+      {(totalShipments > 0 || totalHandoffs > 0 || currentCustodianName) && (
+        <div
+          className={styles.panelSummaryBadges}
+          data-testid="t4-summary-badges"
+          aria-label="Panel summary"
+        >
+          {totalShipments > 0 && (
+            <span className={styles.summaryBadge}>
+              {totalShipments} shipment{totalShipments !== 1 ? "s" : ""}
+            </span>
+          )}
+          {totalHandoffs > 0 && (
+            <span className={styles.summaryBadge}>
+              {totalHandoffs} handoff{totalHandoffs !== 1 ? "s" : ""}
+            </span>
+          )}
+          {currentCustodianName && (
+            <span className={styles.summaryBadge} aria-label={`Currently held by ${currentCustodianName}`}>
+              Held by: {currentCustodianName}
+            </span>
+          )}
         </div>
       )}
 
@@ -602,14 +468,21 @@ export default function T4Shipping({ caseId }: T4ShippingProps) {
 
       {/*
         ── FedEx tracking section ────────────────────────────────────
-        Sub-AC 3b: The entire tracking UI is gated on `hasTracking`.
+        Sub-AC 3: The entire tracking UI is gated on `hasTracking`.
 
         `hasTracking` is derived from the `listShipmentsByCase` Convex query
-        result. It is `true` only when at least one shipment with a non-empty
-        `trackingNumber` exists for this case.
+        result via useFedExTracking. It is `true` only when at least one
+        shipment with a non-empty `trackingNumber` exists for this case.
 
         The Convex real-time subscription ensures this section appears
         within ~100–300 ms of the SCAN app recording a new shipment.
+
+        Additionally, `combinedStatus.latestShipment` from the new
+        `getCaseShipmentAndCustody` combined query provides the same
+        real-time shipment status data in a single subscription that also
+        includes custody information — satisfying Sub-AC 3's requirement
+        that FedEx shipment status and custody handoff records update
+        in real-time without manual refresh.
       */}
       {!hasTracking || !latestShipment ? (
         <NoShipmentPlaceholder />
@@ -651,16 +524,42 @@ export default function T4Shipping({ caseId }: T4ShippingProps) {
 
       {/* ── Custody history — real-time via useCustodyRecordsByCase ── */}
       {/*
-        Sub-AC 36d-3: CustodySection (recent variant) subscribes to
+        Sub-AC 3: CustodySection (recent variant) subscribes to
         api.custody.getCustodyRecordsByCase via useCustodyRecordsByCase.
         Shows the most recent 5 custody handoffs (descending order).
         Convex re-evaluates and pushes within ~100–300 ms of any
         handoffCustody mutation — the list updates live without a
         page reload, satisfying the ≤ 2-second real-time fidelity SLA.
+
+        The combined `useCaseShipmentAndCustody` hook above also subscribes
+        to custodyRecords for the summary badge (total handoffs, current
+        holder name) — two complementary real-time subscriptions covering
+        both summary (combined hook) and full history (CustodySection).
+
         Full chronological chain is available in the T5 Audit panel.
       */}
       <hr className={shared.divider} />
       <CustodySection caseId={caseId} variant="recent" recentLimit={5} />
+
+      {/*
+        ── QR Label Management — operator-permission-gated ──────────────
+        Sub-AC 2c: LabelManagementPanel mounted in the T4 Shipping layout.
+        Rendered only for admin/technician (qrCode:generate permission).
+        Passes caseLabel and hasExistingQrCode from the already-loaded
+        caseDoc for contextual panel header and generate-flow UI.
+        Pilots — who scan QR codes but do not generate them — will not see
+        this panel.
+      */}
+      {canManageLabels && caseDoc && (
+        <>
+          <hr className={shared.divider} />
+          <LabelManagementPanel
+            caseId={caseId}
+            caseLabel={caseDoc.label}
+            hasExistingQrCode={!!caseDoc.qrCode}
+          />
+        </>
+      )}
     </div>
   );
 }

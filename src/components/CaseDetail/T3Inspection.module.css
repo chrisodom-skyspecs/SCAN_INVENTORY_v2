@@ -112,6 +112,102 @@
   border-color: var(--signal-error-border);
 }
 
+/* ── Annotated photo thumbnails ──────────────────────────────────────────── */
+/*
+ * Real-time photo evidence strip for damaged items.
+ * Updated automatically when useDamagePhotoReportsWithUrls subscription fires
+ * (within ~100–300 ms of SCAN app submitDamagePhoto).
+ */
+
+.photoStrip {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.375rem;
+  overflow-x: auto;
+  padding: 0.25rem 0;
+  scrollbar-width: none;           /* Firefox: hide scrollbar for compact look */
+  -ms-overflow-style: none;        /* IE 11 */
+}
+
+.photoStrip::-webkit-scrollbar {
+  display: none;                   /* WebKit: hide scrollbar */
+}
+
+/* Individual photo thumbnail wrapper — position: relative for pin overlay */
+.photoThumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 4rem;                     /* 64px — compact for side panel */
+  height: 4rem;
+  border-radius: 0.25rem;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--surface-sunken);
+}
+
+/* Actual photo image */
+.photoImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Placeholder when photoUrl is null (deleted or invalid storage object) */
+.photoImgPlaceholder {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background-color: var(--surface-sunken);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--border-subtle) 0,
+    var(--border-subtle) 1px,
+    transparent 0,
+    transparent 50%
+  );
+  background-size: 8px 8px;
+}
+
+/* Container that holds all annotation pin dots — absolute positioned over image */
+.annotationDots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;            /* Dots are decorative; don't block image interactions */
+}
+
+/* Individual annotation pin dot — positioned via inline left/top */
+.annotationDot {
+  position: absolute;
+  width: 0.5rem;                   /* 8px */
+  height: 0.5rem;
+  border-radius: 9999px;
+  border: 1.5px solid var(--signal-error-border);
+  background-color: var(--signal-error-fill);
+  transform: translate(-50%, -50%); /* Center on the annotation coordinate */
+  box-shadow: 0 0 0 1px var(--surface-raised);
+}
+
+/* Annotation count badge — bottom-right corner of thumbnail */
+.annotationCount {
+  position: absolute;
+  bottom: 0.1875rem;
+  right: 0.1875rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.1875rem;
+  border-radius: 9999px;
+  background-color: var(--ink-primary);
+  color: var(--surface-raised);
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  line-height: 1rem;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* ── Shipment context banner (in-transit indicator below inspection header) ── */
 
 .shipmentContextBanner {
@@ -186,3 +282,38 @@
   box-shadow: var(--elevation-focus);
   border-radius: 0.125rem;
 }
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   ============================================================ */
+
+/*
+ * Photo placeholder stripe pattern — in dark mode the --border-subtle
+ * token (--_n-850) is very close to --surface-sunken (--_n-975) making
+ * the diagonal stripes nearly invisible.  Bump to --border-default
+ * (--_n-800) for sufficient contrast.
+ */
+:global(.theme-dark) .photoImgPlaceholder {
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--border-default) 0,
+    var(--border-default) 1px,
+    transparent 0,
+    transparent 50%
+  );
+}
+
+/*
+ * Annotation dot ring — surface-raised in dark mode is --_n-900 (9% l)
+ * which separates the dot from the photo background.  No override needed
+ * beyond the token fix above (surface-default → surface-raised).
+ */
+
+/* Shipment context banner — bump border for better dark contrast */
+:global(.theme-dark) .shipmentContextBanner {
+  border-color: var(--border-default);
+}
+
+/* Severity badges in dark mode — no fill change needed; signal tokens
+   handle light/dark ramp selection already. */

@@ -81,6 +81,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 
 // Re-export types so consumers can import them from the hook module.
 export type {
@@ -129,7 +130,7 @@ export type {
 export function useCustodyRecordsByCase(caseId: string | null) {
   return useQuery(
     api.custody.getCustodyRecordsByCase,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -171,7 +172,7 @@ export function useCustodyRecordsByCase(caseId: string | null) {
 export function useLatestCustodyRecord(caseId: string | null) {
   return useQuery(
     api.custody.getLatestCustodyRecord,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -222,7 +223,7 @@ export function useLatestCustodyRecord(caseId: string | null) {
 export function useCustodyChain(caseId: string | null) {
   return useQuery(
     api.custody.getCustodyChain,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 

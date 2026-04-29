@@ -1,10 +1,12 @@
 {
   "framework": "nextjs",
-  "buildCommand": "npm run build",
+  "buildCommand": "if [ -n \"$CONVEX_DEPLOY_KEY\" ]; then npx convex deploy --cmd 'npm run build'; else npm run build; fi",
   "outputDirectory": ".next",
   "installCommand": "npm install",
   "devCommand": "npm run dev",
-  "regions": ["iad1"],
+
+  "regions": ["iad1", "sfo1", "lhr1"],
+
   "headers": [
     {
       "source": "/(.*)",
@@ -27,12 +29,65 @@
         }
       ]
     },
+
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    },
+
+    {
+      "source": "/manifest.json",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+
+    {
+      "source": "/icons/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    },
+
+    {
+      "source": "/_next/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+
     {
       "source": "/scan",
       "headers": [
         {
           "key": "Permissions-Policy",
-          "value": "camera=self, microphone=()"
+          "value": "camera=self, microphone=(), geolocation=self"
         }
       ]
     },
@@ -41,10 +96,11 @@
       "headers": [
         {
           "key": "Permissions-Policy",
-          "value": "camera=self, microphone=()"
+          "value": "camera=self, microphone=(), geolocation=self"
         }
       ]
     }
   ],
+
   "trailingSlash": false
 }

@@ -30,6 +30,7 @@
 import { useQuery, useAction } from "convex/react";
 import { useState, useCallback } from "react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import {
   type FedExTrackingErrorCode,
   FEDEX_ERROR_MESSAGES,
@@ -193,7 +194,7 @@ export function useFedExTracking(caseId: string): UseFedExTrackingReturn {
   // `listShipmentsByCase` is a public query — Convex re-runs it and pushes
   // updates within ~100–300 ms whenever a shipment row changes (e.g., when
   // the SCAN app calls createShipment or the background refresh runs).
-  const rawShipments = useQuery(api.shipping.listShipmentsByCase, { caseId });
+  const rawShipments = useQuery(api.shipping.listShipmentsByCase, { caseId: caseId as Id<"cases"> });
 
   // ── On-demand FedEx action ─────────────────────────────────────────────────
   // `trackShipment` is a public action that calls the FedEx Track API.

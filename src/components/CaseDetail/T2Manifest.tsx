@@ -1,18 +1,50 @@
 /**
  * T2Manifest — Manifest / Packing List Panel
  *
- * Displays the full packing list (manifest items) for a case with per-item
- * status indicators.  Includes:
- *   - Aggregate progress bar
- *   - Status filter tabs (all / ok / damaged / missing / unchecked)
- *   - Item list with StatusPill for each item's inspection state
- *   - Item notes when present
+ * Displays the full packing list (manifest items) for a case in a tabular
+ * layout with equipment item list, quantity/status columns, and checklist data.
+ *
+ * Layout
+ * ──────
+ *   [ShipmentStatusBanner]       — compact in-transit indicator (when applicable)
+ *   [Progress bar]               — aggregate review progress (reviewed / total)
+ *   [Filter bar]                 — filter by status: All / Unchecked / OK / Damaged / Missing
+ *   [Column headers: Item | Qty | Status]
+ *   [Item rows]                  — name column + qty column (1×) + status pill column
+ *     [Damage severity badge]    — when item.status === "damaged"
+ *     [Photo count line]         — when damage photos have been submitted
+ *     [Notes]                    — technician free-text notes
+ *     [Attribution timestamp]    — checker name + date
+ *   [Custody section]            — compact current-custodian row
+ *
+ * Data flow (real-time via Convex)
+ * ─────────────────────────────────
+ * • useChecklistWithInspection   — manifest items + inspection record + summary
+ * • useDamageReportsByCase       — damage severity + photo counts per item
+ * • useLatestShipment            — shipment status for the transit banner
+ *
+ * Convex re-evaluates all three queries within ~100–300 ms of any SCAN app
+ * action (check-in, item update, damage photo, ship), satisfying the ≤ 2-second
+ * real-time fidelity requirement between field action and dashboard visibility.
+ *
+ * Quantity column
+ * ───────────────
+ * The packing list schema stores one `manifestItems` row per physical unit —
+ * each template item maps to exactly one manifest item, so the expected
+ * quantity is always 1.  The "Qty" column displays "1×" per item, making the
+ * manifest read like a proper equipment manifest rather than a flat checklist.
+ *
+ * Props
+ * ─────
+ *   caseId              — Convex document ID of the case to display.
+ *   onNavigateToShipping — optional callback fired when the user clicks
+ *                          "View Shipping →" to jump to the T4 Shipping tab.
  */
 
 "use client";
 
 import { useState } from "react";
-import { useChecklistWithInspection } from "../../hooks/use-checklist";
+import { useChecklistWithInspection } from "../../queries/checklist";
 import { useDamageReportsByCase } from "../../hooks/use-damage-reports";
 import {
   useLatestShipment,
@@ -21,9 +53,12 @@ import {
 import type { ShipmentRecord } from "../../hooks/use-shipment-status";
 import { StatusPill } from "../StatusPill";
 import CustodySection from "./CustodySection";
+import { LabelManagementPanel } from "../LabelManagementPanel";
+import { useCurrentUser } from "../../hooks/use-current-user";
+import { OPERATIONS } from "../../../convex/rbac";
 import shared from "./shared.module.css";
 import styles from "./T2Manifest.module.css";
-import type { ManifestItemStatus, ChecklistWithInspection } from "../../../convex/checklists";
+import type { ManifestItemStatus, ChecklistWithInspection } from "../../queries/checklist";
 import type { StatusKind } from "../StatusPill/StatusPill";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -159,10 +194,26 @@ const MANIFEST_STATUS_KIND: Record<ManifestItemStatus, StatusKind> = {
   missing:   "exception",  // error   — item is absent
 };
 
+/**
+ * Human-readable status labels for aria attributes and screen readers.
+ * These are the user-facing terms that operators and technicians see.
+ */
+const MANIFEST_STATUS_LABEL: Record<ManifestItemStatus, string> = {
+  unchecked: "Unchecked",
+  ok:        "Verified",
+  damaged:   "Flagged",
+  missing:   "Missing",
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestProps) {
   const [filter, setFilter] = useState<FilterKind>("all");
+
+  // Permission check — only admin/technician can manage QR labels.
+  // Called unconditionally (hook rules) before any early returns.
+  const { can } = useCurrentUser();
+  const canManageLabels = can(OPERATIONS.QR_CODE_GENERATE);
 
   // useChecklistWithInspection is a real-time subscription via Convex.
   // Convex re-runs getChecklistWithInspection whenever any manifestItem or
@@ -187,7 +238,7 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
   // Loading
   if (checklistData === undefined) {
     return (
-      <div className={shared.emptyState} aria-busy="true">
+      <div className={shared.emptyState} aria-busy="true" data-testid="t2-manifest-loading">
         <div className={shared.spinner} />
       </div>
     );
@@ -198,11 +249,38 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
   // No items
   if (items.length === 0) {
     return (
-      <div className={shared.emptyState}>
-        <p className={shared.emptyStateTitle}>No manifest items</p>
-        <p className={shared.emptyStateText}>
-          Apply a case template to define the expected packing list.
-        </p>
+      <div className={styles.manifest} data-testid="t2-manifest">
+        {/*
+          ── Shipment status banner — real-time via useLatestShipment ──────
+          Shown even when no items exist — the case could be in transit
+          without a completed template application.
+        */}
+        <ShipmentStatusBanner
+          caseId={caseId}
+          onNavigateToShipping={onNavigateToShipping}
+        />
+        <div className={shared.emptyState}>
+          <p className={shared.emptyStateTitle}>No manifest items</p>
+          <p className={shared.emptyStateText}>
+            Apply a case template to define the expected packing list.
+          </p>
+        </div>
+        <hr className={shared.divider} />
+        <div className={styles.custodyRow}>
+          <CustodySection caseId={caseId} variant="compact" />
+        </div>
+
+        {/*
+          ── QR Label Management — operator-permission-gated ──────────────
+          Sub-AC 2c: LabelManagementPanel mounted in the T2 Manifest layout.
+          Rendered only for admin/technician (qrCode:generate permission).
+        */}
+        {canManageLabels && (
+          <>
+            <hr className={shared.divider} />
+            <LabelManagementPanel caseId={caseId} />
+          </>
+        )}
       </div>
     );
   }
@@ -232,7 +310,7 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
         <div className={shared.sectionHeader}>
           <h3 className={shared.sectionTitle}>Packing List</h3>
           <span className={shared.timestamp}>
-            {summary.ok + summary.damaged + summary.missing} / {summary.total}
+            {summary.ok + summary.damaged + summary.missing} / {summary.total} reviewed
           </span>
         </div>
 
@@ -258,9 +336,13 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
           <div className={shared.progressMeta}>
             <span>{summary.progressPct}% reviewed</span>
             <span>
-              {summary.ok > 0 && `${summary.ok} OK`}
-              {summary.damaged > 0 && ` · ${summary.damaged} damaged`}
-              {summary.missing > 0 && ` · ${summary.missing} missing`}
+              {[
+                summary.ok      > 0 && `${summary.ok} verified`,
+                summary.damaged > 0 && `${summary.damaged} flagged`,
+                summary.missing > 0 && `${summary.missing} missing`,
+              ]
+                .filter(Boolean)
+                .join(" · ") || `${summary.unchecked} unchecked`}
             </span>
           </div>
         </div>
@@ -278,31 +360,54 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
           return (
             <button
               key={f.id}
+              type="button"
               className={[
                 styles.filterBtn,
                 filter === f.id ? styles.filterBtnActive : "",
               ].filter(Boolean).join(" ")}
               onClick={() => setFilter(f.id)}
               aria-pressed={filter === f.id}
+              aria-label={`Show ${f.label.toLowerCase()} items (${count})`}
             >
               {f.label}
               {count > 0 && (
-                <span className={styles.filterCount}>{count}</span>
+                <span className={styles.filterCount} aria-hidden="true">{count}</span>
               )}
             </button>
           );
         })}
       </div>
 
-      {/* ── Item list ─────────────────────────────────────────────── */}
+      {/* ── Column headers — Item | Qty | Status ─────────────────── */}
+      {/*
+        The packing list is rendered as a semantic table-like structure.
+        Column headers are visually distinct from item rows and
+        provide screen-reader context for the columnar layout.
+        "Qty" is always 1 per manifest item (one row per physical unit).
+      */}
+      <div
+        className={styles.columnHeaders}
+        aria-hidden="true"
+        data-testid="t2-manifest-col-headers"
+      >
+        <span className={styles.colHeaderItem}>Item</span>
+        <span className={styles.colHeaderQty}>Qty</span>
+        <span className={styles.colHeaderStatus}>Status</span>
+      </div>
+
+      {/* ── Item list / empty-filter state ─────────────────────────── */}
       {filteredItems.length === 0 ? (
-        <div className={shared.emptyState}>
+        <div className={shared.emptyState} data-testid="t2-manifest-empty-filtered">
           <p className={shared.emptyStateText}>
             No items matching &ldquo;{FILTERS.find(f => f.id === filter)?.label}&rdquo;.
           </p>
         </div>
       ) : (
-        <ul className={styles.itemList} aria-label="Manifest items">
+        <ul
+          className={styles.itemList}
+          aria-label="Manifest items"
+          data-testid="t2-manifest-item-list"
+        >
           {filteredItems.map((item) => {
             // Lookup damage report for this item (by stable templateItemId).
             // damageReport is present only when the item is actually damaged;
@@ -311,12 +416,35 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
               ? damageByTemplateId.get(item.templateItemId)
               : undefined;
 
+            const statusKind = MANIFEST_STATUS_KIND[item.status as ManifestItemStatus] ?? "pending";
+            const statusLabel = MANIFEST_STATUS_LABEL[item.status as ManifestItemStatus] ?? item.status;
+
             return (
-              <li key={item._id} className={styles.item} data-testid="manifest-item">
-                <div className={styles.itemHeader}>
-                  <span className={styles.itemName}>{item.name}</span>
-                  <div className={styles.itemPills}>
-                    <StatusPill kind={MANIFEST_STATUS_KIND[item.status as ManifestItemStatus] ?? "pending"} />
+              <li
+                key={item._id}
+                className={styles.item}
+                data-testid="manifest-item"
+                data-status={item.status}
+                aria-label={`${item.name}: ${statusLabel}`}
+              >
+                {/*
+                  ── Primary row: Name | Qty | Status ──────────────────
+                  Columnar layout matching the column headers above.
+                  - colName: item name (flexible, ellipsis on overflow)
+                  - colQty:  expected quantity — always "1×" per template item
+                  - colStatus: StatusPill + optional severity badge
+                */}
+                <div className={styles.itemRow}>
+                  <span className={styles.colName}>{item.name}</span>
+                  <span
+                    className={styles.colQty}
+                    aria-label="Expected quantity: 1"
+                    title="Expected quantity"
+                  >
+                    1×
+                  </span>
+                  <div className={styles.colStatus}>
+                    <StatusPill kind={statusKind} />
                     {/* Severity badge — shown when a damage report with severity exists */}
                     {damageReport?.severity && (
                       <span
@@ -334,7 +462,10 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
 
                 {/* Photo count — shown for damaged items that have photo evidence */}
                 {damageReport && damageReport.photoStorageIds.length > 0 && (
-                  <p className={styles.itemPhotoCount} aria-label={`${damageReport.photoStorageIds.length} damage photo${damageReport.photoStorageIds.length !== 1 ? "s" : ""}`}>
+                  <p
+                    className={styles.itemPhotoCount}
+                    aria-label={`${damageReport.photoStorageIds.length} damage photo${damageReport.photoStorageIds.length !== 1 ? "s" : ""}`}
+                  >
                     <span aria-hidden="true" className={styles.photoIcon}>Photo</span>
                     {damageReport.photoStorageIds.length} photo{damageReport.photoStorageIds.length !== 1 ? "s" : ""}
                     {damageReport.reportedByName && (
@@ -345,13 +476,15 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
                   </p>
                 )}
 
+                {/* Free-text notes entered by the technician */}
                 {item.notes && (
                   <p className={styles.itemNote}>{item.notes}</p>
                 )}
 
+                {/* Attribution — checker name + timestamp */}
                 {item.checkedByName && item.checkedAt && (
                   <p className={shared.timestamp}>
-                    Checked by {item.checkedByName} ·{" "}
+                    {statusLabel} by {item.checkedByName} ·{" "}
                     {new Date(item.checkedAt).toLocaleString("en-US", {
                       month: "short",
                       day: "numeric",
@@ -377,6 +510,20 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
       <div className={styles.custodyRow}>
         <CustodySection caseId={caseId} variant="compact" />
       </div>
+
+      {/*
+        ── QR Label Management — operator-permission-gated ──────────────
+        Sub-AC 2c: LabelManagementPanel mounted in the T2 Manifest layout.
+        Rendered only for admin/technician (qrCode:generate permission).
+        Pilots — who scan QR codes but do not generate them — will not see
+        this panel.
+      */}
+      {canManageLabels && (
+        <>
+          <hr className={shared.divider} />
+          <LabelManagementPanel caseId={caseId} />
+        </>
+      )}
     </div>
   );
 }

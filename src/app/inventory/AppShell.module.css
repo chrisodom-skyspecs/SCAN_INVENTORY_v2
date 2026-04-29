@@ -1,0 +1,253 @@
+/**
+ * AppShell.module.css — INVENTORY app shell layout scaffold
+ *
+ * Implements the three-region chrome layout:
+ *   • Top bar   : fixed 52px strip (var(--shell-topbar-height))
+ *   • Side nav  : 220px left panel (var(--shell-sidenav-width))
+ *   • Main      : fills remaining viewport
+ *
+ * CSS Grid is used so:
+ *   — the top bar always spans the full width (including over the sidenav)
+ *   — the sidenav and main area share the row below the top bar
+ *   — both regions know their exact boundaries without JS measurement
+ *
+ * Responsive behaviour (no JS, pure CSS):
+ *   ≥ 1025px  : full side nav (220px)
+ *   769–1024px: collapsed side nav (52px icon strip)
+ *   ≤ 768px   : sidenav hidden from grid; accessible as overlay drawer
+ *               (overlay open state controlled by parent via data-nav-open)
+ *
+ * All dimensions reference CSS custom properties from §6 of base.css.
+ * No hex literals; no hard-coded pixel values in this file.
+ */
+
+/* ── Shell root ─────────────────────────────────────────────────── */
+
+/**
+ * .shell — outermost grid container.
+ *
+ * Grid areas:
+ *   topbar  : spans both columns, full-width header row
+ *   sidenav : left column below the topbar
+ *   main    : right column below the topbar (main content area)
+ */
+.shell {
+  display: grid;
+  grid-template-areas:
+    "topbar  topbar"
+    "sidenav main";
+  grid-template-rows: var(--shell-topbar-height) 1fr;
+  grid-template-columns: var(--shell-sidenav-width) 1fr;
+
+  /* Lock the shell to the full viewport — no page scroll at this level. */
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+
+  background: var(--surface-base);
+
+  /*
+   * Compatibility alias: --inv-navbar-height
+   *
+   * InventoryMapClient.module.css calculates its height as:
+   *   height: calc(100dvh - var(--inv-navbar-height, 0px))
+   *
+   * In the legacy layout, --inv-navbar-height is set to 3rem (48px) by the
+   * InventoryLayout wrapper.  In the redesign layout, the shell sets it to
+   * --shell-topbar-height (52px) so the existing calc resolves correctly
+   * without any change to InventoryMapClient.
+   */
+  --inv-navbar-height: var(--shell-topbar-height);
+}
+
+/* ── Top bar container ──────────────────────────────────────────── */
+
+/**
+ * .topBar — fixed-height header strip.
+ *
+ * Spans the full width of the viewport.  Stacks above the sidenav with
+ * z-index so that any floating menus or popovers inside the sidenav
+ * don't overlap the top bar.
+ *
+ * Height is exactly var(--shell-topbar-height) = 52px.  Children
+ * are responsible for their own internal padding/alignment.
+ */
+.topBar {
+  grid-area: topbar;
+  height: var(--shell-topbar-height);
+
+  /* Visually separate from content below */
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-default);
+  box-shadow: var(--elevation-1);
+
+  /* Always on top */
+  position: relative;
+  z-index: var(--shell-z-topbar, 200);
+
+  /* Flex so inner content can align items vertically */
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* ── Side nav container ─────────────────────────────────────────── */
+
+/**
+ * .sideNav — left navigation panel.
+ *
+ * Width is exactly var(--shell-sidenav-width) = 220px at full size.
+ * Uses overflow-y: auto so long nav lists can scroll independently
+ * of the main content area.
+ *
+ * The width transitions via var(--shell-nav-transition) so that
+ * expanding / collapsing animates smoothly.
+ */
+.sideNav {
+  grid-area: sidenav;
+  width: var(--shell-sidenav-width);
+
+  /* Panel chrome */
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--border-default);
+  box-shadow: var(--elevation-1);
+
+  /* Stack above main content when overlapping (e.g. popovers / tooltips) */
+  position: relative;
+  z-index: var(--shell-z-sidenav, 100);
+
+  /* Scroll nav items independently of main content */
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  /* Animate width on collapse/expand */
+  transition: width var(--shell-nav-transition, 220ms ease);
+  flex-shrink: 0;
+}
+
+/* ── Main content area ──────────────────────────────────────────── */
+
+/**
+ * .main — primary content region.
+ *
+ * Fills the remaining space after the sidenav column.
+ * overflow: hidden prevents children from accidentally causing a
+ * page-level scrollbar; each child (e.g. map canvas, detail panel)
+ * manages its own scroll behaviour.
+ */
+.main {
+  grid-area: main;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Collapsed side nav (medium viewport) ──────────────────────── */
+
+/**
+ * At 769–1024px viewports, the sidenav collapses to an icon-only strip.
+ * The shell grid column shrinks accordingly.
+ */
+@media (max-width: 1024px) {
+  .shell {
+    grid-template-columns: var(--shell-sidenav-width-collapsed) 1fr;
+  }
+
+  .sideNav {
+    width: var(--shell-sidenav-width-collapsed);
+  }
+}
+
+/* ── Mobile layout (≤ 768px) ────────────────────────────────────── */
+
+/**
+ * On narrow viewports the sidenav is removed from the grid flow and
+ * becomes a fixed overlay drawer.
+ *
+ * The shell collapses to a single column so the main content fills
+ * the full viewport width below the top bar.
+ *
+ * The sidenav is positioned absolutely, off-screen to the left by
+ * default.  When the parent sets data-nav-open="true" on .shell,
+ * the nav slides in via CSS transform.
+ */
+@media (max-width: 768px) {
+  .shell {
+    grid-template-areas:
+      "topbar"
+      "main";
+    grid-template-columns: 1fr;
+    grid-template-rows: var(--shell-topbar-height) 1fr;
+  }
+
+  /* Remove sidenav from grid flow — becomes overlay */
+  .sideNav {
+    grid-area: unset;
+    position: fixed;
+    top: var(--shell-topbar-height);
+    left: 0;
+    bottom: 0;
+    width: var(--shell-sidenav-width);
+    z-index: var(--shell-z-nav-overlay, 150);
+
+    /* Default: hidden off-screen */
+    transform: translateX(-100%);
+    transition: transform var(--shell-nav-transition, 220ms ease),
+                box-shadow var(--shell-nav-transition, 220ms ease);
+    box-shadow: none;
+  }
+
+  /* Revealed when parent sets data-nav-open="true" */
+  .shell[data-nav-open="true"] .sideNav {
+    transform: translateX(0);
+    box-shadow: var(--elevation-4);
+  }
+
+  /* Scrim overlay when nav is open on mobile */
+  .shell[data-nav-open="true"]::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    top: var(--shell-topbar-height);
+    background: var(--scrim-overlay);
+    z-index: calc(var(--shell-z-nav-overlay, 150) - 1);
+    animation: scrimFadeIn 200ms ease forwards;
+  }
+
+  @keyframes scrimFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .sideNav {
+    transition: none;
+  }
+}
+
+/* ── Dark theme ─────────────────────────────────────────────────── */
+
+/*
+ * All colors above reference semantic tokens that are overridden by the
+ * .theme-dark class on <html> (base.css §3):
+ *
+ *   --surface-base    → --_n-950  (shell/page background)
+ *   --surface-raised  → --_n-900  (top bar background)
+ *   --surface-sidebar → --_n-900  (side nav panel background)
+ *   --border-default  → --_n-800  (top bar and side nav borders)
+ *   --elevation-1     → deeper black shadows (top bar and side nav lift)
+ *   --elevation-4     → deeper black shadows (mobile nav drawer shadow)
+ *   --scrim-overlay   → hsl(0,0%,0%,0.72) (mobile nav backdrop — heavier alpha)
+ *
+ * The mobile nav scrim (::after pseudo-element) uses --scrim-overlay which
+ * has a heavier alpha in dark mode (0.72 vs 0.56 in light) to maintain
+ * sufficient contrast between the overlay nav and the darkened page content.
+ *
+ * No component-level dark-mode overrides are needed — the token cascade
+ * handles all color adjustments automatically when html.theme-dark is set.
+ */

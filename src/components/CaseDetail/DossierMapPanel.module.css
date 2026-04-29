@@ -1,0 +1,433 @@
+/**
+ * DossierMapPanel.module.css
+ *
+ * Styles for the Map tab content in the T4 Tabbed Dossier.
+ *
+ * Layout contract:
+ *   DossierMapPanel is rendered inside T4DossierShell's tabPanel cell.
+ *   For the "map" tab, T4DossierShell applies the `.tabPanelMap` class which
+ *   sets padding: 0 and overflow: hidden — allowing .mapRoot to fill the
+ *   panel edge-to-edge.  .mapRoot is a flex column:
+ *
+ *     [.mapRoot flex-column]
+ *       ├── [.mapContainer flex:1] — Mapbox GL canvas + location overlay
+ *       └── [.gpsStrip]           — compact GPS data row (lat, lng, location, time)
+ *
+ * Design constraints:
+ *   - No hex literals — all colors via CSS custom properties (var(--*))
+ *   - WCAG AA contrast in both light and dark themes
+ *   - Typography: Inter Tight (UI labels), IBM Plex Mono (coordinate values)
+ *   - prefers-reduced-motion: shimmer animation disabled when requested
+ */
+
+/* ── Root container ─────────────────────────────────────────────────────────── */
+
+/**
+ * .mapRoot — Flex column that fills the tabPanel cell.
+ *
+ * height: 100%   — fill the tabPanel's flex-1 space
+ * min-height: 0  — allow the flex item to shrink below its content height
+ *
+ * When padding: 0 is applied to the parent (.tabPanelMap), this div expands
+ * to fill the full panel height including the area previously occupied by padding.
+ */
+.mapRoot {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  /* Constrain map canvas rendering to this block */
+  overflow: hidden;
+}
+
+/* ── Map container — flex:1, holds the Mapbox GL canvas ────────────────────── */
+
+/**
+ * .mapContainer — Positioning context for the Mapbox GL canvas.
+ *
+ * flex: 1      — takes all remaining vertical space above the GPS strip
+ * min-height: 0 — ensures the container can shrink in flex contexts
+ * position: relative — creates the containing block for inset-0 canvas
+ * overflow: hidden — clips GL tiles at container boundary
+ *
+ * react-map-gl requires the <Map>'s direct container to have explicit
+ * dimensions.  The `style={{ width: "100%", height: "100%" }}` on
+ * <MapboxMap> fills this container completely.
+ */
+.mapContainer {
+  flex: 1;
+  min-height: 0;
+  /* 16rem minimum height ensures the map is usable at compact panel widths */
+  min-height: 16rem;
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-sunken);
+}
+
+/* ── Loading skeleton ───────────────────────────────────────────────────────── */
+
+/**
+ * .skeleton — Shimmer placeholder while the Convex subscription resolves.
+ *
+ * Fills the entire .mapRoot area (position: absolute, inset: 0) to preserve
+ * panel proportions during loading.
+ * Respects prefers-reduced-motion.
+ */
+.skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    var(--surface-active) 0%,
+    var(--surface-sunken) 40%,
+    var(--surface-active) 80%,
+    var(--surface-active) 100%
+  );
+  background-size: 300% 100%;
+  animation: dossierMapSkeleton 1.8s linear infinite;
+}
+
+@keyframes dossierMapSkeleton {
+  0%   { background-position: 100% center; }
+  100% { background-position: -100% center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--surface-active);
+  }
+}
+
+/* ── Placeholder (no location, not found, no token) ─────────────────────────── */
+
+/**
+ * .placeholder — Centered empty-state container.
+ *
+ * Fills the available .mapRoot area.  Uses min-height: 16rem to preserve
+ * a readable map-sized area even when panel height is constrained.
+ */
+.placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  background: var(--surface-sunken);
+  min-height: 16rem;
+}
+
+/* Circular icon wrap with background circle */
+.placeholderIconWrap {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: var(--surface-active);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-bottom: 0.25rem;
+}
+
+/**
+ * Pure-CSS map pin shape for the placeholder icon.
+ * Composed from a circle (::before) + white dot inside (::after).
+ */
+.placeholderPinIcon {
+  position: relative;
+  display: inline-block;
+  width: 1.125rem;
+  height: 1.375rem;
+}
+
+.placeholderPinIcon::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 50% 50% 50% 0;
+  rotate: -45deg;
+  background: var(--ink-tertiary);
+}
+
+.placeholderPinIcon::after {
+  content: "";
+  position: absolute;
+  top: 0.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+}
+
+.placeholderTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  line-height: 1.35;
+  margin: 0;
+}
+
+.placeholderHint {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 24rem;
+}
+
+.placeholderDetail {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.75rem;
+  color: var(--ink-brand);
+  line-height: 1.5;
+  margin: 0.25rem 0 0;
+  background: var(--surface-active);
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.75rem;
+}
+
+/* ── Location overlay — floating badge on top of the map ────────────────────── */
+
+/**
+ * .locationOverlay — Frosted glass info badge anchored bottom-left on the map.
+ *
+ * z-index 20 → above Mapbox GL layers (0–15), below modal overlays (30+).
+ * max-width: 22rem → prevents overflow on wide panels.
+ * flex-wrap: wrap  → allows name + coords to wrap on narrow panels.
+ */
+.locationOverlay {
+  position: absolute;
+  bottom: 1rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  z-index: 20;
+  max-width: 22rem;
+
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.4375rem 0.75rem;
+
+  background: var(--surface-overlay, rgba(255, 255, 255, 0.92));
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  box-shadow: var(--elevation-2);
+
+  /* Frosted glass effect where supported */
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.locationName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 12rem;
+}
+
+.locationCoords {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Case position marker ──────────────────────────────────────────────────── */
+
+/**
+ * .caseMarker — Outer anchor element for the react-map-gl <Marker>.
+ *
+ * The Marker uses anchor="bottom" so the pin point aligns with the coordinate.
+ * transform: translateY(-50%) lifts the marker so the tail tip sits at the
+ * exact lat/lng coordinate.
+ */
+.caseMarker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: default;
+  /* Small drop shadow for legibility over map tiles */
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+}
+
+/**
+ * .caseMarkerHead — The circular "bubble" of the map pin.
+ *
+ * Shape: circle rotated 45° → classic map pin "teardrop" from the border-radius
+ * trick (50% 50% 50% 0 / rotate -45deg).
+ *
+ * Color is driven by the case status via [data-status] attribute selectors
+ * that map to the layer-* design tokens (same tokens used in the map layer
+ * engine and StatusPill component for visual consistency).
+ */
+.caseMarkerHead {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50% 50% 50% 0;
+  rotate: -45deg;
+  /* Default: brand color — overridden by data-status selectors below */
+  background: var(--layer-deployed-bg, var(--ink-brand));
+  border: 2px solid var(--surface-base);
+  box-shadow: var(--elevation-1);
+  flex-shrink: 0;
+}
+
+/* ── Status-derived marker colors ─────────────────────────────────────────── */
+/* Mirrors the token set used by the layer engine and StatusPill */
+
+.caseMarkerHead[data-status="hangar"],
+.caseMarkerHead[data-status="assembled"],
+.caseMarkerHead[data-status="received"],
+.caseMarkerHead[data-status="archived"] {
+  background: var(--layer-hangar-bg);
+}
+
+.caseMarkerHead[data-status="transit_out"],
+.caseMarkerHead[data-status="transit_in"] {
+  background: var(--layer-transit-bg);
+}
+
+.caseMarkerHead[data-status="deployed"] {
+  background: var(--layer-deployed-bg);
+}
+
+.caseMarkerHead[data-status="flagged"] {
+  background: var(--layer-flagged-bg);
+}
+
+/**
+ * .caseMarkerTail — Thin vertical stem connecting the marker head to the map.
+ */
+.caseMarkerTail {
+  width: 0.125rem;
+  height: 0.5rem;
+  background: var(--ink-secondary);
+  border-radius: 0 0 1px 1px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* ── GPS data strip ─────────────────────────────────────────────────────────── */
+
+/**
+ * .gpsStrip — Horizontal data row at the bottom of the map panel.
+ *
+ * Renders 4 labeled data items in a flex row:
+ *   Latitude | Longitude | Location | Updated
+ *
+ * flex-shrink: 0 — does not shrink as map container takes all space
+ * border-top     — visual separator from the map canvas
+ * overflow-x: auto — allows horizontal scroll on very narrow panels
+ */
+.gpsStrip {
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 0;
+  background: var(--surface-raised);
+  border-top: 1px solid var(--border-default);
+  padding: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gpsStrip::-webkit-scrollbar {
+  display: none;
+}
+
+.gpsDataItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.5625rem 0.875rem;
+  border-right: 1px solid var(--border-subtle);
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.gpsDataItem:last-child {
+  border-right: none;
+}
+
+.gpsDataLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+
+/* Monospace for lat/lng decimal values (IBM Plex Mono per design spec) */
+.gpsDataValue {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+/* Inter Tight for non-numeric values (location name, etc.) */
+.gpsDataValueText {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 10rem;
+}
+
+/* Slightly lighter for timestamps */
+.gpsDataValueTime {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+/* ── Dark theme overrides ───────────────────────────────────────────────────── */
+
+:global(.theme-dark) .locationOverlay {
+  background: var(--surface-overlay, rgba(18, 18, 22, 0.92));
+  border-color: var(--border-default);
+}
+
+:global(.theme-dark) .caseMarkerHead {
+  border-color: var(--surface-sunken);
+}
+
+:global(.theme-dark) .gpsStrip {
+  background: var(--surface-sunken);
+  border-top-color: var(--border-strong);
+}
+
+:global(.theme-dark) .gpsDataItem {
+  border-right-color: var(--border-default);
+}
+
+:global(.theme-dark) .placeholderPinIcon::after {
+  background: var(--surface-sunken);
+}

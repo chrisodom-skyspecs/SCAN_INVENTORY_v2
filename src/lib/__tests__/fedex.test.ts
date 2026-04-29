@@ -24,6 +24,8 @@ import {
   FEDEX_PRODUCTION_BASE,
   FEDEX_SANDBOX_BASE,
   getFedExBaseUrl,
+  getTrackingStatus,
+  invalidateTokenCache,
   isSandboxMode,
   isValidTrackingNumber,
   toConvexShipmentStatus,
@@ -110,6 +112,75 @@ beforeEach(() => {
 
   // Reset any stubbed fetch
   vi.unstubAllGlobals();
+});
+
+// ─── getTrackingStatus (alias) ────────────────────────────────────────────────
+
+describe("getTrackingStatus", () => {
+  it("is exported from the module", () => {
+    expect(typeof getTrackingStatus).toBe("function");
+  });
+
+  it("is the same function as trackPackage", () => {
+    expect(getTrackingStatus).toBe(trackPackage);
+  });
+
+  it("returns normalised tracking result on success (via alias)", async () => {
+    const trackResponse = makeTrackResponse(
+      "794644823741",
+      "IT",
+      "In transit",
+      [
+        {
+          timestamp:        "2025-06-01T10:00:00Z",
+          eventType:        "IT",
+          eventDescription: "In transit",
+          city:             "Memphis",
+        },
+      ]
+    );
+
+    vi.stubGlobal("fetch", mockFetch(makeTokenResponse(), trackResponse));
+
+    const result = await getTrackingStatus("794644823741");
+
+    expect(result.trackingNumber).toBe("794644823741");
+    expect(result.status).toBe("in_transit");
+    expect(result.description).toBe("In transit");
+    expect(result.events).toHaveLength(1);
+  });
+
+  it("throws FedExError with RATE_LIMITED on 429 (via alias)", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/oauth/token")) {
+        return {
+          ok: true, status: 200,
+          json: async () => makeTokenResponse(),
+          text: async () => "",
+        };
+      }
+      return { ok: false, status: 429, json: async () => ({}), text: async () => "" };
+    }) as unknown as typeof fetch;
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getTrackingStatus("794644823741")).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      statusCode: 429,
+    });
+  });
+
+  it("throws FedExError with NOT_FOUND for unknown tracking number (via alias)", async () => {
+    const errorResponse = {
+      errors: [{ code: "TRACKING.TRACKINGNUMBER.NOTFOUND", message: "Not found." }],
+    };
+
+    vi.stubGlobal("fetch", mockFetch(makeTokenResponse(), errorResponse));
+
+    await expect(getTrackingStatus("000000000000")).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
 });
 
 // ─── isValidTrackingNumber ────────────────────────────────────────────────────
@@ -262,6 +333,7 @@ describe("trackPackage", () => {
   });
 
   it("throws CONFIGURATION_ERROR when credentials are missing", async () => {
+    invalidateTokenCache();
     delete process.env.FEDEX_CLIENT_ID;
     delete process.env.FEDEX_CLIENT_SECRET;
 

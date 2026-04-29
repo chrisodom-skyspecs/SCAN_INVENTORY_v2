@@ -44,6 +44,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import type { Id, Doc } from "../../convex/_generated/dataModel";
 import type { CaseStatus, BoundsFilter } from "../../convex/cases";
 
 // Re-export so consumers can import these types from the hook module too
@@ -75,7 +76,7 @@ export type { CaseStatus, BoundsFilter } from "../../convex/cases";
 export function useCaseStatus(caseId: string | null) {
   return useQuery(
     api.cases.getCaseStatus,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -106,7 +107,7 @@ export function useCaseStatus(caseId: string | null) {
 export function useCaseById(caseId: string | null) {
   return useQuery(
     api.cases.getCaseById,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -220,7 +221,7 @@ export function useCasesByStatus(status: CaseStatus | null) {
 export function useCasesByMission(missionId: string | null) {
   return useQuery(
     api.cases.listCases,
-    missionId !== null ? { missionId } : "skip",
+    missionId !== null ? { missionId: missionId as Id<"missions"> } : "skip",
   );
 }
 
@@ -302,6 +303,51 @@ export function useCasesInBounds(
       ? { ...bounds, ...(status !== undefined ? { status } : {}) }
       : "skip",
   );
+}
+
+// ─── useCaseByQrIdentifier ────────────────────────────────────────────────────
+
+/**
+ * Subscribe to a case by a raw QR payload or any recognized identifier.
+ *
+ * Uses the `getCaseByQrIdentifier` multi-strategy query which tries, in order:
+ *   A. Exact `cases.qrCode` match via the `by_qr_code` index (O(log n))
+ *   B. Embedded Convex case-ID extraction from generated URL patterns (O(1))
+ *   C. Plain case-label match via the `by_label` index (O(log n))
+ *
+ * This is the preferred hook for the SCAN app scanner flow because it handles:
+ *   • Generated QR codes (URL format: `https://…/case/{id}?uid=…`)
+ *   • External/physical label URLs
+ *   • Manual case-label entry (e.g., "CASE-001")
+ *
+ * Pass `null` as `identifier` to skip the subscription (pre-scan state).
+ *
+ * Return values:
+ *   `undefined`       — query loading / resolving
+ *   `null`            — no case found for this identifier
+ *   `Doc<"cases">`    — matched case document
+ *
+ * @param identifier  Raw QR payload string, or `null` to skip.
+ *
+ * @example
+ * function ScanResultView({ scannedCode }: { scannedCode: string | null }) {
+ *   const caseDoc = useCaseByQrIdentifier(scannedCode);
+ *   if (scannedCode === null) return <ScanPrompt />;
+ *   if (caseDoc === undefined) return <ResolvingSpinner />;
+ *   if (caseDoc === null) return <QrNotFoundError code={scannedCode} />;
+ *   return <CaseFoundView case={caseDoc} />;
+ * }
+ */
+export function useCaseByQrIdentifier(identifier: string | null): Doc<"cases"> | null | undefined {
+  // getCaseByQrIdentifier uses `ctx.db.get(id as any)` internally which widens
+  // the inferred return type to a union of all document types.  The query
+  // always returns a cases document or null — cast here for type safety at the
+  // call site without modifying the generated server-side handler.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return useQuery(
+    api.cases.getCaseByQrIdentifier,
+    identifier !== null ? { identifier } : "skip",
+  ) as Doc<"cases"> | null | undefined;
 }
 
 // ─── useCaseStatusCounts ──────────────────────────────────────────────────────

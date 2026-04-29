@@ -1,0 +1,466 @@
+/**
+ * TimelineEvent.module.css
+ *
+ * Styles for the standalone TimelineEvent component — a reusable single-event
+ * entry for vertical spine timelines.
+ *
+ * Design constraints:
+ *   • No hex literals — all colors via CSS custom properties (var(--*))
+ *   • WCAG AA contrast in both light and dark themes
+ *   • Inter Tight for UI text (event type label, actor name, detail text)
+ *   • IBM Plex Mono for data values (timestamps, tracking numbers, coordinates)
+ *   • Reduced-motion: no transitions under prefers-reduced-motion
+ *   • Touch targets ≥ 44×44 px for any interactive elements inside (future)
+ *
+ * Token families used:
+ *   --surface-*        backgrounds and inline color fills
+ *   --ink-*            text colors by hierarchy
+ *   --border-*         dot borders and thread color
+ *   --layer-transit-*  transit-colored dots (inspection_started, shipped)
+ *   --layer-deployed-* success-colored dots (inspection_completed, delivered)
+ *   --layer-history-*  neutral dots (custody_handoff, template_applied)
+ *   --signal-error-*   error-colored dots (damage_reported)
+ *   --elevation-focus  keyboard focus ring
+ *
+ * Anatomy
+ * ───────
+ *
+ *   <li.item data-is-first? data-is-last? data-event-type>
+ *     <div.spineCol>         ← vertical spine track
+ *       <div.dot />          ← semantic-colored dot
+ *       <div.thread />       ← connecting line (hidden when isLast)
+ *     </div>
+ *     <div.contentCol>       ← event content
+ *       <div.eventHeader>    ← event type + status pill
+ *         <span.eventType />
+ *         <StatusPill />     ← optional
+ *       </div>
+ *       <p.meta>             ← actor + timestamp
+ *         <span.actorName />
+ *         <span.metaSep />
+ *         <time.timestamp />
+ *       </p>
+ *       <span.description /> ← event-type-specific detail
+ *       <p.location />       ← location name or coordinates
+ *       <p.locationMissing />← "No location recorded"
+ *     </div>
+ *   </li>
+ *
+ * Dot variant system
+ * ──────────────────
+ * [data-variant] on .dot controls its fill and border color:
+ *   brand   → brand-blue (status_change, mission_assigned)
+ *   transit → transit-blue (inspection_started, shipped)
+ *   success → green (inspection_completed, delivered)
+ *   error   → red (damage_reported)
+ *   neutral → gray default (custody_handoff, template_applied, scan_check_in)
+ *
+ * [data-no-location="true"] on .dot applies a dashed border to signal
+ * that no GPS fix was captured for this event.
+ */
+
+
+/* ── Root list item ──────────────────────────────────────────────────────── */
+
+/**
+ * .item is an <li> — the parent must provide an <ol> or <ul> context.
+ * Uses a 2-column grid: spine column (fixed) + content column (flex).
+ *
+ * grid-template-columns: 2rem 1fr
+ *   • 2rem : spine column centered on the dot
+ *   • 1fr  : content column fills remaining width
+ */
+.item {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  grid-template-areas: "spine content";
+  gap: 0;
+  align-items: start;
+  list-style: none; /* remove bullet in case parent forgets list-style:none */
+}
+
+
+/* ── Spine column ─────────────────────────────────────────────────────────── */
+
+/**
+ * .spineCol holds the dot and the connecting thread.
+ * Flexbox column centers the dot horizontally in the 2rem track and
+ * stretches the thread below it.
+ */
+.spineCol {
+  grid-area: spine;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  /* Nudge dot down to align with the first text baseline of eventType */
+  padding-top: 0.125rem;
+}
+
+
+/* ── Event dot ────────────────────────────────────────────────────────────── */
+
+/**
+ * Semantic-colored dot for each event type.
+ *
+ * The dot uses a box-shadow "halo" ring (matching the surface-raised background)
+ * to visually separate it from the spine thread — giving a layered appearance
+ * without actual overlapping elements.
+ *
+ * Color is controlled via [data-variant]:
+ *   brand   → var(--surface-brand)       + brand ring
+ *   transit → var(--layer-transit-bg)    + subtle border
+ *   success → var(--layer-deployed-bg)   + subtle border
+ *   error   → var(--signal-error-fill)   + error ring
+ *   neutral → var(--layer-history-subtle) + border (default)
+ *
+ * [data-no-location="true"] → dashed border, muted fill (missing GPS)
+ */
+.dot {
+  width: 0.75rem;        /* 12px */
+  height: 0.75rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  z-index: 1;
+  /* Halo ring: creates separation between dot and thread */
+  box-shadow: 0 0 0 2px var(--surface-raised);
+
+  /* Default: neutral — gray background + visible border */
+  background-color: var(--layer-history-subtle);
+  border: 1.5px solid var(--layer-history-border);
+
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+/* Variant: brand — brand-blue fill (status_change, mission_assigned) */
+.dot[data-variant="brand"] {
+  background-color: var(--surface-brand);
+  border-color: var(--surface-brand);
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3px var(--surface-brand);
+}
+
+/* Variant: transit — transit-blue fill (inspection_started, shipped) */
+.dot[data-variant="transit"] {
+  background-color: var(--layer-transit-bg);
+  border-color: var(--layer-transit-border);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+/* Variant: success — green fill (inspection_completed, delivered) */
+.dot[data-variant="success"] {
+  background-color: var(--layer-deployed-bg);
+  border-color: var(--layer-deployed-border);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+/* Variant: error — red fill (damage_reported) */
+.dot[data-variant="error"] {
+  background-color: var(--signal-error-fill);
+  border-color: var(--signal-error-border);
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3px var(--signal-error-border);
+}
+
+/* No-location: dashed border + muted fill to signal missing GPS */
+.dot[data-no-location="true"] {
+  background-color: var(--surface-sunken);
+  border-style: dashed;
+  border-color: var(--border-default);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+/* First event: slightly larger dot to anchor the timeline visually */
+.item[data-is-first="true"] .dot {
+  width: 0.875rem;  /* 14px */
+  height: 0.875rem;
+}
+
+/* Last event: brand accent ring to mark most recent activity */
+.item[data-is-last="true"] .dot {
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3.5px var(--border-brand);
+}
+
+/* Last + brand: single combined brand ring */
+.item[data-is-last="true"] .dot[data-variant="brand"] {
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3.5px var(--surface-brand);
+}
+
+/* Last + error: error ring remains */
+.item[data-is-last="true"] .dot[data-variant="error"] {
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3.5px var(--signal-error-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    transition: none;
+  }
+}
+
+
+/* ── Spine thread (vertical connector) ───────────────────────────────────── */
+
+/**
+ * The thread stretches from below the dot to the top of the next event dot.
+ * It is a flex:1 element that fills whatever height the content column needs.
+ *
+ * Hidden on the last event via the [data-is-last="true"] selector so the spine
+ * terminates cleanly at the bottom of the timeline.
+ *
+ * min-height ensures a visible thread even for very short content items.
+ */
+.thread {
+  width: 1.5px;
+  flex: 1;
+  min-height: 1.5rem;
+  background-color: var(--border-default);
+  margin-top: 0.1875rem;  /* small gap between dot bottom and thread top */
+  border-radius: 9999px;
+}
+
+/* Hide thread after the last event */
+.item[data-is-last="true"] .thread {
+  display: none;
+}
+
+
+/* ── Content column ──────────────────────────────────────────────────────── */
+
+/**
+ * .contentCol fills the right side of the grid.
+ * It uses flex column layout to stack event header, meta line, description,
+ * and location in vertical order.
+ *
+ * padding-bottom: 1.5rem creates the visual gap between events that the thread
+ * fills — the thread height equals the bottom padding of the previous event's
+ * content column plus the top padding of the next event's spine column.
+ */
+.contentCol {
+  grid-area: content;
+  padding: 0 0 1.5rem 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+
+/* Reduce bottom padding for the last event (thread is gone) */
+.item[data-is-last="true"] .contentCol {
+  padding-bottom: 0.5rem;
+}
+
+
+/* ── Event header row: type label + status pill ──────────────────────────── */
+
+.eventHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+
+/**
+ * Event type label — Inter Tight semibold.
+ * For damage_reported, the text is rendered in error color.
+ */
+.eventType {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;   /* 13px */
+  font-weight: 600;
+  color: var(--ink-primary);
+  line-height: 1.3;
+}
+
+/* Emphasize damage events in error color */
+.item[data-event-type="damage_reported"] .eventType {
+  color: var(--ink-critical);
+}
+
+
+/* ── Meta line: actor + timestamp ────────────────────────────────────────── */
+
+/**
+ * .meta is a <p> that holds the actor name and timestamp on the same line.
+ * Setting font-size: 0 on the container prevents the text-baseline gap;
+ * each child element sets its own font-size.
+ */
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 0;     /* zero container font-size; children set their own */
+  line-height: 0;
+}
+
+/* Actor name — Inter Tight medium weight */
+.actorName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;   /* 12px */
+  font-weight: 500;
+  color: var(--ink-secondary);
+  line-height: 1.4;
+}
+
+/* Separator dot between actor and timestamp */
+.metaSep {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;  /* 11px */
+  color: var(--ink-disabled);
+  line-height: 1.4;
+  user-select: none;
+}
+
+/* Timestamp — IBM Plex Mono for tabular data */
+.timestamp {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;  /* 11px */
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+
+
+/* ── Event-type-specific description block ───────────────────────────────── */
+
+/**
+ * .description wraps the event-type-specific summary rendered below the meta line.
+ * Uses inline-flex so the sub-spans (statusFrom, statusArrow, etc.) flow
+ * naturally on one line with appropriate gaps.
+ */
+.description {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;   /* 12px */
+  color: var(--ink-secondary);
+  line-height: 1.4;
+}
+
+/* ── Status change: from → to ────────────── */
+
+.statusFrom {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  text-transform: capitalize;
+}
+
+.statusArrow {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-disabled);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.statusTo {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-primary);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* ── Custody handoff: from user → to user ────── */
+
+.custodyFrom {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+}
+
+.custodyTo {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+/* ── Shipped: tracking number ───────────────── */
+
+.trackingNumber {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-brand);
+  letter-spacing: 0.01em;
+}
+
+/* ── Shipped: route summary ─────────────────── */
+
+.routeSummary {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+}
+
+
+/* ── Location line ───────────────────────────────────────────────────────── */
+
+/**
+ * Location name or lat/lng coordinates — IBM Plex Mono for data fidelity.
+ * Truncated with ellipsis if the string is too long for the content column.
+ */
+.location {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;   /* 9px */
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  margin: 0;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/**
+ * "No location recorded" — visually de-emphasized in italic.
+ * Uses ink-disabled so it is clearly secondary to actual location data.
+ */
+.locationMissing {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;   /* 9px */
+  color: var(--ink-disabled);
+  font-style: italic;
+  margin: 0;
+  line-height: 1.4;
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   The token cascade handles most color swaps automatically.
+   These selectors provide additional polish.
+   ============================================================ */
+
+/**
+ * Neutral dot — layer-history-subtle is too close to the dark surface in
+ * dark mode; add a visible default border for shape definition.
+ */
+:global(.theme-dark) .dot {
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+:global(.theme-dark) .dot[data-no-location="true"] {
+  border-color: var(--border-default);
+}
+
+/**
+ * Spine thread — in dark mode the border-default token provides sufficient
+ * contrast for the thread line against the dark surface.  Reduce opacity
+ * slightly so the thread reads as connective rather than structural.
+ */
+:global(.theme-dark) .thread {
+  background-color: var(--border-strong);
+  opacity: 0.5;
+}
+
+/**
+ * Damage type label — --ink-critical in dark mode is already adjusted
+ * via the token remapping; no additional rule needed here.
+ */

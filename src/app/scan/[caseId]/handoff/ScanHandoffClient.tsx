@@ -19,7 +19,7 @@
  * Convex mutation wiring
  * ──────────────────────
  * `useHandoffCustody()` from src/hooks/use-scan-mutations.ts wraps
- * `api.custody.handoffCustody`.  On submit:
+ * `api.custodyHandoffs.handoffCustody`.  On submit:
  *
  *   await handoff({
  *     caseId, fromUserId, fromUserName,
@@ -49,9 +49,8 @@
  *
  * User identity
  * ─────────────
- * fromUserId / fromUserName are sourced from the Kinde auth context when
- * available (useKindeAuth).  This file uses a placeholder fallback pending
- * full Kinde integration — the auth shape is wired in `useCurrentUser()`.
+ * fromUserId / fromUserName are sourced from the authenticated Kinde session
+ * via `useKindeUser()` from src/hooks/use-kinde-user.ts.
  *
  * Design system compliance
  * ────────────────────────
@@ -73,11 +72,16 @@ import {
   useRef,
 } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
-import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { useHandoffCustody } from "../../../../hooks/use-scan-mutations";
 import { useLatestCustodyRecord } from "../../../../hooks/use-custody";
+import { useScanCaseDetail } from "../../../../hooks/use-scan-queries";
+import { useKindeUser } from "../../../../hooks/use-kinde-user";
+import { useServerStateReconciliation } from "../../../../hooks/use-server-state-reconciliation";
 import { StatusPill } from "../../../../components/StatusPill";
+import { ReconciliationBanner } from "../../../../components/ReconciliationBanner";
+import { UserSelector } from "../../../../components/UserSelector";
+import type { UserSelectorValue } from "../../../../components/UserSelector";
 import { trackEvent } from "../../../../lib/telemetry.lib";
 import { TelemetryEventName } from "../../../../types/telemetry.types";
 import type { HandoffType } from "../../../../types/telemetry.types";
@@ -88,28 +92,6 @@ import styles from "./page.module.css";
 
 interface ScanHandoffClientProps {
   caseId: string;
-}
-
-// ─── User identity helper ─────────────────────────────────────────────────────
-
-/**
- * Returns the current user's Kinde ID and display name.
- *
- * Replace the body with Kinde auth hook calls when full auth integration
- * is wired:
- *
- *   import { useKindeAuth } from "@kinde-oss/kinde-auth-nextjs";
- *   const { user } = useKindeAuth();
- *   return {
- *     id:   user?.id   ?? "anon",
- *     name: user?.given_name
- *             ? `${user.given_name} ${user.family_name ?? ""}`.trim()
- *             : "Field Technician",
- *   };
- */
-function useCurrentUser(): { id: string; name: string } {
-  // Placeholder — replace with useKindeAuth() when wired
-  return { id: "scan-user", name: "Field Technician" };
 }
 
 // ─── GPS capture hook ─────────────────────────────────────────────────────────
@@ -430,9 +412,10 @@ function SuccessView({
  */
 export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
   // ── Convex subscriptions ──────────────────────────────────────────────────
-  // getCaseById is a real-time subscription: the header refreshes automatically
-  // after a successful handoff (Convex pushes the updated doc back).
-  const caseDoc = useQuery(api.cases.getCaseById, { caseId });
+  // useScanCaseDetail delegates to useCaseById via the SCAN query layer.
+  // The subscription re-evaluates within ~100–300 ms after any mutation that
+  // touches the cases row (e.g., handoffCustody updates assigneeId/assigneeName).
+  const caseDoc = useScanCaseDetail(caseId);
 
   // Subscribe to the latest custody record so we can show the current holder.
   // This subscription is also invalidated by the handoffCustody mutation, so
@@ -441,7 +424,7 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
   const latestCustody = useLatestCustodyRecord(caseId);
 
   // ── Mutation ──────────────────────────────────────────────────────────────
-  // useHandoffCustody wraps api.custody.handoffCustody.
+  // useHandoffCustody wraps api.custodyHandoffs.handoffCustody.
   //
   // When called, the mutation:
   //   1. Inserts into custodyRecords  → invalidates all custody subscriptions
@@ -452,12 +435,29 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
   //   4. Inserts notification          → notifies incoming custodian in-app
   const handoff = useHandoffCustody();
 
+  // ── Server-state reconciliation (Sub-AC 2c) ───────────────────────────────
+  // Detects divergence between the optimistic assignee update and the server-
+  // confirmed result.  For handoff, the key fields are toUserId/toUserName.
+  // If a concurrent handoff completed between the optimistic update and the
+  // server write, the server may have recorded a different custodian.
+  const reconciliation = useServerStateReconciliation();
+
   // ── User identity ─────────────────────────────────────────────────────────
-  const user = useCurrentUser();
+  const user = useKindeUser();
 
   // ── Form state ────────────────────────────────────────────────────────────
-  const [recipientId, setRecipientId] = useState("");
-  const [recipientName, setRecipientName] = useState("");
+  /**
+   * recipientUser — the user selected from the UserSelector combobox.
+   * `null` means no user has been selected yet.
+   *
+   * The UserSelector calls onChange with { userId, userName } on selection,
+   * and onChange(null) when the selection is cleared (user types after picking).
+   */
+  const [recipientUser, setRecipientUser] = useState<UserSelectorValue | null>(null);
+
+  // Backward-compatible aliases so the rest of the mutation code is unchanged.
+  const recipientId   = recipientUser?.userId   ?? "";
+  const recipientName = recipientUser?.userName ?? "";
   const [locationEnabled, setLocationEnabled] = useState(true);
   const [locationName, setLocationName] = useState("");
   const [notes, setNotes] = useState("");
@@ -548,6 +548,16 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
       handoffType,
     });
 
+    // ── Sub-AC 2c: Track optimistic prediction before mutation ──────────────
+    // The optimistic update sets assigneeId = toUserId, assigneeName = toUserName.
+    // If another device completes a concurrent handoff, the server may record a
+    // different custodian.  The reconciliation hook compares after the mutation.
+    const mutationId = `handoff-${caseId}-${now}`;
+    reconciliation.trackMutation(mutationId, {
+      assigneeId:   trimmedRecipientId,
+      assigneeName: trimmedRecipientName,
+    });
+
     try {
       // ── Core mutation call ─────────────────────────────────────────────
       // handoffCustody writes to three tables in one transaction:
@@ -578,8 +588,8 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
       //
       // Convex propagates these invalidations to all connected clients within
       // ~100–300 ms — well within the ≤ 2-second real-time fidelity requirement.
-      await handoff({
-        caseId,
+      const result = await handoff({
+        caseId:       caseId as Id<"cases">,
         fromUserId:   user.id,
         fromUserName: user.name,
         toUserId:     trimmedRecipientId,
@@ -589,6 +599,15 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
         lng:          locationEnabled && geo.status === "success" ? geo.lng : undefined,
         locationName: trimmedLocationName,
         notes:        trimmedNotes,
+      });
+
+      // ── Sub-AC 2c: Confirm against server result ────────────────────────
+      // The handoff result returns toUserId and toUserName as recorded by the
+      // server.  If they differ from our optimistic prediction (e.g. concurrent
+      // handoff), the reconciliation banner will surface the divergence.
+      reconciliation.confirmMutation(mutationId, {
+        assigneeId:   result.toUserId,
+        assigneeName: trimmedRecipientName, // server echoes same name back
       });
 
       // ── Telemetry: handoff completed (spec §23) ────────────────────────
@@ -623,6 +642,9 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
       });
       setPhase("success");
     } catch (err) {
+      // ── Sub-AC 2c: Cancel pending record — Convex rolled back ──────────
+      reconciliation.cancelMutation(mutationId);
+
       const message =
         err instanceof Error
           ? err.message
@@ -636,6 +658,7 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
     caseId,
     handoff,
     user,
+    recipientUser,
     recipientId,
     recipientName,
     handoffType,
@@ -643,6 +666,7 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
     geo,
     locationName,
     notes,
+    reconciliation,
   ]);
 
   const handleRetry = useCallback(() => {
@@ -787,58 +811,32 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
           Transfer To
         </h2>
         <p className={styles.sectionHint}>
-          Enter the recipient&apos;s ID and name to record the custody transfer.
+          Search for the recipient by name or email to record the custody transfer.
         </p>
 
-        <div className={styles.fieldGroup}>
-          <label htmlFor="recipientId" className={styles.fieldLabel}>
-            Recipient User ID
-            <span className={styles.fieldRequired} aria-hidden="true"> *</span>
-          </label>
-          <input
-            id="recipientId"
-            type="text"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            className={styles.fieldInput}
-            placeholder="e.g. kp_123abc"
-            value={recipientId}
-            onChange={(e) => setRecipientId(e.target.value)}
-            disabled={phase === "submitting"}
-            required
-            aria-required="true"
-            aria-describedby="recipient-id-hint"
-          />
-          <span id="recipient-id-hint" className={styles.fieldHint}>
-            Kinde user ID of the person receiving custody of this case.
-          </span>
-        </div>
+        {/*
+          UserSelector — searchable combobox that queries api.users.listUsers
+          and filters in-browser.  On selection, sets recipientUser to
+          { userId, userName }.  On clear/type-after-select, sets it to null.
 
+          The backward-compatible aliases `recipientId` and `recipientName`
+          derived above ensure the rest of the mutation code is unchanged.
+        */}
         <div className={styles.fieldGroup}>
-          <label htmlFor="recipientName" className={styles.fieldLabel}>
-            Recipient Display Name
+          <label htmlFor="recipientUser" className={styles.fieldLabel}>
+            Recipient
             <span className={styles.fieldRequired} aria-hidden="true"> *</span>
           </label>
-          <input
-            id="recipientName"
-            type="text"
-            autoComplete="name"
-            autoCorrect="off"
-            autoCapitalize="words"
-            spellCheck={false}
-            className={styles.fieldInput}
-            placeholder="e.g. Jane Pilot"
-            value={recipientName}
-            onChange={(e) => setRecipientName(e.target.value)}
+          <UserSelector
+            id="recipientUser"
+            value={recipientUser}
+            onChange={setRecipientUser}
             disabled={phase === "submitting"}
-            required
-            aria-required="true"
-            aria-describedby="recipient-name-hint"
+            placeholder="Search by name or email…"
+            aria-describedby="recipient-user-hint"
           />
-          <span id="recipient-name-hint" className={styles.fieldHint}>
-            Full name of the recipient — displayed on the dashboard custody panel.
+          <span id="recipient-user-hint" className={styles.fieldHint}>
+            Select a registered SkySpecs user to receive custody of this case.
           </span>
         </div>
       </section>
@@ -971,6 +969,21 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
           </svg>
           <span className={styles.errorBannerText}>{submitError}</span>
         </div>
+      )}
+
+      {/* ── Reconciliation banners (Sub-AC 2c) ────────────────────────── */}
+      {reconciliation.isStale && !reconciliation.hasDivergence && (
+        <ReconciliationBanner
+          stale
+          staleSince={reconciliation.staleSince}
+          onDismiss={reconciliation.dismiss}
+        />
+      )}
+      {reconciliation.hasDivergence && (
+        <ReconciliationBanner
+          divergedFields={reconciliation.divergedFields}
+          onDismiss={reconciliation.dismiss}
+        />
       )}
 
       {/* ── Submit row ────────────────────────────────────────────────────── */}

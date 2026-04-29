@@ -93,6 +93,22 @@ vi.mock("../../../../../../convex/_generated/api", () => ({
   },
 }));
 
+// ─── Mock Kinde auth (browser client) ────────────────────────────────────────
+// Returns the placeholder "scan-user" identity expected by telemetry assertions.
+
+vi.mock("@kinde-oss/kinde-auth-nextjs", () => ({
+  useKindeBrowserClient: () => ({
+    user: {
+      id:          "scan-user",
+      given_name:  "Field",
+      family_name: "Technician",
+      email:       "field.technician@skyspecs.com",
+    },
+    isAuthenticated: true,
+    isLoading:       false,
+  }),
+}));
+
 // ─── Import SUT and mocked modules (after vi.mock hoisting) ──────────────────
 
 import { useQuery, useMutation } from "convex/react";
@@ -158,7 +174,7 @@ const MOCK_STATE = {
 
 /** Returns a resolving updateChecklistItem mock. */
 function makeUpdateMock() {
-  return vi.fn().mockResolvedValue({
+  const mock = vi.fn().mockResolvedValue({
     itemId:              MANIFEST_ID_1,
     previousStatus:      "unchecked",
     newStatus:           "ok",
@@ -169,11 +185,19 @@ function makeUpdateMock() {
       missingItems: 0,
     },
   });
+  // useUpdateChecklistItem calls .withOptimisticUpdate() on the mutation result.
+  // Return `mock` itself so the returned function is still callable.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (mock as any).withOptimisticUpdate = vi.fn().mockReturnValue(mock);
+  return mock;
 }
 
 /** Returns a rejecting updateChecklistItem mock. */
 function makeUpdateMockThatFails() {
-  return vi.fn().mockRejectedValue(new Error("Convex mutation failed"));
+  const mock = vi.fn().mockRejectedValue(new Error("Convex mutation failed"));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (mock as any).withOptimisticUpdate = vi.fn().mockReturnValue(mock);
+  return mock;
 }
 
 /** Minimal resolving completeInspection mock. */

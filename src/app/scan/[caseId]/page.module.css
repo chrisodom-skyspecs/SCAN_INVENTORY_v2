@@ -19,9 +19,11 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  width: 100%;
   max-width: 42rem;
   margin: 0 auto;
   padding: 0 1rem 3rem;
+  box-sizing: border-box;
 }
 
 /* ── Case header ────────────────────────────────────────────────────── */
@@ -161,7 +163,7 @@
 .qrLinkedCheck {
   width: 0.75rem;
   height: 0.75rem;
-  color: var(--_n-0, #fff);
+  color: var(--ink-inverse);
 }
 
 /* QR payload block */
@@ -205,9 +207,20 @@
   text-decoration: none;
   border: none;
   background: none;
-  padding: 0;
+  /*
+   * Use inline-flex + padding so the element meets the 44px touch target
+   * minimum (WCAG 2.5.5) without forcing the surrounding flex column to
+   * expand. The negative margin compensates for the added padding so the
+   * visual text position is unchanged.
+   */
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;  /* 44px touch target */
+  padding: 0 0.25rem;
+  margin-left: -0.25rem;
   cursor: pointer;
   align-self: flex-start;
+  border-radius: 0.25rem;
 }
 
 .qrReassociateLink:hover {

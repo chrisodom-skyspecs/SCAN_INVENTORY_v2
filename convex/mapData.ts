@@ -61,14 +61,29 @@
  */
 
 import { query } from "./_generated/server";
+import type { Auth, UserIdentity } from "convex/server";
 import { v } from "convex/values";
 import { Doc } from "./_generated/dataModel";
+
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+
+async function requireAuth(ctx: { auth: Auth }): Promise<UserIdentity> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error(
+      "[AUTH_REQUIRED] Unauthenticated. Provide a valid Kinde access token."
+    );
+  }
+  return identity;
+}
 import {
   assembleM1,
   assembleM2,
   assembleM3,
   assembleM4,
   assembleM5,
+  assembleCasesMapPayload,
+  withinBounds,
   type M1Response,
   type M2Response,
   type M3Response,
@@ -76,6 +91,13 @@ import {
   type M5Response,
   type MapBounds,
   type ParsedFilters,
+  type CustodySnapshot,
+  // Re-exported at the bottom of this file for client-side consumption.
+  // TypeScript treats these as "used" because they appear in the export block.
+  type CaseModeFlags,
+  type CaseInspectionSummary,
+  type CaseMapPayload,
+  type CasesMapPayloadResponse,
 } from "./maps";
 
 // ─── Shared bound-building helper ─────────────────────────────────────────────
@@ -127,11 +149,14 @@ const commonFilterArgs = {
   status: v.optional(
     v.array(
       v.union(
+        v.literal("hangar"),
         v.literal("assembled"),
+        v.literal("transit_out"),
         v.literal("deployed"),
-        v.literal("in_field"),
-        v.literal("shipping"),
-        v.literal("returned")
+        v.literal("flagged"),
+        v.literal("transit_in"),
+        v.literal("received"),
+        v.literal("archived")
       )
     )
   ),
@@ -171,14 +196,37 @@ export const getM1MapData = query({
     ...commonFilterArgs,
   },
   handler: async (ctx, args): Promise<M1Response> => {
-    // Load all cases — the single table read that makes M1 reactive to any
-    // case mutation.  Convex tracks this query's dependency on the cases table
-    // and invalidates subscriptions when any row changes.
-    const allCases = await ctx.db
-      .query("cases")
-      .withIndex("by_updated")
-      .order("desc")
-      .collect();
+    await requireAuth(ctx);
+    // Load cases AND custody records in a single parallel pass.
+    //
+    // Convex tracks dependencies on BOTH tables:
+    //   • cases: any case mutation (scanCheckIn, shipCase, etc.) invalidates M1
+    //   • custodyRecords: any handoffCustody mutation invalidates M1 so that the
+    //     "currently held by" custodian pin tooltip updates within ~2 seconds
+    const [allCases, allCustodyRecords] = await Promise.all([
+      ctx.db
+        .query("cases")
+        .withIndex("by_updated")
+        .order("desc")
+        .collect(),
+      ctx.db.query("custodyRecords").collect(),
+    ]);
+
+    // Build O(1) latest-custody-per-case map — single linear pass, no N+1.
+    const latestCustodyByCase = new Map<string, CustodySnapshot>();
+    for (const record of allCustodyRecords) {
+      const key = record.caseId.toString();
+      const existing = latestCustodyByCase.get(key);
+      if (!existing || record.transferredAt > existing.transferredAt) {
+        latestCustodyByCase.set(key, {
+          toUserId:      record.toUserId,
+          toUserName:    record.toUserName,
+          fromUserId:    record.fromUserId,
+          fromUserName:  record.fromUserName,
+          transferredAt: record.transferredAt,
+        });
+      }
+    }
 
     const bounds = buildBounds(args.swLat, args.swLng, args.neLat, args.neLng);
 
@@ -188,7 +236,7 @@ export const getM1MapData = query({
       missionId:  args.missionId,
     };
 
-    return assembleM1(allCases, bounds, filters);
+    return assembleM1(allCases, bounds, filters, latestCustodyByCase);
   },
 });
 
@@ -220,11 +268,14 @@ export const getM2MapData = query({
     status:    v.optional(
       v.array(
         v.union(
+          v.literal("hangar"),
           v.literal("assembled"),
+          v.literal("transit_out"),
           v.literal("deployed"),
-          v.literal("in_field"),
-          v.literal("shipping"),
-          v.literal("returned")
+          v.literal("flagged"),
+          v.literal("transit_in"),
+          v.literal("received"),
+          v.literal("archived")
         )
       )
     ),
@@ -232,13 +283,35 @@ export const getM2MapData = query({
     missionId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<M2Response> => {
-    // Load cases and missions in a single parallel pass.
-    // Convex tracks dependencies on BOTH tables — any case or mission mutation
-    // invalidates M2 subscriptions and triggers a fresh push to clients.
-    const [allCases, allMissions] = await Promise.all([
+    await requireAuth(ctx);
+    // Load cases, missions, AND custody records in a single parallel pass.
+    //
+    // Convex tracks dependencies on ALL THREE tables:
+    //   • cases: status changes re-group cases into mission buckets
+    //   • missions: mission position/status changes update cluster pins
+    //   • custodyRecords: handoffCustody mutations update per-case custodian
+    //     displayed in mission group case lists and map tooltips
+    const [allCases, allMissions, allCustodyRecords] = await Promise.all([
       ctx.db.query("cases").withIndex("by_updated").order("desc").collect(),
       ctx.db.query("missions").withIndex("by_updated").order("desc").collect(),
+      ctx.db.query("custodyRecords").collect(),
     ]);
+
+    // Build O(1) latest-custody-per-case map — single linear pass, no N+1.
+    const latestCustodyByCase = new Map<string, CustodySnapshot>();
+    for (const record of allCustodyRecords) {
+      const key = record.caseId.toString();
+      const existing = latestCustodyByCase.get(key);
+      if (!existing || record.transferredAt > existing.transferredAt) {
+        latestCustodyByCase.set(key, {
+          toUserId:      record.toUserId,
+          toUserName:    record.toUserName,
+          fromUserId:    record.fromUserId,
+          fromUserName:  record.fromUserName,
+          transferredAt: record.transferredAt,
+        });
+      }
+    }
 
     const bounds = buildBounds(args.swLat, args.swLng, args.neLat, args.neLng);
 
@@ -247,7 +320,7 @@ export const getM2MapData = query({
       missionId: args.missionId,
     };
 
-    return assembleM2(allCases, allMissions, bounds, filters);
+    return assembleM2(allCases, allMissions, bounds, filters, latestCustodyByCase);
   },
 });
 
@@ -295,16 +368,22 @@ export const getM3MapData = query({
     hasDamage: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<M3Response> => {
-    // Load cases and ALL inspection rows in parallel.
+    await requireAuth(ctx);
+    // Load cases, ALL inspection rows, AND custody records in a single parallel pass.
     //
     // We load all inspections (not just for in-viewport cases) because:
     //   1. We need to build latestInspectionByCase for all field cases.
     //   2. Convex tracks the inspections table as a dependency — any
     //      updateChecklistItem or startInspection mutation invalidates this
     //      query and pushes the updated progress to dashboard clients.
-    const [allCases, allInspections] = await Promise.all([
+    //
+    // We load custodyRecords so M3 field mode pins can show who currently holds
+    // each case, and Convex tracks the custodyRecords dependency so the tooltip
+    // updates within ~2 seconds of a handoffCustody mutation.
+    const [allCases, allInspections, allCustodyRecords] = await Promise.all([
       ctx.db.query("cases").withIndex("by_updated").order("desc").collect(),
       ctx.db.query("inspections").collect(),
+      ctx.db.query("custodyRecords").collect(),
     ]);
 
     // Build latest-inspection-per-case map (O(n) linear pass — no N+1 queries).
@@ -319,6 +398,22 @@ export const getM3MapData = query({
       }
     }
 
+    // Build O(1) latest-custody-per-case map — single linear pass, no N+1.
+    const latestCustodyByCase = new Map<string, CustodySnapshot>();
+    for (const record of allCustodyRecords) {
+      const key = record.caseId.toString();
+      const existing = latestCustodyByCase.get(key);
+      if (!existing || record.transferredAt > existing.transferredAt) {
+        latestCustodyByCase.set(key, {
+          toUserId:      record.toUserId,
+          toUserName:    record.toUserName,
+          fromUserId:    record.fromUserId,
+          fromUserName:  record.fromUserName,
+          transferredAt: record.transferredAt,
+        });
+      }
+    }
+
     const bounds = buildBounds(args.swLat, args.swLng, args.neLat, args.neLng);
 
     const filters: ParsedFilters = {
@@ -329,7 +424,7 @@ export const getM3MapData = query({
       hasDamage:     args.hasDamage,
     };
 
-    return assembleM3(allCases, latestInspectionByCase, bounds, filters);
+    return assembleM3(allCases, latestInspectionByCase, bounds, filters, latestCustodyByCase);
   },
 });
 
@@ -382,6 +477,7 @@ export const getM4MapData = query({
     ),
   },
   handler: async (ctx, args): Promise<M4Response> => {
+    await requireAuth(ctx);
     // Load cases and shipments in a single parallel pass.
     //
     // Convex tracks dependencies on BOTH tables:
@@ -438,6 +534,7 @@ export const getM5MapData = query({
     ...boundsArgs,
   },
   handler: async (ctx, args): Promise<M5Response> => {
+    await requireAuth(ctx);
     // Load cases, missions, and the FF_MAP_MISSION feature flag in parallel.
     //
     // Convex tracks all three table reads as dependencies:
@@ -457,6 +554,175 @@ export const getM5MapData = query({
     const bounds = buildBounds(args.swLat, args.swLng, args.neLat, args.neLng);
 
     return assembleM5(allCases, allMissions, featureEnabled, bounds);
+  },
+});
+
+// ─── getCasesMapPayload — Unified denormalized map payload (Sub-AC 2) ─────────
+
+/**
+ * Subscribe to the unified, denormalized map payload covering all 5 map modes.
+ *
+ * Returns ALL cases enriched with pre-joined inspection data, custody state,
+ * and pre-computed `modeFlags` booleans.  Clients subscribe to this single
+ * query instead of maintaining five separate mode-specific subscriptions when
+ * they need to switch between M1–M5 without stale data gaps.
+ *
+ * Design rationale (denormalization)
+ * ───────────────────────────────────
+ * • `modeFlags` — computed server-side so clients filter by map mode in O(1)
+ *   without re-deriving status-to-mode logic (e.g. `isFieldActive` replaces
+ *   the per-component check `status === "deployed" || status === "flagged"`).
+ *
+ * • `inspection` — latest inspection summary joined from the `inspections`
+ *   table in a single parallel DB load; no N+1 per-case fetch needed.
+ *
+ * • Custody fields — latest custodian resolved from the `custodyRecords` table
+ *   in a single parallel DB load; single O(1) map lookup per case.
+ *
+ * • Shipping fields — already denormalized onto the `cases` table by the
+ *   `shipCase` mutation; passed through as-is (no join needed).
+ *
+ * Tables read (Convex dependency tracking)
+ * ──────────────────────────────────────────
+ *   cases           — always (primary case data)
+ *   inspections     — always (inspection progress for M3 mode)
+ *   custodyRecords  — always (custody state for all mode tooltips)
+ *
+ * Any SCAN mutation that writes to cases, inspections, or custodyRecords
+ * invalidates all active getCasesMapPayload subscriptions and pushes an
+ * updated payload to connected clients within ~100–300 ms, satisfying the
+ * ≤ 2-second real-time fidelity requirement.
+ *
+ * Client usage
+ * ────────────
+ *   const data = useQuery(api.mapData.getCasesMapPayload, {});
+ *   const data = useQuery(api.mapData.getCasesMapPayload, {
+ *     status: ["deployed", "flagged"],
+ *     swLat: bounds.swLat, swLng: bounds.swLng,
+ *     neLat: bounds.neLat, neLng: bounds.neLng,
+ *   });
+ *
+ *   // Filter by mode client-side (O(1) per case):
+ *   const fieldCases = data.cases.filter(c => c.modeFlags.isFieldActive);
+ *   const transitCases = data.cases.filter(c => c.modeFlags.isInTransit);
+ */
+export const getCasesMapPayload = query({
+  args: {
+    // Optional viewport bounds — omit all four for a global (unbounded) view
+    ...boundsArgs,
+    // Optional status filter — subset of caseStatus values
+    status: v.optional(
+      v.array(
+        v.union(
+          v.literal("hangar"),
+          v.literal("assembled"),
+          v.literal("transit_out"),
+          v.literal("deployed"),
+          v.literal("flagged"),
+          v.literal("transit_in"),
+          v.literal("received"),
+          v.literal("archived")
+        )
+      )
+    ),
+    /** Filter to cases assigned to a specific technician (Kinde user ID). */
+    assigneeId: v.optional(v.string()),
+    /** Filter to cases on a specific mission (Convex mission _id string). */
+    missionId: v.optional(v.string()),
+  },
+
+  handler: async (ctx, args): Promise<CasesMapPayloadResponse> => {
+    await requireAuth(ctx);
+
+    // ── Single parallel DB load — all tables needed by any map mode ────────
+    //
+    // Convex tracks reads on ALL THREE tables as reactive dependencies:
+    //   • cases           → any case mutation invalidates this query
+    //   • inspections     → scan.updateChecklistItem invalidates (M3 progress)
+    //   • custodyRecords  → custody.handoffCustody invalidates (tooltip names)
+    //
+    // Loading all three in one Promise.all keeps total latency at
+    // max(cases, inspections, custodyRecords) rather than sum, satisfying
+    // the <200 ms p50 map endpoint performance requirement.
+    //
+    // Index strategy:
+    //   cases       — by_updated index: efficient reactive tracking; Convex
+    //                 re-evaluates this query within ~100–300 ms of any case
+    //                 write.  Ordered desc so the most-recently-updated cases
+    //                 appear first in the response array.
+    //   inspections — full table scan (.collect()): we need ALL inspection rows
+    //                 to build the latestInspectionByCase lookup map.  No index
+    //                 helps here because we cannot filter by caseId without
+    //                 introducing per-case N+1 queries.  The in-memory map
+    //                 built below gives O(1) per-case access with zero N+1.
+    //   custodyRecords — same reasoning as inspections: full scan + in-memory
+    //                    map is the correct pattern when we need "latest per
+    //                    case" across the entire fleet in a single query.
+    const [allCases, allInspections, allCustodyRecords] = await Promise.all([
+      ctx.db.query("cases").withIndex("by_updated").order("desc").collect(),
+      ctx.db.query("inspections").collect(),
+      ctx.db.query("custodyRecords").collect(),
+    ]);
+
+    // ── Build O(1) lookup maps (single linear pass each — no N+1) ─────────
+
+    /**
+     * latestInspectionByCase — keyed by case _id string.
+     * Uses _creationTime (auto-set monotonically by Convex) to select the
+     * most recent inspection row per case without a secondary sort query.
+     * O(n) to build, O(1) per-case lookup in the assembler below.
+     */
+    const latestInspectionByCase = new Map<string, Doc<"inspections">>();
+    for (const ins of allInspections) {
+      const key = ins.caseId.toString();
+      const existing = latestInspectionByCase.get(key);
+      if (!existing || ins._creationTime > existing._creationTime) {
+        latestInspectionByCase.set(key, ins);
+      }
+    }
+
+    /**
+     * latestCustodyByCase — keyed by case _id string.
+     * Selects the most recent transfer per case by transferredAt (epoch ms).
+     * O(n) to build, O(1) per-case lookup in the assembler below.
+     */
+    const latestCustodyByCase = new Map<string, CustodySnapshot>();
+    for (const record of allCustodyRecords) {
+      const key = record.caseId.toString();
+      const existing = latestCustodyByCase.get(key);
+      if (!existing || record.transferredAt > existing.transferredAt) {
+        latestCustodyByCase.set(key, {
+          toUserId:      record.toUserId,
+          toUserName:    record.toUserName,
+          fromUserId:    record.fromUserId,
+          fromUserName:  record.fromUserName,
+          transferredAt: record.transferredAt,
+        });
+      }
+    }
+
+    // ── Build filters and bounds objects ───────────────────────────────────
+
+    const filters: ParsedFilters = {
+      status:     args.status as string[] | undefined,
+      assigneeId: args.assigneeId,
+      missionId:  args.missionId,
+    };
+
+    const bounds = buildBounds(args.swLat, args.swLng, args.neLat, args.neLng);
+
+    // ── Delegate to pure assembler — no further DB calls ──────────────────
+    //
+    // assembleCasesMapPayload applies filters and bounds in-memory, computes
+    // mode flags and inspection summaries per case, and builds the response
+    // envelope.  No N+1 — all lookups go through the O(1) maps above.
+    return assembleCasesMapPayload(
+      allCases,
+      latestInspectionByCase,
+      latestCustodyByCase,
+      filters,
+      bounds,
+    );
   },
 });
 
@@ -484,4 +750,11 @@ export type {
   M5HeatmapPoint,
   M5TimelineSnapshot,
   MapDataResponse,
+  // CustodySnapshot is used by map pin types to expose who holds each case.
+  CustodySnapshot,
+  // Unified denormalized payload types (Sub-AC 2)
+  CasesMapPayloadResponse,
+  CaseMapPayload,
+  CaseModeFlags,
+  CaseInspectionSummary,
 } from "./maps";

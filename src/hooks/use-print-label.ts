@@ -49,9 +49,10 @@
 
 import * as React from "react";
 import QRCode from "qrcode";
-import { buildQrPayload, type QrMetadata } from "@/lib/qr-code";
+import { buildQrPayload, type QrMetadata } from "@/lib/qr-code-payload";
 import {
   downloadLabelAsPng,
+  downloadLabelAsPdf,
   type LabelExportSize,
   type LabelExportData,
 } from "@/lib/label-export";
@@ -121,6 +122,8 @@ export interface DownloadPngMeta {
   missionName?: string;
   assigneeName?: string;
   locationName?: string;
+  /** Case creation date — rendered as "YYYY-MM-DD" in the PNG export. */
+  createdAt?: string | Date;
   notes?: string;
 }
 
@@ -151,6 +154,25 @@ export interface UsePrintLabelResult {
    *                  Defaults to `<label>-label` (e.g. "case-001-label.png").
    */
   downloadAsPng: (
+    meta: DownloadPngMeta,
+    size?: LabelExportSize,
+    filename?: string,
+  ) => Promise<void>;
+  /**
+   * Render the label as a PDF at physical print dimensions and trigger a
+   * browser file download. The PDF embeds a JPEG image of the label rendered
+   * at high DPI (300 by default). Resolves when the download anchor has been
+   * clicked.
+   *
+   * Only callable when `qrState.status === "ready"`. Throws if the QR code
+   * is not yet generated.
+   *
+   * @param meta      Case display metadata to render on the label.
+   * @param size      Physical label size (default: "4x6").
+   * @param filename  Download filename base without ".pdf" extension.
+   *                  Defaults to `<label>-label` (e.g. "case-001-label.pdf").
+   */
+  downloadAsPdf: (
     meta: DownloadPngMeta,
     size?: LabelExportSize,
     filename?: string,
@@ -309,6 +331,7 @@ export function usePrintLabel(
         missionName:  meta.missionName,
         assigneeName: meta.assigneeName,
         locationName: meta.locationName,
+        createdAt:    meta.createdAt,
         notes:        meta.notes,
       };
       await downloadLabelAsPng({ data: exportData, size, filename });
@@ -316,5 +339,48 @@ export function usePrintLabel(
     [qrState],
   );
 
-  return { qrState, triggerPrint, regenerate, downloadAsPng };
+  /**
+   * Render the label as a PDF file and trigger a browser file download.
+   *
+   * The QR code fields (`identifier`, `payload`, `qrDataUrl`) are sourced
+   * from the current `qrState`. The caller provides only the case display
+   * metadata via `meta`.
+   *
+   * The exported PDF embeds a high-DPI JPEG image of the label in a minimal
+   * single-page PDF 1.4 envelope with the correct physical page dimensions.
+   *
+   * Throws when `qrState.status !== "ready"`, so callers should gate the
+   * action on QR readiness (e.g. disable the button while loading).
+   */
+  const downloadAsPdf = React.useCallback(
+    async (
+      meta: DownloadPngMeta,
+      size: LabelExportSize = "4x6",
+      filename?: string,
+    ): Promise<void> => {
+      if (qrState.status !== "ready") {
+        throw new Error(
+          "downloadAsPdf called before QR code is ready. " +
+          "Check qrState.status === 'ready' before invoking."
+        );
+      }
+      const exportData: LabelExportData = {
+        qrDataUrl:    qrState.dataUrl,
+        identifier:   qrState.identifier,
+        payload:      qrState.payload,
+        label:        meta.label,
+        status:       meta.status,
+        templateName: meta.templateName,
+        missionName:  meta.missionName,
+        assigneeName: meta.assigneeName,
+        locationName: meta.locationName,
+        createdAt:    meta.createdAt,
+        notes:        meta.notes,
+      };
+      await downloadLabelAsPdf({ data: exportData, size, filename });
+    },
+    [qrState],
+  );
+
+  return { qrState, triggerPrint, regenerate, downloadAsPng, downloadAsPdf };
 }

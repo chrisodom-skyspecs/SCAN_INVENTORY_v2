@@ -51,11 +51,24 @@
  */
 
 import { query } from "./_generated/server";
+import type { Auth, UserIdentity } from "convex/server";
 import { v } from "convex/values";
 import {
   buildSummary,
   projectItem,
 } from "./checklistHelpers";
+
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+
+async function requireAuth(ctx: { auth: Auth }): Promise<UserIdentity> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error(
+      "[AUTH_REQUIRED] Unauthenticated. Provide a valid Kinde access token."
+    );
+  }
+  return identity;
+}
 
 // ─── Re-exports (types and pure helpers) ──────────────────────────────────────
 // Consumers should import types from convex/checklists (this module) or from
@@ -93,6 +106,7 @@ export { MANIFEST_ITEM_STATUSES, buildSummary, projectItem } from "./checklistHe
 export const getChecklistByCase = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     const rows = await ctx.db
       .query("manifestItems")
       .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
@@ -132,6 +146,7 @@ export const getChecklistItem = query({
     templateItemId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     // Load all items for the case via the by_case index, then filter by
     // templateItemId in memory.  Each case has at most ~10–50 manifest items,
     // so a full in-memory filter after the index scan is negligible.
@@ -167,6 +182,7 @@ export const getChecklistItem = query({
 export const getChecklistSummary = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     const rows = await ctx.db
       .query("manifestItems")
       .withIndex("by_case", (q) => q.eq("caseId", args.caseId))
@@ -226,6 +242,7 @@ export const getChecklistItemsByStatus = query({
     ),
   },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     // Use the by_case_status compound index for O(log n + |results|) lookup.
     // This avoids loading all items for the case and filtering in memory when
     // the caller only needs items in one specific completion state.
@@ -270,6 +287,7 @@ export const getChecklistItemsByStatus = query({
 export const getUncheckedItems = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     const rows = await ctx.db
       .query("manifestItems")
       .withIndex("by_case_status", (q) =>
@@ -316,6 +334,7 @@ export const getUncheckedItems = query({
 export const getChecklistWithInspection = query({
   args: { caseId: v.id("cases") },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     // Load manifest items and all inspections for this case in parallel.
     // Single Promise.all — no sequential awaits, no N+1.
     const [itemRows, inspectionRows] = await Promise.all([

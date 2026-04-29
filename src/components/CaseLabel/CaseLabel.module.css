@@ -369,23 +369,32 @@
    Isolation strategy: hide all body content via visibility:hidden,
    then restore visibility on [data-case-label-root] and all its
    descendants. This works regardless of DOM nesting depth.
+
+   Page geometry:
+     - Each physical label size has a named @page rule (label-4x6,
+       label-4x3, label-2x35) with `size:` matching the physical
+       label dimensions and `margin: 0` so the printable area equals
+       the full label face — a label printer's roll has no margin.
+     - Labels carry `break-inside: avoid` so a single label is never
+       split across pages, and `break-after: page` so batch-printing
+       multiple labels emits one page per label.
+     - `print-color-adjust: exact` is asserted on the dark header,
+       the subtle footer, and the QR module so the renderer cannot
+       drop the band fills as a "background" optimization.
+
+   The named @page rules are placed at the top level of the @media
+   block. PostCSS / Lightning CSS preserve @page through CSS-Modules
+   transformation; the `page:` property on the data-attribute
+   selector references them by the same identifier.
    ═══════════════════════════════════════════════════════════════ */
 
 @media print {
-  /* Page size follows the label's physical size attribute */
-  :global([data-case-label-root][data-label-size="4x6"]) {
-    page: label-4x6;
-  }
+  /* ── Page size descriptors ──────────────────────────────────────
+     Named @page rules are global; declare them once, then bind
+     each rule to the correct label-size root via the `page:`
+     property below.
+     ───────────────────────────────────────────────────────────── */
 
-  :global([data-case-label-root][data-label-size="4x3"]) {
-    page: label-4x3;
-  }
-
-  :global([data-case-label-root][data-label-size="2x35"]) {
-    page: label-2x35;
-  }
-
-  /* Named page rules for each label size */
   @page label-4x6 {
     size: 4in 6in portrait;
     margin: 0;
@@ -401,34 +410,76 @@
     margin: 0;
   }
 
-  /* Fallback @page for all other pages (should be none) */
+  /* Fallback @page for any non-label content that slips through */
   @page {
     margin: 0;
   }
 
-  /* ── Print isolation ── */
-  :global(body) {
-    visibility: hidden;
-    margin: 0;
-    padding: 0;
+  /* Bind each label root to its named page rule (scoped via .wrapper). */
+  .wrapper[data-label-size="4x6"] {
+    page: label-4x6;
   }
 
+  .wrapper[data-label-size="4x3"] {
+    page: label-4x3;
+  }
+
+  .wrapper[data-label-size="2x35"] {
+    page: label-2x35;
+  }
+
+  /* ── Print isolation (document-level reset lives in CaseLabel.print.css) ── */
+
   /* Restore visibility for the label root and all descendants */
-  :global([data-case-label-root]),
-  :global([data-case-label-root]) * {
+  .wrapper,
+  .wrapper * {
     visibility: visible;
   }
 
-  /* Position the label at the top of the page */
-  :global([data-case-label-root]) {
+  /* Position the label at the top-left of the page and let it
+     expand to the full media-box. `position: fixed` removes the
+     label from the document flow so surrounding screen-only
+     chrome cannot reserve printable area. */
+  .wrapper {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100% !important;
+    height: 100% !important;
     display: flex;
-    align-items: flex-start;
-    justify-content: flex-start;
+    flex-direction: column;
+    align-items: stretch !important;
+    justify-content: stretch;
+    gap: 0 !important;
+    /* Each label is its own page-block — never split a label */
+    break-inside: avoid;
+    page-break-inside: avoid;
+    /* Batch-print support: each label root yields its own page */
+    break-after: page;
+    page-break-after: always;
+    /* Ensure printer renders backgrounds and theme tokens exactly */
+    color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    /* Avoid clipped artwork on rasterizing print drivers */
+    overflow: visible;
+  }
+
+  /* When multiple label roots are stacked, suppress the trailing
+     blank page that some browsers emit after the last `break-after`. */
+  .wrapper:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  /* Disable transitions/animations during print so no in-flight
+     interpolation is rasterized into the PDF. */
+  .wrapper,
+  .wrapper *,
+  .wrapper *::before,
+  .wrapper *::after {
+    transition: none !important;
+    animation: none !important;
   }
 
   /* ── Label print styles ── */
@@ -436,6 +487,7 @@
     /* Fill the page exactly */
     width: 100% !important;
     min-height: 100% !important;
+    height: 100% !important;
     margin: 0 !important;
     border: none !important;
     border-radius: 0 !important;
@@ -443,6 +495,19 @@
     /* Force white background for print */
     background-color: white !important;
     color: black !important;
+    /* Defensive: never split label bands across pages */
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Body band (QR + meta) — stays glued to the header/footer; do
+     not allow the print engine to insert a page break here. */
+  .body {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   /* Header: use ink instead of brand fill for black-and-white compatibility */
@@ -450,6 +515,14 @@
     background-color: black !important;
     color: white !important;
     padding: 0.25rem 0.5rem !important;
+    /* Force the dark band to render — UAs sometimes drop "backgrounds" */
+    color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
   }
 
   /* Restore body text color */
@@ -458,16 +531,37 @@
     color: black !important;
   }
 
+  /* Long primary heading should not break across pages mid-word. */
+  .caseLabel {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    orphans: 3;
+    widows: 3;
+  }
+
   .fieldLabel {
     /* Near-black for secondary label text — clear on white paper */
     color: var(--ink-tertiary, currentColor) !important;
     opacity: 0.7;
   }
 
+  /* Field rows: keep dt/dd pair together on the same page */
+  .field {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
   /* Footer */
   .footer {
     background-color: var(--surface-sunken, transparent) !important;
     border-top: 1px solid var(--border-subtle, currentColor) !important;
+    color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    break-before: avoid !important;
+    page-break-before: avoid !important;
   }
 
   .footerScanHint,
@@ -478,6 +572,8 @@
   /* Meta column border */
   .meta {
     border-left-color: var(--border-subtle, currentColor) !important;
+    orphans: 2;
+    widows: 2;
   }
 
   /* Hide the screen-only controls */
@@ -485,25 +581,42 @@
     display: none !important;
   }
 
-  /* Ensure QR code SVG prints correctly */
-  .qrCode svg {
-    color-adjust: exact;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  /* Status pill: opt out of any animation/glow and force ink-correct fill */
+  .statusRow {
+    color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ensure QR code prints with full fidelity (modules == black) */
+  .qrSection,
+  .qrCode,
+  .qrCode svg,
+  .qrCode img {
+    color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   /* QR code sizing for print — scale to fill column */
-  .label[data-label-size="4x6"] .qrCode {
+  .label[data-label-size="4x6"] .qrCode,
+  .label[data-label-size="4x6"] .qrPlaceholder {
     width: 2.25in;
     height: 2.25in;
   }
 
-  .label[data-label-size="4x3"] .qrCode {
+  .label[data-label-size="4x3"] .qrCode,
+  .label[data-label-size="4x3"] .qrPlaceholder {
     width: 1.6in;
     height: 1.6in;
   }
 
-  .label[data-label-size="2x35"] .qrCode {
+  .label[data-label-size="2x35"] .qrCode,
+  .label[data-label-size="2x35"] .qrPlaceholder {
     width: 1.4in;
     height: 1.4in;
   }

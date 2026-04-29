@@ -33,6 +33,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 
 // Re-export types so consumers can import them from the hook module.
 export type {
@@ -132,6 +133,6 @@ export function useAllCaseTemplates() {
 export function useCaseTemplateById(templateId: string | null) {
   return useQuery(
     api.caseTemplates.getCaseTemplateById,
-    templateId !== null ? { templateId } : "skip",
+    templateId !== null ? { templateId: templateId as Id<"caseTemplates"> } : "skip",
   );
 }

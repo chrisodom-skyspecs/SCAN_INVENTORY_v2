@@ -73,6 +73,8 @@ export const TelemetryEventName = {
   INV_ACTION_FILTER_ORG_CHANGED: "inv:action:filter_org_changed",
   /** User changed the kit / case template filter. */
   INV_ACTION_FILTER_KIT_CHANGED: "inv:action:filter_kit_changed",
+  /** User submitted the global case search (Enter key or form submit). */
+  INV_ACTION_SEARCH_SUBMITTED: "inv:action:search_submitted",
   /** User dragged the M5 mission-replay scrubber. */
   INV_ACTION_MISSION_REPLAY_SCRUBBED: "inv:action:mission_replay_scrubbed",
   /** User initiated an export (label, PDF, CSV). */
@@ -87,6 +89,14 @@ export const TelemetryEventName = {
   SCAN_NAV_PAGE_CHANGED: "scan:nav:page_changed",
   /** Case detail was opened after a successful QR scan. */
   SCAN_NAV_CASE_OPENED: "scan:nav:case_opened",
+  /**
+   * The QR scanner camera view was opened and is awaiting a scan.
+   * Fired when the camera stream activates — distinct from SCAN_ACTION_QR_SCANNED
+   * (which fires when a code is decoded).  Enables funnel analysis of how many
+   * scanner sessions produce a successful decode vs. are abandoned.
+   * (spec §23 — scan domain)
+   */
+  SCAN_NAV_SCANNER_OPENED: "scan:nav:scanner_opened",
   /** User entered the inspection checklist flow. */
   SCAN_NAV_INSPECTION_STARTED: "scan:nav:inspection_started",
   /** User opened the damage report / photo annotation flow. */
@@ -101,6 +111,22 @@ export const TelemetryEventName = {
   // ── SCAN — User Actions ───────────────────────────────────────────────────
   /** QR code scan completed (success or failure recorded separately). */
   SCAN_ACTION_QR_SCANNED: "scan:action:qr_scanned",
+  /**
+   * User selected a workflow context after a successful QR scan.
+   *
+   * The SCAN app post-scan screen offers five workflow choices:
+   *   "inspect"      — Start Inspection checklist flow
+   *   "history"      — View case history / past inspections
+   *   "issue"        — Report an issue (damage report)
+   *   "ship"         — Ship Case (FedEx tracking entry)
+   *   "handoff"      — In-person custody handoff
+   *
+   * This event is emitted when the user taps one of these buttons.
+   * Subsequent domain events (SCAN_NAV_INSPECTION_STARTED, etc.) provide
+   * per-workflow detail once the chosen flow begins.
+   * (spec §23 — scan domain)
+   */
+  SCAN_ACTION_CONTEXT_SELECTED: "scan:action:context_selected",
   /** User changed the check state of a manifest item. */
   SCAN_ACTION_ITEM_CHECKED: "scan:action:item_checked",
   /** Damage photo submitted (photo + annotations uploaded). */
@@ -115,6 +141,16 @@ export const TelemetryEventName = {
   SCAN_ACTION_CUSTODY_COMPLETED: "scan:action:custody_completed",
   /** User marked an inspection as complete. */
   SCAN_ACTION_INSPECTION_COMPLETED: "scan:action:inspection_completed",
+  /**
+   * User exited the inspection checklist without completing all required items.
+   *
+   * Fired when the technician navigates away from an in-progress inspection
+   * before tapping "Complete Inspection".  Captures how many items had been
+   * checked at the point of abandonment so partial completion rates can be
+   * measured per case template.
+   * (spec §23 — inspection domain)
+   */
+  SCAN_ACTION_INSPECTION_ABANDONED: "scan:action:inspection_abandoned",
   /** User added a free-text note to a case or manifest item. */
   SCAN_ACTION_NOTE_ADDED: "scan:action:note_added",
   /**
@@ -367,11 +403,14 @@ export interface ScanNavCaseOpenedEvent extends TelemetryEventBase {
   caseId: string;
   /** Current case status at time of open. */
   caseStatus:
+    | "hangar"
     | "assembled"
+    | "transit_out"
     | "deployed"
-    | "in_field"
-    | "shipping"
-    | "returned";
+    | "flagged"
+    | "transit_in"
+    | "received"
+    | "archived";
 }
 
 export interface ScanNavInspectionStartedEvent extends TelemetryEventBase {
@@ -417,6 +456,30 @@ export interface ScanNavPageLoadedEvent extends TelemetryEventBase {
   loadDurationMs: number;
 }
 
+/**
+ * Fired when the QR scanner camera view opens and the camera stream activates.
+ *
+ * This precedes `ScanActionQrScannedEvent` in the scan funnel.  Comparing the
+ * count of SCAN_NAV_SCANNER_OPENED vs SCAN_ACTION_QR_SCANNED events reveals the
+ * scanner-to-decode conversion rate and surfaces camera permission friction.
+ * (spec §23 — scan domain)
+ */
+export interface ScanNavScannerOpenedEvent extends TelemetryEventBase {
+  eventCategory: "navigation";
+  eventName: typeof TelemetryEventName.SCAN_NAV_SCANNER_OPENED;
+  app: "scan";
+  /**
+   * Whether this scanner session was opened from the home screen (cold start)
+   * or from within a case detail page (already authenticated).
+   */
+  entryPoint: "home" | "case_detail";
+  /**
+   * True when the device already had camera permission granted at open time.
+   * False means the browser will prompt for permission — or has already denied it.
+   */
+  cameraPermissionGranted: boolean;
+}
+
 /** Discriminated union of all navigation events. */
 export type NavigationEvent =
   | InvNavMapViewChangedEvent
@@ -426,6 +489,7 @@ export type NavigationEvent =
   | InvNavPageLoadedEvent
   | ScanNavPageChangedEvent
   | ScanNavCaseOpenedEvent
+  | ScanNavScannerOpenedEvent
   | ScanNavInspectionStartedEvent
   | ScanNavDamageReportOpenedEvent
   | ScanNavShipFlowOpenedEvent
@@ -477,6 +541,27 @@ export interface InvActionFilterKitChangedEvent extends TelemetryEventBase {
   previousKitId: string | null;
 }
 
+export interface InvActionSearchSubmittedEvent extends TelemetryEventBase {
+  eventCategory: "user_action";
+  eventName: typeof TelemetryEventName.INV_ACTION_SEARCH_SUBMITTED;
+  app: "inventory";
+  /**
+   * Length of the search query in characters.
+   * The query value itself is not stored; use length for analytics trending.
+   * 0 when the submission contained only whitespace (no-op submissions
+   * are still tracked so empty-submit rates can be measured).
+   */
+  queryLength: number;
+  /**
+   * How the search was submitted.
+   *
+   * "enter_key"  — user pressed Enter inside the search input.
+   * "form_submit" — user submitted the containing <form> via any means
+   *                 other than the Enter key (e.g. mobile "Go" button).
+   */
+  submitMethod: "enter_key" | "form_submit";
+}
+
 export interface InvActionMissionReplayScrubbedEvent
   extends TelemetryEventBase {
   eventCategory: "user_action";
@@ -520,6 +605,47 @@ export interface InvActionTemplateAppliedEvent extends TelemetryEventBase {
 }
 
 // ── SCAN action payloads ───────────────────────────────────────────────────
+
+/**
+ * User selected a workflow context from the post-scan choice screen.
+ *
+ * After a successful QR decode the SCAN app presents five workflow options
+ * (inspect, history, issue, ship, handoff).  This event captures which
+ * option was selected and how long the choice screen was shown before the
+ * user tapped an option.
+ * (spec §23 — scan domain)
+ */
+export interface ScanActionContextSelectedEvent extends TelemetryEventBase {
+  eventCategory: "user_action";
+  eventName: typeof TelemetryEventName.SCAN_ACTION_CONTEXT_SELECTED;
+  app: "scan";
+  caseId: string;
+  /**
+   * Which workflow option the user selected on the post-scan context screen.
+   *
+   * "inspect"  — Start Inspection (→ SCAN_NAV_INSPECTION_STARTED)
+   * "history"  — View case history (read-only)
+   * "issue"    — Report an issue (→ SCAN_NAV_DAMAGE_REPORT_OPENED)
+   * "ship"     — Ship Case (→ SCAN_NAV_SHIP_FLOW_OPENED)
+   * "handoff"  — In-person handoff (→ SCAN_NAV_CUSTODY_FLOW_OPENED)
+   */
+  contextChoice: "inspect" | "history" | "issue" | "ship" | "handoff";
+  /**
+   * Milliseconds the choice screen was displayed before the user tapped.
+   * Useful for measuring decision latency per workflow type.
+   */
+  decisionTimeMs: number;
+  /** Current case status at time of context selection. */
+  caseStatus:
+    | "hangar"
+    | "assembled"
+    | "transit_out"
+    | "deployed"
+    | "flagged"
+    | "transit_in"
+    | "received"
+    | "archived";
+}
 
 export interface ScanActionQrScannedEvent extends TelemetryEventBase {
   eventCategory: "user_action";
@@ -698,6 +824,50 @@ export interface ScanActionInspectionCompletedEvent extends TelemetryEventBase {
   durationMs: number;
 }
 
+/**
+ * User exited the inspection checklist before completing all items.
+ *
+ * Fired when the technician navigates away from an active inspection without
+ * tapping "Complete Inspection".  The partial-completion counters allow
+ * funnel analysis to identify which items or case types most often cause
+ * abandonment.
+ * (spec §23 — inspection domain)
+ */
+export interface ScanActionInspectionAbandonedEvent extends TelemetryEventBase {
+  eventCategory: "user_action";
+  eventName: typeof TelemetryEventName.SCAN_ACTION_INSPECTION_ABANDONED;
+  app: "scan";
+  caseId: string;
+  /** Convex inspection record ID (the in-progress inspection being abandoned). */
+  inspectionId: string;
+  /** Total number of manifest items in the checklist. */
+  totalItems: number;
+  /**
+   * Number of items that had been checked (any status) at abandonment time.
+   * `checkedItems / totalItems` gives the partial-completion ratio.
+   */
+  checkedItems: number;
+  /** Items marked ok at abandonment. */
+  okItems: number;
+  /** Items marked damaged at abandonment. */
+  damagedItems: number;
+  /** Items marked missing at abandonment. */
+  missingItems: number;
+  /**
+   * Duration from inspection start to abandonment (ms).
+   * Useful for detecting cases where technicians time out or lose connectivity.
+   */
+  durationMs: number;
+  /**
+   * Where the user navigated when they left the inspection.
+   * "back"       — tapped the back/cancel button explicitly
+   * "home"       — navigated to the SCAN home screen
+   * "other_case" — scanned a different case
+   * "external"   — left the SCAN app entirely (app backgrounded)
+   */
+  exitReason: "back" | "home" | "other_case" | "external";
+}
+
 export interface ScanActionNoteAddedEvent extends TelemetryEventBase {
   eventCategory: "user_action";
   eventName: typeof TelemetryEventName.SCAN_ACTION_NOTE_ADDED;
@@ -788,10 +958,12 @@ export type UserActionEvent =
   | InvActionLayerToggledEvent
   | InvActionFilterOrgChangedEvent
   | InvActionFilterKitChangedEvent
+  | InvActionSearchSubmittedEvent
   | InvActionMissionReplayScrubbedEvent
   | InvActionExportInitiatedEvent
   | InvActionCaseCreateOpenedEvent
   | InvActionTemplateAppliedEvent
+  | ScanActionContextSelectedEvent
   | ScanActionQrScannedEvent
   | ScanActionItemCheckedEvent
   | ScanActionDamageReportedEvent
@@ -800,6 +972,7 @@ export type UserActionEvent =
   | ScanActionCustodyInitiatedEvent
   | ScanActionCustodyCompletedEvent
   | ScanActionInspectionCompletedEvent
+  | ScanActionInspectionAbandonedEvent
   | ScanActionNoteAddedEvent
   | ScanActionAnnotationAddedEvent
   | ScanActionAnnotationRemovedEvent;
@@ -1109,3 +1282,291 @@ export type TelemetryEventInput<E extends TelemetryEvent> = Omit<
   E,
   "timestamp"
 > & { timestamp?: number };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION 23 — DOMAIN-ORIENTED EVENT CATEGORIES
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Spec §23 organises telemetry by the six operational workflows of the SCAN
+// app (and cross-cutting navigation).  The discriminated union `TelemetryEvent`
+// above is organised by technical category (navigation, user_action, error,
+// performance) for clean switch-dispatch; these domain types cross-cut that
+// structure for product-analytics and funnel queries.
+//
+// Usage:
+//   function handleScanDomain(e: ScanDomainEvents) { ... }
+//   const isHandoffEvent = (e: TelemetryEvent): e is HandoffDomainEvents =>
+//     DOMAIN_EVENT_NAMES.handoff.includes(e.eventName as never);
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The six domain-workflow categories from spec §23.
+ *
+ * These correspond to the primary user journeys in the SCAN mobile app
+ * and the cross-cutting navigation category shared with INVENTORY.
+ *
+ *   scan        — QR code scanning (camera open → decode → context choice)
+ *   inspection  — Item-by-item checklist inspection workflow
+ *   damage      — Damage photo capture and annotation workflow
+ *   shipping    — FedEx tracking number entry and shipment submission
+ *   handoff     — In-person custody transfer between users
+ *   navigation  — Route/view changes across both INVENTORY and SCAN apps
+ */
+export type TelemetryDomainCategory =
+  | "scan"
+  | "inspection"
+  | "damage"
+  | "shipping"
+  | "handoff"
+  | "navigation";
+
+// ─── Scan domain ──────────────────────────────────────────────────────────────
+
+/**
+ * Events belonging to the QR scan domain (spec §23).
+ *
+ * Covers the full scan funnel:
+ *   SCAN_NAV_SCANNER_OPENED → camera activates
+ *   SCAN_ACTION_QR_SCANNED  → code decoded (or decode attempt fails)
+ *   SCAN_ACTION_CONTEXT_SELECTED → user picks a workflow from the choice screen
+ *   ERROR_QR_SCAN_FAILED    → no decodable result
+ *   ERROR_CAMERA_DENIED     → browser blocked camera access
+ */
+export type ScanDomainEvents = Extract<
+  TelemetryEvent,
+  {
+    eventName:
+      | typeof TelemetryEventName.SCAN_NAV_SCANNER_OPENED
+      | typeof TelemetryEventName.SCAN_ACTION_QR_SCANNED
+      | typeof TelemetryEventName.SCAN_ACTION_CONTEXT_SELECTED
+      | typeof TelemetryEventName.SCAN_NAV_CASE_OPENED
+      | typeof TelemetryEventName.ERROR_QR_SCAN_FAILED
+      | typeof TelemetryEventName.ERROR_CAMERA_DENIED;
+  }
+>;
+
+// ─── Inspection domain ────────────────────────────────────────────────────────
+
+/**
+ * Events belonging to the inspection domain (spec §23).
+ *
+ * Covers the inspection checklist workflow:
+ *   SCAN_NAV_INSPECTION_STARTED      → checklist view opens
+ *   SCAN_ACTION_ITEM_CHECKED         → single item state change
+ *   SCAN_ACTION_INSPECTION_COMPLETED → all items reviewed; inspection closed
+ *   SCAN_ACTION_INSPECTION_ABANDONED → user exits before completing
+ *   SCAN_ACTION_NOTE_ADDED           → free-text note attached
+ */
+export type InspectionDomainEvents = Extract<
+  TelemetryEvent,
+  {
+    eventName:
+      | typeof TelemetryEventName.SCAN_NAV_INSPECTION_STARTED
+      | typeof TelemetryEventName.SCAN_ACTION_ITEM_CHECKED
+      | typeof TelemetryEventName.SCAN_ACTION_INSPECTION_COMPLETED
+      | typeof TelemetryEventName.SCAN_ACTION_INSPECTION_ABANDONED
+      | typeof TelemetryEventName.SCAN_ACTION_NOTE_ADDED;
+  }
+>;
+
+// ─── Damage domain ────────────────────────────────────────────────────────────
+
+/**
+ * Events belonging to the damage reporting domain (spec §23).
+ *
+ * Covers the photo capture and annotation workflow:
+ *   SCAN_NAV_DAMAGE_REPORT_OPENED   → damage report view opens
+ *   SCAN_ACTION_ANNOTATION_ADDED    → pin placed on photo
+ *   SCAN_ACTION_ANNOTATION_REMOVED  → pin removed from photo
+ *   SCAN_ACTION_DAMAGE_REPORTED     → photo + annotations submitted
+ *   ERROR_PHOTO_UPLOAD_FAILED       → upload failed
+ *   PERF_PHOTO_UPLOAD               → upload timing measurement
+ */
+export type DamageDomainEvents = Extract<
+  TelemetryEvent,
+  {
+    eventName:
+      | typeof TelemetryEventName.SCAN_NAV_DAMAGE_REPORT_OPENED
+      | typeof TelemetryEventName.SCAN_ACTION_ANNOTATION_ADDED
+      | typeof TelemetryEventName.SCAN_ACTION_ANNOTATION_REMOVED
+      | typeof TelemetryEventName.SCAN_ACTION_DAMAGE_REPORTED
+      | typeof TelemetryEventName.ERROR_PHOTO_UPLOAD_FAILED
+      | typeof TelemetryEventName.PERF_PHOTO_UPLOAD;
+  }
+>;
+
+// ─── Shipping domain ──────────────────────────────────────────────────────────
+
+/**
+ * Events belonging to the FedEx shipping domain (spec §23).
+ *
+ * Covers the tracking-number entry and shipment creation flow:
+ *   SCAN_NAV_SHIP_FLOW_OPENED       → shipping form view opens
+ *   SCAN_ACTION_TRACKING_ENTERED    → tracking number typed/pasted
+ *   SCAN_ACTION_SHIPMENT_SUBMITTED  → shipment form submitted
+ *   ERROR_FEDEX_VALIDATION_FAILED   → tracking number failed validation
+ */
+export type ShippingDomainEvents = Extract<
+  TelemetryEvent,
+  {
+    eventName:
+      | typeof TelemetryEventName.SCAN_NAV_SHIP_FLOW_OPENED
+      | typeof TelemetryEventName.SCAN_ACTION_TRACKING_ENTERED
+      | typeof TelemetryEventName.SCAN_ACTION_SHIPMENT_SUBMITTED
+      | typeof TelemetryEventName.ERROR_FEDEX_VALIDATION_FAILED;
+  }
+>;
+
+// ─── Handoff domain ───────────────────────────────────────────────────────────
+
+/**
+ * Events belonging to the in-person custody handoff domain (spec §23).
+ *
+ * Covers the custody transfer workflow:
+ *   SCAN_NAV_CUSTODY_FLOW_OPENED    → handoff form view opens
+ *   SCAN_ACTION_CUSTODY_INITIATED   → outgoing holder confirms transfer
+ *   SCAN_ACTION_CUSTODY_COMPLETED   → both parties confirm; custody recorded
+ */
+export type HandoffDomainEvents = Extract<
+  TelemetryEvent,
+  {
+    eventName:
+      | typeof TelemetryEventName.SCAN_NAV_CUSTODY_FLOW_OPENED
+      | typeof TelemetryEventName.SCAN_ACTION_CUSTODY_INITIATED
+      | typeof TelemetryEventName.SCAN_ACTION_CUSTODY_COMPLETED;
+  }
+>;
+
+// ─── Navigation domain ────────────────────────────────────────────────────────
+
+/**
+ * Events belonging to the navigation domain (spec §23).
+ *
+ * Covers route / view changes across both INVENTORY and SCAN:
+ *   INVENTORY map mode switches, case selection/deselection, detail tab changes,
+ *   and SCAN page navigation events.
+ *
+ * Note: some navigation events are also part of a specific workflow domain
+ * (e.g. SCAN_NAV_INSPECTION_STARTED is in both `navigation` and `inspection`
+ * domains).  These cross-domain events appear in both type aliases but are
+ * stored as a single event in the database.
+ */
+export type NavigationDomainEvents = Extract<
+  TelemetryEvent,
+  {
+    eventName:
+      | typeof TelemetryEventName.INV_NAV_MAP_VIEW_CHANGED
+      | typeof TelemetryEventName.INV_NAV_CASE_SELECTED
+      | typeof TelemetryEventName.INV_NAV_CASE_DESELECTED
+      | typeof TelemetryEventName.INV_NAV_DETAIL_TAB_CHANGED
+      | typeof TelemetryEventName.INV_NAV_PAGE_LOADED
+      | typeof TelemetryEventName.SCAN_NAV_PAGE_CHANGED
+      | typeof TelemetryEventName.SCAN_NAV_PAGE_LOADED
+      | typeof TelemetryEventName.SCAN_NAV_CASE_OPENED
+      | typeof TelemetryEventName.SCAN_NAV_SCANNER_OPENED
+      | typeof TelemetryEventName.SCAN_NAV_INSPECTION_STARTED
+      | typeof TelemetryEventName.SCAN_NAV_DAMAGE_REPORT_OPENED
+      | typeof TelemetryEventName.SCAN_NAV_SHIP_FLOW_OPENED
+      | typeof TelemetryEventName.SCAN_NAV_CUSTODY_FLOW_OPENED;
+  }
+>;
+
+// ─── Section 23 domain → event-name mapping ──────────────────────────────────
+
+/**
+ * Canonical mapping from spec §23 domain category to the event name strings
+ * belonging to that domain.
+ *
+ * Use this to:
+ *   • Build analytics filters for domain-specific dashboards
+ *   • Assert in tests that a tracked event belongs to the correct domain
+ *   • Generate documentation / dictionaries from code
+ *
+ * @example
+ * // Check whether an event belongs to the inspection domain:
+ * const isInspection = (e: TelemetryEvent) =>
+ *   (DOMAIN_EVENT_NAMES.inspection as readonly string[]).includes(e.eventName);
+ *
+ * @example
+ * // Build a Convex query filter for all scan-domain events:
+ * const scanFilter = q.or(
+ *   ...DOMAIN_EVENT_NAMES.scan.map(name => q.eq(q.field("eventName"), name))
+ * );
+ */
+export const DOMAIN_EVENT_NAMES = {
+  /** QR scanning funnel events. */
+  scan: [
+    TelemetryEventName.SCAN_NAV_SCANNER_OPENED,
+    TelemetryEventName.SCAN_ACTION_QR_SCANNED,
+    TelemetryEventName.SCAN_ACTION_CONTEXT_SELECTED,
+    TelemetryEventName.SCAN_NAV_CASE_OPENED,
+    TelemetryEventName.ERROR_QR_SCAN_FAILED,
+    TelemetryEventName.ERROR_CAMERA_DENIED,
+  ] as const,
+
+  /** Inspection checklist workflow events. */
+  inspection: [
+    TelemetryEventName.SCAN_NAV_INSPECTION_STARTED,
+    TelemetryEventName.SCAN_ACTION_ITEM_CHECKED,
+    TelemetryEventName.SCAN_ACTION_INSPECTION_COMPLETED,
+    TelemetryEventName.SCAN_ACTION_INSPECTION_ABANDONED,
+    TelemetryEventName.SCAN_ACTION_NOTE_ADDED,
+  ] as const,
+
+  /** Damage photo capture and annotation workflow events. */
+  damage: [
+    TelemetryEventName.SCAN_NAV_DAMAGE_REPORT_OPENED,
+    TelemetryEventName.SCAN_ACTION_ANNOTATION_ADDED,
+    TelemetryEventName.SCAN_ACTION_ANNOTATION_REMOVED,
+    TelemetryEventName.SCAN_ACTION_DAMAGE_REPORTED,
+    TelemetryEventName.ERROR_PHOTO_UPLOAD_FAILED,
+    TelemetryEventName.PERF_PHOTO_UPLOAD,
+  ] as const,
+
+  /** FedEx shipping entry and submission events. */
+  shipping: [
+    TelemetryEventName.SCAN_NAV_SHIP_FLOW_OPENED,
+    TelemetryEventName.SCAN_ACTION_TRACKING_ENTERED,
+    TelemetryEventName.SCAN_ACTION_SHIPMENT_SUBMITTED,
+    TelemetryEventName.ERROR_FEDEX_VALIDATION_FAILED,
+  ] as const,
+
+  /** In-person custody handoff workflow events. */
+  handoff: [
+    TelemetryEventName.SCAN_NAV_CUSTODY_FLOW_OPENED,
+    TelemetryEventName.SCAN_ACTION_CUSTODY_INITIATED,
+    TelemetryEventName.SCAN_ACTION_CUSTODY_COMPLETED,
+  ] as const,
+
+  /**
+   * Navigation / view-change events shared across INVENTORY and SCAN.
+   * Note: SCAN_NAV_INSPECTION_STARTED, SCAN_NAV_DAMAGE_REPORT_OPENED,
+   * SCAN_NAV_SHIP_FLOW_OPENED, and SCAN_NAV_CUSTODY_FLOW_OPENED also appear in
+   * their respective workflow domain lists — cross-domain events are intentional.
+   */
+  navigation: [
+    TelemetryEventName.INV_NAV_MAP_VIEW_CHANGED,
+    TelemetryEventName.INV_NAV_CASE_SELECTED,
+    TelemetryEventName.INV_NAV_CASE_DESELECTED,
+    TelemetryEventName.INV_NAV_DETAIL_TAB_CHANGED,
+    TelemetryEventName.INV_NAV_PAGE_LOADED,
+    TelemetryEventName.SCAN_NAV_PAGE_CHANGED,
+    TelemetryEventName.SCAN_NAV_PAGE_LOADED,
+    TelemetryEventName.SCAN_NAV_CASE_OPENED,
+    TelemetryEventName.SCAN_NAV_SCANNER_OPENED,
+    TelemetryEventName.SCAN_NAV_INSPECTION_STARTED,
+    TelemetryEventName.SCAN_NAV_DAMAGE_REPORT_OPENED,
+    TelemetryEventName.SCAN_NAV_SHIP_FLOW_OPENED,
+    TelemetryEventName.SCAN_NAV_CUSTODY_FLOW_OPENED,
+  ] as const,
+} as const satisfies Record<TelemetryDomainCategory, readonly TelemetryEventNameValue[]>;
+
+/**
+ * Type-level union of all event names that belong to a specific domain.
+ *
+ * @example
+ * type ScanEventNames = DomainEventNames<"scan">;
+ * // → "scan:nav:scanner_opened" | "scan:action:qr_scanned" | ...
+ */
+export type DomainEventNames<D extends TelemetryDomainCategory> =
+  (typeof DOMAIN_EVENT_NAMES)[D][number];

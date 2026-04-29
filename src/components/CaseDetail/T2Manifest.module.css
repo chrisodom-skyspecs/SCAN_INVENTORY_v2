@@ -1,13 +1,27 @@
 /**
  * T2Manifest.module.css
- * No hex literals — CSS custom properties only.
+ *
+ * Styles for the T2 Manifest / Packing List tab panel.
+ *
+ * Layout: a tabular equipment list with three logical columns —
+ *   Item name (flexible)  |  Qty (fixed, narrow)  |  Status (fixed)
+ *
+ * Rules:
+ *   - No hex literals — CSS custom properties only
+ *   - Inter Tight for UI typography (labels, titles, filters, item names)
+ *   - IBM Plex Mono for data values (counts, timestamps, qty column)
+ *   - WCAG AA contrast maintained via semantic tokens
  */
+
+/* ── Manifest root ────────────────────────────────────────────────── */
 
 .manifest {
   display: flex;
   flex-direction: column;
   gap: 0;
 }
+
+/* ── Progress section ─────────────────────────────────────────────── */
 
 .progressSection {
   margin-bottom: 0.25rem;
@@ -25,7 +39,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.375rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .filterBtn {
@@ -72,6 +86,62 @@
   color: inherit;
 }
 
+/* ── Column headers ───────────────────────────────────────────────── */
+/*
+ * Sticky column header row displayed above the item list.
+ * aria-hidden="true" — these are decorative labels; the item rows
+ * carry their own aria-label attributes describing name + status.
+ *
+ * Column alignment mirrors the item row layout (see .colName / .colQty / .colStatus).
+ */
+
+.columnHeaders {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0 0.375rem;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 0;
+  /* Sticky: pins below the filter bar as the panel is scrolled */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: var(--surface-raised);
+}
+
+/* Header label base */
+.colHeaderItem,
+.colHeaderQty,
+.colHeaderStatus {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  user-select: none;
+}
+
+/* Item name header — flexible (matches .colName) */
+.colHeaderItem {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Qty header — fixed narrow width (matches .colQty) */
+.colHeaderQty {
+  width: 2.25rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Status header — fixed width for the pill column (matches .colStatus) */
+.colHeaderStatus {
+  width: 6rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
 /* ── Item list ────────────────────────────────────────────────────── */
 
 .itemList {
@@ -83,33 +153,93 @@
   padding: 0;
 }
 
+/* ── Individual item row ──────────────────────────────────────────── */
+
 .item {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  padding: 0.625rem 0;
+  padding: 0.5rem 0;
   border-bottom: 1px solid var(--border-subtle);
+  /* Left-border accent by inspection status */
+  border-left: 3px solid transparent;
+  transition: background-color 0.1s ease, border-left-color 0.15s ease;
 }
 
 .item:last-child {
   border-bottom: none;
 }
 
-.itemHeader {
+.item:hover {
+  background-color: var(--surface-hover);
+}
+
+/* ── Status-specific left-border accents ──────────────────────────── */
+/* Visual scan aid: operators can spot issues by color before reading the pill. */
+
+.item[data-status="ok"] {
+  border-left-color: var(--signal-success-border);
+}
+
+.item[data-status="damaged"] {
+  border-left-color: var(--signal-warning-border);
+}
+
+.item[data-status="missing"] {
+  border-left-color: var(--signal-error-border);
+}
+
+.item[data-status="unchecked"] {
+  border-left-color: var(--border-subtle);
+}
+
+/* ── Primary row: columnar layout ─────────────────────────────────── */
+/*
+ * Three columns aligned with the column headers above:
+ *   colName   — item name (flexible, truncates with ellipsis)
+ *   colQty    — quantity "1×" (fixed narrow, monospace)
+ *   colStatus — StatusPill + optional severity badge (fixed width, right-aligned)
+ */
+
+.itemRow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
 }
 
-.itemName {
+.colName {
   font-family: "Inter Tight", "Inter", system-ui, sans-serif;
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--ink-primary);
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.colQty {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+  width: 2.25rem;
+  text-align: center;
+  flex-shrink: 0;
+  letter-spacing: 0.01em;
+}
+
+.colStatus {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 6rem;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* ── Item secondary info ──────────────────────────────────────────── */
 
 .itemNote {
   font-family: "Inter Tight", "Inter", system-ui, sans-serif;
@@ -117,16 +247,10 @@
   color: var(--ink-secondary);
   margin: 0;
   padding-left: 0.125rem;
+  line-height: 1.4;
 }
 
 /* ── Damage-specific item elements ────────────────────────────────── */
-
-.itemPills {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex-shrink: 0;
-}
 
 .severityBadge {
   display: inline-flex;
@@ -195,6 +319,7 @@
   border-radius: 0.375rem;
   flex-wrap: wrap;
   row-gap: 0.375rem;
+  margin-bottom: 0.75rem;
 }
 
 .shipmentBannerLeft {
@@ -249,4 +374,72 @@
   outline: none;
   box-shadow: var(--elevation-focus);
   border-radius: 0.125rem;
+}
+
+/* ── Reduced-motion adaptations ──────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .item {
+    transition: none;
+  }
+}
+
+/* ── Density: compact ─────────────────────────────────────────────── */
+
+[data-density="compact"] .item {
+  padding: 0.3125rem 0;
+}
+
+[data-density="compact"] .colName {
+  font-size: 0.75rem;
+}
+
+[data-density="compact"] .columnHeaders {
+  padding: 0.1875rem 0 0.25rem;
+}
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   ============================================================ */
+
+/*
+ * Filter button defaults — sunken background has low contrast in dark mode;
+ * add border-default so the button shape reads clearly.
+ */
+:global(.theme-dark) .filterBtn {
+  border-color: var(--border-default);
+}
+
+/*
+ * Active filter button — surface-selected in dark mode is --_b-900;
+ * keep border-brand for consistent active indicator.
+ */
+:global(.theme-dark) .filterBtnActive {
+  background-color: var(--surface-selected);
+  border-color: var(--border-brand);
+}
+
+/*
+ * Column headers background — surface-raised in dark mode ensures the sticky
+ * header reads clearly against the list rows below it.
+ */
+:global(.theme-dark) .columnHeaders {
+  background-color: var(--surface-raised);
+  border-bottom-color: var(--border-default);
+}
+
+/*
+ * Shipment banner — subtle border is near invisible in dark mode;
+ * use default border for card-like readability.
+ */
+:global(.theme-dark) .shipmentBanner {
+  border-color: var(--border-default);
+}
+
+/*
+ * Item list rows — subtle divider is very faint in dark mode;
+ * bump to border-default for row separation.
+ */
+:global(.theme-dark) .item {
+  border-bottom-color: var(--border-default);
 }

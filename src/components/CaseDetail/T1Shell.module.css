@@ -1,0 +1,189 @@
+/**
+ * T1Shell.module.css — 50/50 split grid container for the T1 Summary layout.
+ *
+ * Renders two equal-width panels side-by-side inside the case detail panel.
+ * The grid is responsive: stacks into a single column at narrow widths so
+ * the panel remains readable when docked alongside the map.
+ *
+ * No hex literals — design-system CSS custom properties only.
+ */
+
+/* ── Shell container — 50/50 column grid ─────────────────────────── */
+
+/**
+ * .shell — The outermost wrapper.
+ *
+ * Uses CSS Grid with two equal `1fr` columns so each panel always occupies
+ * exactly 50% of the available width, regardless of content length.
+ *
+ * `height: 100%` fills the `.body[data-window="T1"]` container (which has
+ * `overflow: hidden; padding: 0`), so each panel can independently scroll
+ * its content without creating double-scrollbar scenarios.
+ *
+ * `align-items: stretch` (default) lets both panels grow to the shell's
+ * full height so they visually match even when content lengths differ.
+ */
+.shell {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  /* No explicit gap — the border-right on the left panel acts as separator */
+  gap: 0;
+  /* Fill the parent body container fully */
+  height: 100%;
+  min-height: 0;
+  /* Prevent grid from expanding beyond its container */
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── Individual panels ───────────────────────────────────────────── */
+
+/**
+ * .panel — Base styles shared by both panels.
+ *
+ * Each panel is a flex column so its children stack vertically.
+ * `overflow-y: auto` enables independent vertical scrolling for each
+ * panel — long content in one panel doesn't force the other to scroll.
+ * `min-width: 0` prevents long words / monospace strings from
+ * overflowing the grid column.
+ * Padding compensates for the stripped body padding in T1-active state.
+ */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Replaces the stripped 1.25rem body padding */
+  padding: 1.25rem;
+  /* Thin scrollbar on Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.panel::-webkit-scrollbar {
+  width: 0.3125rem;
+}
+
+.panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel::-webkit-scrollbar-thumb {
+  background-color: var(--border-default);
+  border-radius: 9999px;
+}
+
+/**
+ * .panelLeft — Left (primary) panel.
+ *
+ * Displays identity and assignment information:
+ *   - Case label, QR code, status pill
+ *   - Location, assignee, timestamps
+ *   - Custody chain summary
+ *   - Notes
+ *
+ * A 1px right border acts as the visual column divider.
+ * The border uses --border-subtle so it stays understated without
+ * visually competing with the section content.
+ */
+.panelLeft {
+  border-right: 1px solid var(--border-subtle);
+}
+
+/**
+ * .panelLeftMap — Left panel variant for map content.
+ *
+ * When the left panel hosts T1MapPanel (an interactive Mapbox GL JS map),
+ * the standard 1.25rem padding is stripped and overflow is clipped so the
+ * map canvas fills the cell edge-to-edge (position: absolute; inset: 0).
+ *
+ * This class is applied instead of — not in addition to — .panelLeft
+ * via T1Shell's `leftPanelHasMap` prop.
+ *
+ * The right border (column divider) is preserved via explicit declaration
+ * so the visual column separator remains consistent regardless of padding.
+ */
+.panelLeftMap {
+  padding: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--border-subtle);
+}
+
+/**
+ * .panelRight — Right (operational) panel.
+ *
+ * Displays current operational state:
+ *   - FedEx tracking (compact badge)
+ *   - Checklist progress
+ *   - Damage summary
+ */
+.panelRight {
+  /* No additional border; left panel's right border acts as separator */
+}
+
+/* ── Responsive: stack at narrow widths ──────────────────────────── */
+
+/**
+ * The INVENTORY case detail panel is --panel-width: 26rem by default.
+ * At that width each 1fr column would be ~13rem — readable but tight.
+ *
+ * We stack to a single column below 48rem (768px container width)
+ * so the layout degrades gracefully both in the docked side panel
+ * and on narrow mobile viewports.
+ *
+ * Using a container-relative breakpoint is ideal but the panel is
+ * not yet a container query context; a viewport media query is used
+ * as a pragmatic approximation.
+ */
+@media (max-width: 48rem) {
+  .shell {
+    grid-template-columns: 1fr;
+    /* At single-column, allow normal block scroll on the shell container */
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .panel {
+    /* Remove independent scroll — outer body (or shell) handles scrolling */
+    overflow-y: visible;
+    overflow-x: visible;
+  }
+
+  .panelLeft,
+  .panelLeftMap {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  /* Restore min-height so the map panel is usable in single-column layout */
+  .panelLeftMap {
+    min-height: 16rem;
+    overflow: hidden;
+  }
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────── */
+/* No animations in this component; clause retained for future-proofing. */
+
+/* ── Dark mode overrides ─────────────────────────────────────────── */
+
+/**
+ * In dark mode, --border-subtle maps to a dark neutral.
+ * Bump to --border-default for better contrast against the dark
+ * --surface-raised background of the detail panel.
+ */
+:global(.theme-dark) .panelLeft,
+:global(.theme-dark) .panelLeftMap {
+  border-right-color: var(--border-default);
+}
+
+@media (max-width: 48rem) {
+  :global(.theme-dark) .panelLeft,
+  :global(.theme-dark) .panelLeftMap {
+    border-bottom-color: var(--border-default);
+  }
+}

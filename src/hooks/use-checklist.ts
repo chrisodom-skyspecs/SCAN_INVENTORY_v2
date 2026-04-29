@@ -67,6 +67,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 
 // Re-export types so consumers can import them from the hook module.
 export type {
@@ -116,7 +117,7 @@ export { MANIFEST_ITEM_STATUSES } from "../../convex/checklists";
 export function useChecklistByCase(caseId: string | null) {
   return useQuery(
     api.checklists.getChecklistByCase,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -158,7 +159,7 @@ export function useChecklistItem(
   return useQuery(
     api.checklists.getChecklistItem,
     caseId !== null && templateItemId !== null
-      ? { caseId, templateItemId }
+      ? { caseId: caseId as Id<"cases">, templateItemId }
       : "skip",
   );
 }
@@ -198,7 +199,7 @@ export function useChecklistItem(
 export function useChecklistSummary(caseId: string | null) {
   return useQuery(
     api.checklists.getChecklistSummary,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -247,7 +248,7 @@ export function useChecklistSummary(caseId: string | null) {
 export function useChecklistWithInspection(caseId: string | null) {
   return useQuery(
     api.checklists.getChecklistWithInspection,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }
 
@@ -306,7 +307,7 @@ export function useChecklistItemsByStatus(
 ) {
   return useQuery(
     api.checklists.getChecklistItemsByStatus,
-    caseId !== null && status !== null ? { caseId, status } : "skip",
+    caseId !== null && status !== null ? { caseId: caseId as Id<"cases">, status } : "skip",
   );
 }
 
@@ -363,6 +364,6 @@ export function useChecklistItemsByStatus(
 export function useUncheckedItems(caseId: string | null) {
   return useQuery(
     api.checklists.getUncheckedItems,
-    caseId !== null ? { caseId } : "skip",
+    caseId !== null ? { caseId: caseId as Id<"cases"> } : "skip",
   );
 }

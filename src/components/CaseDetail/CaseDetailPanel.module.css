@@ -116,6 +116,21 @@
   scroll-padding-top: 0.5rem;
 }
 
+/**
+ * T1 layout override — strip body padding so T1Shell's 50/50 grid panels
+ * extend edge-to-edge within the panel body.  Each T1Shell panel manages
+ * its own internal padding (1.25rem), so visual spacing is preserved.
+ *
+ * The overflow change to `hidden` prevents double-scrollbar scenarios —
+ * T1Shell's individual panels handle their own overflow independently.
+ * Loading / not-found states rendered before the shell still center
+ * correctly via the shared .emptyState flex layout.
+ */
+.body[data-window="T1"] {
+  padding: 0;
+  overflow: hidden;
+}
+
 /* ── Loading skeleton ─────────────────────────────────────────────── */
 
 .skeleton {
@@ -167,4 +182,50 @@
   height: 4rem;
   width: 100%;
   border-radius: 0.375rem;
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   ============================================================ */
+
+/*
+ * Panel container — add a slightly stronger border in dark mode so the
+ * panel edge is readable against the dark base background.
+ */
+:global(.theme-dark) .panel {
+  border-color: var(--border-default);
+}
+
+/*
+ * Tab bar — the sunken background and border-default are close in dark mode;
+ * increase the separator contrast.
+ */
+:global(.theme-dark) .tabBar {
+  border-bottom-color: var(--border-strong);
+}
+
+/*
+ * Active tab indicator — brand border is remapped in dark mode but we want
+ * the active tab background (surface-raised) to read as elevated.
+ */
+:global(.theme-dark) .tab.active {
+  background-color: var(--surface-raised);
+}
+
+/*
+ * Skeleton shimmer — in dark mode the midpoint token (--surface-hover =
+ * --_n-800, 18% l) provides visible shimmer against the
+ * endpoints (--surface-sunken = --_n-975, 4% l).  Swap midpoint to
+ * --surface-active (--_n-700, 27% l) for a slightly more prominent
+ * animation in the deep dark palette.
+ */
+:global(.theme-dark) .skeletonLine {
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-active) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 400% 100%;
 }

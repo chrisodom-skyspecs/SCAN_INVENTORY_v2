@@ -1,0 +1,373 @@
+/**
+ * EventCard.module.css
+ *
+ * Styles for the EventCard component — a lifecycle-event card for
+ * use within swim-lane columns and event-log surfaces.
+ *
+ * Design constraints:
+ *   • No hex literals — all colors via CSS custom properties (var(--*))
+ *   • WCAG AA contrast in both light and dark themes
+ *   • Inter Tight for UI text (labels, actor, detail)
+ *   • IBM Plex Mono for data values (case label, timestamp)
+ *   • Reduced-motion: no animations (except shimmer on skeleton cards)
+ *   • Touch targets ≥ 44×44 px for interactive cards (WCAG 2.5.5)
+ *
+ * Token families used:
+ *   --surface-*        card backgrounds and variant tints
+ *   --ink-*            text colors by hierarchy
+ *   --border-*         card borders and focus rings
+ *   --elevation-*      card box-shadow depth
+ *   --layer-deployed-* success / completed variant accent
+ *   --layer-transit-*  active / in-progress variant accent
+ *   --layer-flagged-*  flagged / attention-required variant accent
+ *   --signal-*         event dot semantic colors
+ *   --density-*        responsive density tokens
+ *
+ * Variant system
+ * ──────────────
+ * The [data-variant] attribute on the root <article> drives the
+ * left accent bar color and background tint:
+ *
+ *   default   — no accent, neutral surface
+ *   active    — brand-blue left bar + subtle blue tint
+ *   completed — green left bar + subtle green tint
+ *   flagged   — amber/orange left bar + subtle amber tint
+ *
+ * Event dot colors
+ * ────────────────
+ * The [data-dot-variant] attribute on .dot drives its fill:
+ *
+ *   brand   — brand blue  (status_change, mission_assigned)
+ *   transit — transit blue (inspection_started, shipped)
+ *   success — green       (inspection_completed, delivered)
+ *   error   — red         (damage_reported)
+ *   neutral — gray        (custody_handoff, template_applied)
+ */
+
+
+/* ── Root <article> ──────────────────────────────────────────────────────── */
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-card, var(--surface-raised));
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.375rem;
+  box-shadow: var(--elevation-1);
+  overflow: hidden;
+
+  /* Left accent bar — controlled by [data-variant] */
+  border-left: 3px solid transparent;
+  padding-left: calc(var(--density-pad-x, 0.75rem) - 3px);
+  padding-right: var(--density-pad-x, 0.75rem);
+  padding-block: var(--density-pad-y, 0.5rem);
+
+  /* Minimum tap-target height for touch screens */
+  min-height: 2.75rem;
+}
+
+
+/* ── Variant: left accent bar + background tint ──────────────────────────── */
+
+.card[data-variant="default"] {
+  border-left-color: transparent;
+}
+
+.card[data-variant="active"] {
+  border-left-color: var(--layer-transit-bg);
+  background: color-mix(in srgb, var(--surface-card) 92%, var(--layer-transit-subtle) 8%);
+}
+
+.card[data-variant="completed"] {
+  border-left-color: var(--layer-deployed-bg);
+  background: color-mix(in srgb, var(--surface-card) 92%, var(--layer-deployed-subtle) 8%);
+}
+
+.card[data-variant="flagged"] {
+  border-left-color: var(--layer-flagged-bg);
+  background: color-mix(in srgb, var(--surface-card) 92%, var(--layer-flagged-subtle) 8%);
+}
+
+/* Fallback for browsers without color-mix() support */
+@supports not (background: color-mix(in srgb, white 1%, white 1%)) {
+  .card[data-variant="active"] {
+    background: var(--layer-transit-subtle);
+  }
+  .card[data-variant="completed"] {
+    background: var(--layer-deployed-subtle);
+  }
+  .card[data-variant="flagged"] {
+    background: var(--layer-flagged-subtle);
+  }
+}
+
+
+/* ── Interactive card button ─────────────────────────────────────────────── */
+
+/**
+ * When `onClick` is provided, the card's content is wrapped in a <button>.
+ * The button fills the entire article, inheriting all layout from the card.
+ */
+.cardButton {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  /* inherit gap from .card children */
+  row-gap: 0.1875rem;
+}
+
+.card:has(.cardButton):hover {
+  background: var(--surface-card-hover, var(--surface-hover));
+  border-color: var(--border-default);
+  box-shadow: var(--elevation-2);
+}
+
+.card:has(.cardButton[aria-pressed="true"]) {
+  background: var(--surface-card-selected, var(--surface-selected));
+  border-color: var(--border-brand);
+  box-shadow: var(--elevation-2);
+}
+
+.cardButton:focus-visible {
+  outline: none;
+}
+
+.card:has(.cardButton:focus-visible) {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  border-color: var(--border-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}
+
+
+/* ── Header row: dot + event type label + status pill ────────────────────── */
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+
+/* ── Event type indicator dot ────────────────────────────────────────────── */
+
+/**
+ * Small semantic circle — color controlled by [data-dot-variant].
+ *
+ *   brand   → brand blue
+ *   transit → transit blue (slightly lighter for distinction)
+ *   success → green
+ *   error   → red
+ *   neutral → gray
+ */
+.dot {
+  display: inline-block;
+  width: 0.4375rem;    /* 7px */
+  height: 0.4375rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  /* Default: neutral */
+  background: var(--signal-neutral-fill);
+}
+
+.dot[data-dot-variant="brand"] {
+  background: var(--surface-brand);
+}
+
+.dot[data-dot-variant="transit"] {
+  background: var(--layer-transit-bg);
+}
+
+.dot[data-dot-variant="success"] {
+  background: var(--layer-deployed-bg);
+}
+
+.dot[data-dot-variant="error"] {
+  background: var(--signal-error-fill);
+}
+
+.dot[data-dot-variant="neutral"] {
+  background: var(--signal-neutral-fill);
+}
+
+
+/* ── Event type label ────────────────────────────────────────────────────── */
+
+.eventType {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: var(--density-font-body, 0.875rem);
+  font-weight: 600;
+  color: var(--ink-primary);
+  line-height: 1.3;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* ── Meta row: case label + timestamp ────────────────────────────────────── */
+
+.metaRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.caseLabel {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: var(--density-font-label, 0.75rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ink-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Spacer preserves layout when caseLabel is absent */
+.caseLabelEmpty {
+  flex: 1;
+}
+
+.timestamp {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: var(--density-font-label, 0.6875rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+
+/* ── Detail row: actor name + supplemental detail ────────────────────────── */
+
+.detailRow {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 0.0625rem;
+}
+
+.actorName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: var(--density-font-label, 0.75rem);
+  font-weight: 500;
+  color: var(--ink-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 8rem;
+}
+
+.metaSep {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: var(--density-font-label, 0.75rem);
+  color: var(--ink-muted);
+  flex-shrink: 0;
+}
+
+.detail {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: var(--density-font-label, 0.75rem);
+  color: var(--ink-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+
+/* ── Card spacing between children ──────────────────────────────────────── */
+
+/**
+ * When the card is non-interactive (no .cardButton child), apply
+ * row-gap directly to the .card flex container.
+ */
+.card > .headerRow,
+.card > .metaRow,
+.card > .detailRow {
+  /* Spacing between card rows when statically rendered */
+}
+
+.card:not(:has(.cardButton)) {
+  gap: 0.1875rem;
+}
+
+.cardButton {
+  gap: 0.1875rem;
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Token cascade handles most color swaps automatically.
+   These selectors provide additional dark-mode polish.
+   ============================================================ */
+
+/**
+ * Card border — bump to border-default for contrast against the
+ * dark surface-card (--_n-850) in dark mode.
+ */
+:global(.theme-dark) .card {
+  border-color: var(--border-default);
+}
+
+/**
+ * Variant tints — dark mode needs slightly more visible tints
+ * since the card background is already dark.
+ */
+:global(.theme-dark) .card[data-variant="active"] {
+  background: color-mix(in srgb, var(--surface-card) 85%, var(--layer-transit-subtle) 15%);
+}
+
+:global(.theme-dark) .card[data-variant="completed"] {
+  background: color-mix(in srgb, var(--surface-card) 85%, var(--layer-deployed-subtle) 15%);
+}
+
+:global(.theme-dark) .card[data-variant="flagged"] {
+  background: color-mix(in srgb, var(--surface-card) 85%, var(--layer-flagged-subtle) 15%);
+}
+
+/* Fallback for browsers without color-mix() — dark mode */
+@supports not (background: color-mix(in srgb, white 1%, white 1%)) {
+  :global(.theme-dark) .card[data-variant="active"] {
+    background: var(--layer-transit-subtle);
+  }
+  :global(.theme-dark) .card[data-variant="completed"] {
+    background: var(--layer-deployed-subtle);
+  }
+  :global(.theme-dark) .card[data-variant="flagged"] {
+    background: var(--layer-flagged-subtle);
+  }
+}
+
+/**
+ * Hover state for interactive cards in dark mode.
+ */
+:global(.theme-dark) .card:has(.cardButton):hover {
+  background: var(--surface-card-hover);
+}

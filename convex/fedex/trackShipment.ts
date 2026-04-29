@@ -54,6 +54,18 @@ import { v } from "convex/values";
 import { getBearerToken, invalidateBearerTokenCache } from "../lib/fedexAuth";
 import type { GenericActionCtx } from "convex/server";
 
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function requireAuth(ctx: GenericActionCtx<any>): Promise<void> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error(
+      "[AUTH_REQUIRED] Unauthenticated. Provide a valid Kinde access token."
+    );
+  }
+}
+
 // ─── Tracking number validation ───────────────────────────────────────────────
 
 /**
@@ -553,6 +565,7 @@ export const trackShipment = action({
   },
 
   handler: async (ctx, args): Promise<TrackShipmentResult> => {
+    await requireAuth(ctx);
     const tn = args.trackingNumber.trim();
 
     // ── Input validation ────────────────────────────────────────────────────

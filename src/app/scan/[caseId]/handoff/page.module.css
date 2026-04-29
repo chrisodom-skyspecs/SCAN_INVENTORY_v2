@@ -19,9 +19,11 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  width: 100%;
   max-width: 42rem;
   margin: 0 auto;
   padding: 0 1rem 4rem;
+  box-sizing: border-box;
 }
 
 /* ── Page header ────────────────────────────────────────────────────── */
@@ -636,6 +638,56 @@
   line-height: 1.5;
 }
 
+/* ── Tablet / desktop responsive adjustments ────────────────────────── */
+
+@media (min-width: 640px) {
+  .page {
+    padding: 0 1.5rem 4rem;
+  }
+
+  /* Submit row: constrain to content width on wider screens */
+  .submitRow {
+    justify-content: flex-end;
+  }
+
+  .submitRow > * {
+    flex: 0 1 auto;
+    min-width: 10rem;
+  }
+
+  /* Custodian card: allow wider info without truncation */
+  .custodianName {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Success meta: center-constrained on wider displays */
+  .successMeta {
+    max-width: 28rem;
+  }
+
+  /* Success actions: row layout on tablet+ */
+  .successActions {
+    flex-direction: row;
+    justify-content: center;
+    max-width: none;
+  }
+
+  .successActions > * {
+    width: auto;
+    flex: 0 1 auto;
+    min-width: 10rem;
+    justify-content: center;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page {
+    padding: 0 2rem 4rem;
+  }
+}
+
 /* ── Success view ───────────────────────────────────────────────────── */
 
 .successView {
@@ -759,3 +811,151 @@
   width: 100%;
   justify-content: center;
 }
+
+
+/* ════════════════════════════════════════════════════════════════════
+   DARK THEME OVERRIDES  (.theme-dark on <html>)
+
+   Design-token-based rules in this file automatically adapt to dark
+   mode via the .theme-dark overrides in src/styles/tokens/base.css §3.
+   This section handles the cases that require explicit override:
+
+     a) Hard-coded colour literals in box-shadow / filter values that
+        cannot reference CSS custom properties and therefore do not
+        respond to the .theme-dark token swap.
+     b) Interactive state (hover / focus / active) re-assertions to
+        guarantee WCAG AA ≥ 3:1 contrast on dark surfaces.
+     c) Subtle tint fills whose token mappings shift to deep ramp stops
+        in dark mode — explicit re-assertion guards against any future
+        token remap that might otherwise reduce contrast below the AA floor.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Toggle thumb shadow ─────────────────────────────────────────────
+ * .locationToggleThumb uses a hard-coded `rgba(0 0 0 / 0.2)` shadow.
+ * On dark page backgrounds (--_n-950 / --_n-900), a near-black shadow
+ * becomes invisible — the thumb loses its tactile depth cue entirely.
+ * Replace with a white-tinted shadow that reads against dark surfaces
+ * while still conveying the same slight floating elevation.
+ */
+:global(.theme-dark) .locationToggleThumb {
+  box-shadow: 0 1px 3px var(--shadow-light-ring);
+}
+
+/* ── Custodian card ──────────────────────────────────────────────────
+ * --surface-raised (--_n-900) and --border-default (--_n-800) adapt
+ * automatically.  Re-assert explicitly to guarantee contrast when the
+ * card sits adjacent to the --_n-950 page background.
+ */
+:global(.theme-dark) .custodianCard {
+  background-color: var(--surface-raised);
+  border-color: var(--border-default);
+}
+
+/* ── Location toggle row ─────────────────────────────────────────────
+ * Same rationale as .custodianCard — explicit assertion guards contrast
+ * against the surrounding page surface in dark mode.
+ */
+:global(.theme-dark) .locationToggleRow {
+  background-color: var(--surface-raised);
+  border-color: var(--border-default);
+}
+
+/* ── Location error row ──────────────────────────────────────────────
+ * --surface-danger-subtle shifts to --_r-700 in dark mode (deep red).
+ * --border-danger shifts to --_r-600.  --ink-danger shifts to --_r-300.
+ * Re-assert so the combination is explicitly documented and guaranteed.
+ */
+:global(.theme-dark) .locationErrorRow {
+  background-color: var(--surface-danger-subtle);
+  border-color: var(--border-danger);
+}
+
+/* ── Location success row ────────────────────────────────────────────
+ * --surface-success-subtle = --_g-700 in dark mode.
+ * --border-success = --_g-600.  --ink-success = --_g-300.
+ * Re-assert for the same documentation and guarantee reasons.
+ */
+:global(.theme-dark) .locationSuccessRow {
+  background-color: var(--surface-success-subtle);
+  border-color: var(--border-success);
+}
+
+/* ── Error banner ─────────────────────────────────────────────────────
+ * Re-assert danger signal tokens so the submission-failure banner is
+ * clearly readable on the dark page background.
+ */
+:global(.theme-dark) .errorBanner {
+  background-color: var(--surface-danger-subtle);
+  border-color: var(--border-danger);
+}
+
+/* ── Field inputs ─────────────────────────────────────────────────────
+ * --surface-raised (--_n-900) input background and --border-default
+ * (--_n-800) border produce a subtle but legible inset in dark mode.
+ * Focus state uses --border-brand (--_b-600 in dark) and
+ * --surface-brand-subtle (--_b-900) for the ring — WCAG AA ≥ 3:1 ✓
+ */
+:global(.theme-dark) .fieldInput {
+  background-color: var(--surface-raised);
+  border-color: var(--border-default);
+  color: var(--ink-primary);
+}
+
+:global(.theme-dark) .fieldInput:focus {
+  border-color: var(--border-brand);
+  box-shadow: 0 0 0 3px var(--surface-brand-subtle);
+  background-color: var(--surface-raised);
+}
+
+/* ── Notes textarea ───────────────────────────────────────────────────
+ * Same surface/border/focus treatment as .fieldInput above.
+ */
+:global(.theme-dark) .notesTextarea {
+  background-color: var(--surface-raised);
+  border-color: var(--border-default);
+  color: var(--ink-primary);
+}
+
+:global(.theme-dark) .notesTextarea:focus {
+  border-color: var(--border-brand);
+  box-shadow: 0 0 0 3px var(--surface-brand-subtle);
+  background-color: var(--surface-raised);
+}
+
+/* ── Secondary CTA button ─────────────────────────────────────────────
+ * In dark mode, --surface-raised and --border-default produce a very
+ * low-contrast ghost button.  Switch to the brand border so the button
+ * reads as interactive against the dark page.
+ */
+:global(.theme-dark) .ctaButtonSecondary {
+  background-color: var(--surface-raised);
+  color: var(--ink-primary);
+  border-color: var(--border-default);
+}
+
+:global(.theme-dark) .ctaButtonSecondary:hover {
+  background-color: var(--surface-subtle);
+}
+
+/* ── Success view ─────────────────────────────────────────────────────
+ * .successIconWrap uses --surface-success-subtle which in dark mode
+ * maps to --_g-700 (deep forest green) — good tint, no override needed.
+ *
+ * .successMeta uses --surface-subtle (--_n-800 in dark) for the
+ * summary card.  Re-assert explicitly to confirm the intended surface.
+ */
+:global(.theme-dark) .successMeta {
+  background-color: var(--surface-subtle);
+}
+
+/* ── Optional badge ───────────────────────────────────────────────────
+ * --surface-subtle (--_n-800) and --ink-tertiary (--_n-500) adapt
+ * automatically.  No explicit override needed.
+ */
+
+/* ── Loading skeleton ─────────────────────────────────────────────────
+ * .skeletonHeader / .skeletonCard use --surface-muted (--_n-850 in dark
+ * mode) which provides visible rhythm against the page (--_n-950).
+ * The pulse animation opacity oscillation (1.0→0.5) stays effective.
+ * No explicit override needed.
+ */

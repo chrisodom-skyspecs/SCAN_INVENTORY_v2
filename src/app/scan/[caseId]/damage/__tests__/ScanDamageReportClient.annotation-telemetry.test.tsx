@@ -125,6 +125,22 @@ vi.mock("../../../../../../convex/_generated/api", () => ({
   },
 }));
 
+// ─── Mock Kinde auth (browser client) ────────────────────────────────────────
+// Returns the placeholder "scan-user" identity expected by telemetry assertions.
+
+vi.mock("@kinde-oss/kinde-auth-nextjs", () => ({
+  useKindeBrowserClient: () => ({
+    user: {
+      id:          "scan-user",
+      given_name:  "Field",
+      family_name: "Technician",
+      email:       "field.technician@skyspecs.com",
+    },
+    isAuthenticated: true,
+    isLoading:       false,
+  }),
+}));
+
 // ─── Import SUT and mocked modules (after vi.mock hoisting) ──────────────────
 
 import { useQuery, useMutation } from "convex/react";
@@ -141,7 +157,7 @@ const MOCK_CASE = {
   _id:           CASE_ID,
   _creationTime: 1_700_000_000_000,
   label:         "CASE-ANN-001",
-  status:        "in_field" as const,
+  status:        "deployed" as const,
 };
 
 const MOCK_MANIFEST_ITEMS = [
@@ -162,12 +178,17 @@ function makeGenerateUrlMock() {
 }
 
 function makeSubmitPhotoMock() {
-  return vi.fn().mockResolvedValue({
+  const mock = vi.fn().mockResolvedValue({
     damageReportId: DAMAGE_REPORT_ID,
     caseId:         CASE_ID,
     manifestItemId: undefined,
     eventId:        EVENT_ID,
   });
+  // useSubmitDamagePhoto calls .withOptimisticUpdate() on the mutation.
+  // Return `mock` itself so the returned function is still callable.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (mock as any).withOptimisticUpdate = vi.fn().mockReturnValue(mock);
+  return mock;
 }
 
 function makeSuccessfulFetch() {

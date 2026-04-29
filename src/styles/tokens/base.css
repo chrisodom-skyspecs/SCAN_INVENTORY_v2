@@ -193,6 +193,28 @@
   --surface-sidebar-section: var(--_n-50);
   --surface-sidebar-nested: var(--_n-100);
 
+  /**
+   * Panel surfaces — INVENTORY dashboard side panels, detail drawers,
+   * filter rails, and dossier section wrappers.  Panels are the standard
+   * "container above the page background" UI primitive used throughout
+   * map-mode sidebars (M1–M5) and case detail layouts (T1–T5).
+   *
+   * panel          = resting panel background (one step above bg-0)
+   * panel-raised   = elevated panel section (e.g. nested cards inside panel)
+   * panel-header   = panel title bar / sticky header band (subtly tinted)
+   * panel-footer   = panel action bar / sticky footer band
+   * panel-divider  = surface fill used for inline section dividers / rules
+   *
+   * All values intentionally alias the existing neutral ramp so panels
+   * stay in lock-step with surface-container / surface-raised when those
+   * canonical tokens are themed.
+   */
+  --surface-panel:          var(--_n-0);
+  --surface-panel-raised:   var(--_n-50);
+  --surface-panel-header:   var(--_n-50);
+  --surface-panel-footer:   var(--_n-50);
+  --surface-panel-divider:  var(--_n-150);
+
   /* ──────────────────────────────────────────────────────────
      SCRIM  (modal backdrop / overlay dimming)
      ────────────────────────────────────────────────────────── */
@@ -224,6 +246,21 @@
   /** Text that appears ON a brand-filled surface */
   --ink-on-brand:          var(--_n-0);
 
+  /**
+   * Link ink — dedicated tokens for anchor / hyperlink text so that
+   * link styling is decoupled from the general --ink-brand token.
+   *
+   * --ink-link         resting link color (≥ 4.5:1 on --surface-base)
+   * --ink-link-hover   hover / focus state — one step darker for feedback
+   * --ink-link-visited visited state — desaturated to signal already-read
+   *
+   * Both visited and hover states satisfy WCAG AA contrast requirements
+   * against the default --surface-base and --surface-raised backgrounds.
+   */
+  --ink-link:              var(--_b-600);
+  --ink-link-hover:        var(--_b-700);
+  --ink-link-visited:      var(--_map-ind-500);
+
   /** Semantic text colors */
   --ink-positive:          var(--_g-600);
   --ink-on-positive:       var(--_n-0);
@@ -243,6 +280,83 @@
   --ink-on-caution-subtle: var(--_a-600);
   --ink-on-critical-subtle: var(--_r-700);
   --ink-on-neutral-subtle: var(--_n-700);
+
+  /* ──────────────────────────────────────────────────────────
+     ICON  (icon / glyph foreground colors)
+
+     Dedicated icon tokens decoupled from text ink so that icon
+     styling can be tuned independently (e.g. decorative chrome
+     icons that should sit one step quieter than body text, or
+     status-bearing icons that need to match a fill chip).
+
+     Hierarchy mirrors --ink-* (primary → disabled) and aliases
+     to the same neutral ramp steps so default behavior matches
+     text.  Components that need icon-specific tuning override
+     just the icon variable without affecting text.
+
+     Naming:
+       --icon-primary      most prominent — header / nav icons
+       --icon-secondary    standard — inline button / list icons
+       --icon-tertiary     supportive — captions, meta, hints
+       --icon-quaternary   faintest readable — separators, decoration
+       --icon-muted        intentionally de-emphasized
+       --icon-disabled     non-interactive / inactive control
+       --icon-inverse      icon ON inverse / dark surface
+       --icon-brand        brand-colored icon (active nav, link adornment)
+       --icon-on-brand     icon ON a brand-filled surface
+       --icon-positive     positive / success state icon
+       --icon-on-positive  icon ON a solid positive surface
+       --icon-caution      caution / warning state icon
+       --icon-on-caution   icon ON a solid caution surface
+       --icon-critical     critical / error state icon
+       --icon-on-critical  icon ON a solid critical surface
+       --icon-neutral      neutral / informational icon
+       --icon-on-neutral   icon ON a solid neutral surface
+       --icon-info         info (cyan) state icon
+       --icon-on-info      icon ON a solid info surface
+
+     "success / warning / error" aliases are provided for SCAN
+     component CSS that uses the public-facing naming.
+     ────────────────────────────────────────────────────────── */
+
+  /** Hierarchy — neutral icon levels */
+  --icon-primary:          var(--ink-primary);
+  --icon-secondary:        var(--ink-secondary);
+  --icon-tertiary:         var(--ink-tertiary);
+  --icon-quaternary:       var(--ink-quaternary);
+  --icon-muted:            var(--ink-muted);
+  --icon-disabled:         var(--ink-disabled);
+  --icon-inverse:          var(--ink-inverse);
+
+  /** Brand */
+  --icon-brand:            var(--ink-brand);
+  --icon-on-brand:         var(--ink-on-brand);
+  --icon-on-brand-subtle:  var(--ink-on-brand-subtle);
+
+  /** Positive / success */
+  --icon-positive:         var(--ink-positive);
+  --icon-on-positive:      var(--ink-on-positive);
+  --icon-success:          var(--ink-success);
+
+  /** Caution / warning */
+  --icon-caution:          var(--ink-caution);
+  --icon-on-caution:       var(--ink-on-caution);
+  --icon-warning:          var(--ink-warning);
+
+  /** Critical / error / danger */
+  --icon-critical:         var(--ink-critical);
+  --icon-on-critical:      var(--ink-on-critical);
+  --icon-error:            var(--ink-error);
+  --icon-on-error:         var(--ink-on-error);
+  --icon-danger:           var(--ink-danger);
+
+  /** Neutral */
+  --icon-neutral:          var(--ink-neutral);
+  --icon-on-neutral:       var(--ink-on-neutral);
+
+  /** Info (cyan/teal) */
+  --icon-info:             var(--ink-info);
+  --icon-on-info:          var(--ink-on-info);
 
   /* ──────────────────────────────────────────────────────────
      BORDER  (strokes / dividers / outlines)
@@ -268,6 +382,116 @@
 
   /** Inverse border (on dark surfaces) */
   --border-inverse:        var(--_n-700);
+
+  /* ──────────────────────────────────────────────────────────
+     EXTENDED ALIASES  (consumed by SCAN screen components)
+
+     These supplement the core token set with additional semantic
+     aliases that provide finer-grained ink and surface steps.
+     They point to existing palette ramp values so that a single
+     source of truth is maintained — no new raw values are introduced.
+
+     Dark-mode overrides are declared in §3 below.
+     ────────────────────────────────────────────────────────── */
+
+  /**
+   * ink-quaternary — faintest readable text level (timestamps, breadcrumbs,
+   * de-emphasized meta).  One step lighter than --ink-tertiary.
+   */
+  --ink-quaternary:              var(--_n-400);
+
+  /**
+   * surface-subtle — lightest interactive fill.  Used for hover states
+   * on non-elevated surfaces, count chip backgrounds, and row tints where
+   * no visible border is needed.
+   */
+  --surface-subtle:              var(--_n-100);
+
+  /**
+   * surface-muted — slightly heavier neutral fill.  Used for skeleton
+   * loading placeholders and muted background regions.
+   */
+  --surface-muted:               var(--_n-150);
+
+  /**
+   * surface-canvas — form input / textarea background.  Matches the
+   * resting input well — slightly off-white in light mode so inputs read
+   * as recessed relative to --surface-raised panels.
+   */
+  --surface-canvas:              var(--_n-0);
+
+  /**
+   * surface-brand-hover — primary CTA hover fill.  One step darker than
+   * --surface-brand so hover provides visible feedback without a border.
+   */
+  --surface-brand-hover:         var(--_b-600);
+
+  /**
+   * focus-ring — focus indicator fill alias.  Points to --border-focus
+   * so that older component rules referencing --focus-ring pick up the
+   * same brand-blue value without requiring a migration.
+   */
+  --focus-ring:                  var(--border-focus);
+
+  /* ── Semantic success / danger / warning aliases ──────────────
+     These map the "success / danger / warning" naming convention (used
+     throughout SCAN component CSS) to the canonical positive / critical /
+     caution token ramps defined above.  All overrides in §3 follow suit.
+     ────────────────────────────────────────────────────────── */
+
+  /** Success (ok / healthy) text + border */
+  --ink-success:                 var(--_g-600);
+  --border-success:              var(--_g-400);
+  --surface-success-subtle:      var(--_g-50);
+
+  /** Danger (damaged / critical) text + border */
+  --ink-danger:                  var(--_r-600);
+  --border-danger:               var(--_r-400);
+  --surface-danger-subtle:       var(--_r-50);
+
+  /** Warning (missing / caution) text + border */
+  --ink-warning:                 var(--_a-600);
+  --border-warning:              var(--_a-300);
+  --surface-warning-subtle:      var(--_a-50);
+
+  /* ── Signal surface / ink completion ─────────────────────────
+     Solid surface fills, on-fill ink, and error/info aliases that
+     complete the surface–ink variant matrix for every signal kind:
+       success | warning | error | info
+
+     Rules:
+       --surface-{kind}         solid filled surface (maps to --signal-{kind}-fill)
+       --surface-{kind}-subtle  tinted surface       (maps to --signal-{kind}-fill-subtle)
+       --ink-{kind}             foreground text color (for text ON a neutral surface)
+       --ink-on-{kind}          text ON a solid signal surface (≥4.5:1 against fill)
+       --border-{kind}          stroke / outline color
+
+     "error" is the public-facing alias for what the positive/caution/critical
+     ramp calls "critical".  "danger" (SCAN-legacy name) remains for backwards
+     compatibility; new code should prefer "error".
+     ────────────────────────────────────────────────────────── */
+
+  /** success — solid fill + on-fill ink */
+  --surface-success:             var(--_g-500);
+  --ink-on-success:              var(--_n-0);
+
+  /** warning — solid fill + on-fill ink */
+  --surface-warning:             var(--_a-400);
+  --ink-on-warning:              var(--_n-0);
+
+  /** error — aliases for the critical (red) ramp; complements --ink-danger */
+  --ink-error:                   var(--_r-600);
+  --border-error:                var(--_r-400);
+  --surface-error:               var(--_r-500);
+  --surface-error-subtle:        var(--_r-50);
+  --ink-on-error:                var(--_n-0);
+
+  /** info — cyan/teal signal kind (fully new in the surface/ink namespace) */
+  --ink-info:                    var(--_i-600);
+  --border-info:                 var(--_i-300);
+  --surface-info:                var(--_i-500);
+  --surface-info-subtle:         var(--_i-50);
+  --ink-on-info:                 var(--_n-0);
 
   /* ──────────────────────────────────────────────────────────
      ELEVATION  (box-shadow layers)
@@ -373,6 +597,97 @@
   --signal-neutral-text:         var(--_n-0);
   --signal-neutral-text-subtle:  var(--_n-700);
   --signal-neutral-border:       var(--_n-300);
+
+  /* ── danger (alias of error / critical ramp) ────────────────
+     Public-facing alias so component code can reference the
+     "danger" naming convention used throughout SCAN screens
+     (damage flow, recall confirmation, destructive actions).
+     Maps 1:1 to --signal-error-* — change error ramp colors in
+     one place and danger picks them up automatically.
+     ────────────────────────────────────────────────────────── */
+  --signal-danger-fill:          var(--signal-error-fill);
+  --signal-danger-fill-subtle:   var(--signal-error-fill-subtle);
+  --signal-danger-text:          var(--signal-error-text);
+  --signal-danger-text-subtle:   var(--signal-error-text-subtle);
+  --signal-danger-border:        var(--signal-error-border);
+
+  /* ── custody states ──────────────────────────────────────────
+     Status colors for the case custody chain — visualizes who
+     currently holds physical custody of a case and the state of
+     any in-flight handoff.  Used by the dashboard CustodySection
+     (T1–T5), map pin holder badges (M1, M3, M4), and the SCAN
+     app handoff confirmation screens.
+
+     Six custody kinds:
+       active       — case currently has a confirmed custodian
+                      (positive / green ramp; signals "in hand,
+                       custody confirmed").
+       pending      — handoff initiated, signature/confirmation
+                      not yet captured (caution / amber ramp).
+       internal     — current custodian is SkySpecs internal staff
+                      (brand blue — same hue as primary brand).
+       external     — current custodian is an external contractor
+                      or pilot organization (indigo — distinct
+                      from brand to differentiate org class).
+       unassigned   — no current custodian; case is in hangar /
+                      between assignments (neutral gray).
+       self         — current viewer is the active custodian
+                      ("held by you" — magenta accent, colorblind-
+                       safe and distinct from all other kinds).
+
+     Naming follows the same {kind}-{slot} convention as the rest
+     of the signal token set:
+       --signal-custody-{kind}-fill
+       --signal-custody-{kind}-fill-subtle
+       --signal-custody-{kind}-text
+       --signal-custody-{kind}-text-subtle
+       --signal-custody-{kind}-border
+
+     All values reference existing private palette ramps; no new
+     raw color values are introduced.
+     ────────────────────────────────────────────────────────── */
+
+  /* active — confirmed current custody (green) */
+  --signal-custody-active-fill:           var(--_g-500);
+  --signal-custody-active-fill-subtle:    var(--_g-50);
+  --signal-custody-active-text:           var(--_n-0);
+  --signal-custody-active-text-subtle:    var(--_g-700);
+  --signal-custody-active-border:         var(--_g-400);
+
+  /* pending — handoff awaiting signature/confirmation (amber) */
+  --signal-custody-pending-fill:          var(--_a-400);
+  --signal-custody-pending-fill-subtle:   var(--_a-50);
+  --signal-custody-pending-text:          var(--_n-0);
+  --signal-custody-pending-text-subtle:   var(--_a-600);
+  --signal-custody-pending-border:        var(--_a-300);
+
+  /* internal — SkySpecs staff holder (brand blue) */
+  --signal-custody-internal-fill:         var(--_b-500);
+  --signal-custody-internal-fill-subtle:  var(--_b-50);
+  --signal-custody-internal-text:         var(--_n-0);
+  --signal-custody-internal-text-subtle:  var(--_b-700);
+  --signal-custody-internal-border:       var(--_b-400);
+
+  /* external — contractor / external org holder (indigo) */
+  --signal-custody-external-fill:         var(--_map-ind-400);
+  --signal-custody-external-fill-subtle:  hsl(248, 90%, 78%, 0.18);
+  --signal-custody-external-text:         var(--_n-0);
+  --signal-custody-external-text-subtle:  var(--_map-ind-600);
+  --signal-custody-external-border:       var(--_map-ind-300);
+
+  /* unassigned — no current custodian (neutral gray) */
+  --signal-custody-unassigned-fill:           var(--_n-500);
+  --signal-custody-unassigned-fill-subtle:    var(--_n-100);
+  --signal-custody-unassigned-text:           var(--_n-0);
+  --signal-custody-unassigned-text-subtle:    var(--_n-700);
+  --signal-custody-unassigned-border:         var(--_n-300);
+
+  /* self — current viewer is the holder ("held by you") (magenta) */
+  --signal-custody-self-fill:             var(--_map-mag-400);
+  --signal-custody-self-fill-subtle:      hsl(322, 80%, 74%, 0.16);
+  --signal-custody-self-text:             var(--_n-0);
+  --signal-custody-self-text-subtle:      var(--_map-mag-600);
+  --signal-custody-self-border:           var(--_map-mag-300);
 }
 
 
@@ -425,6 +740,16 @@
   --surface-sidebar-section: var(--_n-950);
   --surface-sidebar-nested: var(--_n-850);
 
+  /* ── Panel — dark overrides ────────────────────────────────
+     Panel surfaces sit one step lighter than the bg-0 dark canvas
+     so they read as elevated containers against the page background.
+     ────────────────────────────────────────────────────────── */
+  --surface-panel:          var(--_n-900);
+  --surface-panel-raised:   var(--_n-850);
+  --surface-panel-header:   var(--_n-950);
+  --surface-panel-footer:   var(--_n-950);
+  --surface-panel-divider:  var(--_n-800);
+
   /* ── Ink ── */
   --ink-primary:           var(--_n-50);
   --ink-secondary:         var(--_n-300);
@@ -435,6 +760,11 @@
 
   --ink-brand:             var(--_b-300);
   --ink-on-brand:          var(--_n-950);
+
+  /* Link ink — dark theme (brighter so links are legible on dark surfaces) */
+  --ink-link:              var(--_b-300);
+  --ink-link-hover:        var(--_b-200);
+  --ink-link-visited:      var(--_map-ind-300);
 
   --ink-positive:          var(--_g-300);
   --ink-on-positive:       var(--_n-950);
@@ -454,6 +784,47 @@
   --ink-on-critical-subtle: var(--_r-200);
   --ink-on-neutral-subtle: var(--_n-200);
 
+  /* ── Icon — dark theme overrides ──────────────────────────
+     Icon tokens alias ink-* tokens (which have their own dark
+     theme overrides above), so icons automatically pick up the
+     correct dark-mode foreground colors.  The explicit overrides
+     below provide an anchor for icon-specific tuning where the
+     icon should differ from body text on dark surfaces — for
+     example, decorative chrome icons that read better one step
+     brighter on the deep --_n-950 canvas.
+     ────────────────────────────────────────────────────────── */
+  --icon-primary:          var(--ink-primary);
+  --icon-secondary:        var(--ink-secondary);
+  --icon-tertiary:         var(--ink-tertiary);
+  --icon-quaternary:       var(--ink-quaternary);
+  --icon-muted:            var(--ink-muted);
+  --icon-disabled:         var(--ink-disabled);
+  --icon-inverse:          var(--ink-inverse);
+
+  --icon-brand:            var(--ink-brand);
+  --icon-on-brand:         var(--ink-on-brand);
+  --icon-on-brand-subtle:  var(--ink-on-brand-subtle);
+
+  --icon-positive:         var(--ink-positive);
+  --icon-on-positive:      var(--ink-on-positive);
+  --icon-success:          var(--ink-success);
+
+  --icon-caution:          var(--ink-caution);
+  --icon-on-caution:       var(--ink-on-caution);
+  --icon-warning:          var(--ink-warning);
+
+  --icon-critical:         var(--ink-critical);
+  --icon-on-critical:      var(--ink-on-critical);
+  --icon-error:            var(--ink-error);
+  --icon-on-error:         var(--ink-on-error);
+  --icon-danger:           var(--ink-danger);
+
+  --icon-neutral:          var(--ink-neutral);
+  --icon-on-neutral:       var(--ink-on-neutral);
+
+  --icon-info:             var(--ink-info);
+  --icon-on-info:          var(--ink-on-info);
+
   /* ── Border ── */
   --border-subtle:         var(--_n-850);
   --border-default:        var(--_n-800);
@@ -468,6 +839,48 @@
   --border-neutral:        var(--_n-700);
 
   --border-inverse:        var(--_n-200);
+
+  /* ── Extended aliases — dark theme overrides ──
+     All values shifted toward the brighter / lighter end of each ramp
+     so that the same semantic intent is preserved on dark surfaces.
+     ────────────────────────────────────────────────────────── */
+  --ink-quaternary:              var(--_n-600);
+  --surface-subtle:              var(--_n-800);
+  --surface-muted:               var(--_n-850);
+  --surface-canvas:              var(--_n-900);
+  --surface-brand-hover:         var(--_b-300);
+  /* --focus-ring derives from --border-focus, which is already overridden above */
+
+  /* success / danger / warning / error / info — brighter on dark surfaces */
+  --ink-success:                 var(--_g-300);
+  --border-success:              var(--_g-600);
+  --surface-success:             var(--_g-400);
+  --surface-success-subtle:      var(--_g-700);
+  --ink-on-success:              var(--_n-950);
+
+  --ink-danger:                  var(--_r-300);
+  --border-danger:               var(--_r-600);
+  --surface-danger-subtle:       var(--_r-700);
+
+  --ink-warning:                 var(--_a-200);
+  --border-warning:              var(--_a-500);
+  --surface-warning:             var(--_a-300);
+  --surface-warning-subtle:      var(--_a-600);
+  --ink-on-warning:              var(--_n-950);
+
+  /* error — dark overrides (alias for critical ramp) */
+  --ink-error:                   var(--_r-300);
+  --border-error:                var(--_r-600);
+  --surface-error:               var(--_r-400);
+  --surface-error-subtle:        var(--_r-700);
+  --ink-on-error:                var(--_n-950);
+
+  /* info — dark overrides (cyan/teal ramp) */
+  --ink-info:                    var(--_i-300);
+  --border-info:                 var(--_i-500);
+  --surface-info:                var(--_i-300);
+  --surface-info-subtle:         var(--_i-700);
+  --ink-on-info:                 var(--_n-950);
 
   /* ── Scrim — dark theme overrides ── */
   --scrim-light:           hsl(0, 0%, 0%, 0.44);
@@ -507,6 +920,65 @@
   --signal-neutral-text:         var(--_n-950);
   --signal-neutral-text-subtle:  var(--_n-200);
   --signal-neutral-border:       var(--_n-700);
+
+  /* ── danger — dark overrides (alias tracks error ramp) ──
+     Pointers re-bind to the dark-mode --signal-error-* values
+     so danger inherits dark theme automatically.
+     ────────────────────────────────────────────────────────── */
+  --signal-danger-fill:          var(--signal-error-fill);
+  --signal-danger-fill-subtle:   var(--signal-error-fill-subtle);
+  --signal-danger-text:          var(--signal-error-text);
+  --signal-danger-text-subtle:   var(--signal-error-text-subtle);
+  --signal-danger-border:        var(--signal-error-border);
+
+  /* ── custody states — dark overrides ───────────────────────
+     Filled states use lighter ramp steps so they pop against
+     the dark canvas; subtle states use the deepest ramp step
+     for contained tinting; on-fill text stays near-black to
+     preserve ≥4.5:1 contrast against the lighter fills.
+     ────────────────────────────────────────────────────────── */
+
+  /* active (green) */
+  --signal-custody-active-fill:           var(--_g-400);
+  --signal-custody-active-fill-subtle:    var(--_g-700);
+  --signal-custody-active-text:           var(--_n-950);
+  --signal-custody-active-text-subtle:    var(--_g-200);
+  --signal-custody-active-border:         var(--_g-600);
+
+  /* pending (amber) */
+  --signal-custody-pending-fill:          var(--_a-300);
+  --signal-custody-pending-fill-subtle:   var(--_a-600);
+  --signal-custody-pending-text:          var(--_n-950);
+  --signal-custody-pending-text-subtle:   var(--_a-200);
+  --signal-custody-pending-border:        var(--_a-500);
+
+  /* internal (brand blue) */
+  --signal-custody-internal-fill:         var(--_b-400);
+  --signal-custody-internal-fill-subtle:  var(--_b-900);
+  --signal-custody-internal-text:         var(--_n-950);
+  --signal-custody-internal-text-subtle:  var(--_b-200);
+  --signal-custody-internal-border:       var(--_b-600);
+
+  /* external (indigo) */
+  --signal-custody-external-fill:         var(--_map-ind-300);
+  --signal-custody-external-fill-subtle:  hsl(248, 68%, 43%, 0.30);
+  --signal-custody-external-text:         var(--_n-950);
+  --signal-custody-external-text-subtle:  var(--_map-ind-200);
+  --signal-custody-external-border:       var(--_map-ind-500);
+
+  /* unassigned (neutral gray) */
+  --signal-custody-unassigned-fill:           var(--_n-500);
+  --signal-custody-unassigned-fill-subtle:    var(--_n-800);
+  --signal-custody-unassigned-text:           var(--_n-950);
+  --signal-custody-unassigned-text-subtle:    var(--_n-300);
+  --signal-custody-unassigned-border:         var(--_n-700);
+
+  /* self (magenta — "held by you") */
+  --signal-custody-self-fill:             var(--_map-mag-300);
+  --signal-custody-self-fill-subtle:      hsl(322, 68%, 42%, 0.32);
+  --signal-custody-self-text:             var(--_n-950);
+  --signal-custody-self-text-subtle:      var(--_map-mag-200);
+  --signal-custody-self-border:           var(--_map-mag-500);
 
   /* ── Elevation — darken shadows further in dark mode ── */
   --elevation-1:
@@ -617,6 +1089,36 @@
   /** Selected / focused pin halo ring */
   --map-pin-halo:            hsl(0, 0%, 100%, 0.85);
   --map-pin-halo-dark:       hsl(0, 0%, 0%, 0.40);
+
+  /**
+   * Pin ring overlay — semi-transparent white outline drawn on top of map pins
+   * to create a subtle separation from the map base. Used in dark-mode badge
+   * rings where --map-pin-halo (0.85 alpha) is too heavy for fine outlines.
+   */
+  --map-pin-ring:            hsl(0, 0%, 100%, 0.30);
+
+  /**
+   * Dark overlay shadow — pure-black drop shadow used in dark-mode popover
+   * and dropdown contexts where the elevated surface needs strong depth
+   * separation from the dark map/panel background.
+   * Complements the elevation tokens (which use a cool-tinted dark hsl value)
+   * for contexts where warmer shadow scrim tones look out of place.
+   */
+  --shadow-dark-overlay:     hsl(0, 0%, 0%, 0.50);
+
+  /**
+   * Heavy dark overlay shadow — stronger variant (0.60 alpha) for elements
+   * that require more pronounced depth on dark backgrounds (e.g. annotation
+   * pins on photo previews where the base shadow would be invisible).
+   */
+  --shadow-dark-overlay-heavy: hsl(0, 0%, 0%, 0.60);
+
+  /**
+   * Light ring shadow — semi-transparent white (0.18 alpha) used as a
+   * subtle floating shadow for toggle thumbs and control elements on dark
+   * page backgrounds where a dark shadow becomes invisible.
+   */
+  --shadow-light-ring:       hsl(0, 0%, 100%, 0.18);
 
   /** Attribution / watermark text */
   --map-attribution-bg:      hsl(0, 0%, 100%, 0.72);
@@ -961,4 +1463,385 @@
   --map-m5-telemetry-border:    var(--_i-300);
   --map-m5-telemetry-value:     var(--_i-100);
   --map-m5-scrubber-fill:       var(--_map-mag-200);
+}
+
+
+/* ============================================================
+   §6  LAYOUT SHELL PRIMITIVES
+   Fixed-dimension tokens for the INVENTORY app shell:
+     — top bar height    : 52px (3.25rem)
+     — side nav width    : 220px (13.75rem)
+     — side nav collapsed: 52px  (3.25rem, icon-only strip)
+
+   Component code must reference these tokens instead of
+   hard-coding pixel values so that a single token change
+   resizes the entire shell consistently.
+
+   Responsive breakpoints:
+     — ≥ 1025px : full side nav (220px)
+     — 769–1024px: collapsed side nav (52px, icon-only)
+     — ≤ 768px  : side nav hidden (overlay drawer on demand)
+   ============================================================ */
+
+:root {
+  /* ── Top bar ── */
+  /** Fixed height of the INVENTORY top app bar. */
+  --shell-topbar-height:          3.25rem;   /* 52px */
+
+  /* ── Side nav ── */
+  /** Full width of the expanded side navigation panel. */
+  --shell-sidenav-width:          13.75rem;  /* 220px */
+
+  /** Collapsed width — icon-only strip visible at ≥ 769px < 1025px. */
+  --shell-sidenav-width-collapsed: 3.25rem;  /* 52px */
+
+  /* ── Content offsets (convenience aliases) ── */
+  /**
+   * Used by main-content containers to offset themselves from the
+   * shell chrome without needing to repeat the token arithmetic.
+   * Set to 0 at mobile breakpoints via media queries below.
+   */
+  --shell-content-offset-top:  var(--shell-topbar-height);
+  --shell-content-offset-left: var(--shell-sidenav-width);
+
+  /* ── Z-index layers ── */
+  /** Top bar sits above all other shell chrome. */
+  --shell-z-topbar:   200;
+  /** Side nav sits above main content but below the top bar. */
+  --shell-z-sidenav:  100;
+  /** Mobile nav overlay drawer. */
+  --shell-z-nav-overlay: 150;
+
+  /* ── Transition ── */
+  /** Duration for side nav expand/collapse animation. */
+  --shell-nav-transition: 220ms ease;
+}
+
+/* Collapsed side nav at medium widths */
+@media (max-width: 1024px) {
+  :root {
+    --shell-content-offset-left: var(--shell-sidenav-width-collapsed);
+  }
+}
+
+/* Mobile: nav is hidden (overlay drawer) — main content fills full width */
+@media (max-width: 768px) {
+  :root {
+    --shell-content-offset-left: 0px;
+  }
+}
+
+
+/* ============================================================
+   §7  SEMANTIC LAYER TOKENS
+   Color tokens for the 7 INVENTORY map data layers.
+   Used by the LayerEngine, LayerPicker, and map canvas consumers.
+
+   Each layer has:
+     --layer-{id}-color   — foreground / icon / label color
+     --layer-{id}-bg      — background fill (pin, swatch, toggle active fill)
+     --layer-{id}-border  — border / stroke (pin outline, badge ring)
+     --layer-{id}-subtle  — low-opacity tint (hover fill, focus ring)
+
+   Color assignments (colorblind-safe palette):
+     deployed  → green  (positive; accessible on white/dark)
+     transit   → blue   (brand; FedEx route association)
+     flagged   → orange (caution/warning; distinct from red)
+     hangar    → indigo (neutral-purple; inactive/stored)
+     heat      → magenta/rose (density; distinct from all above)
+     history   → neutral gray (low priority; past events)
+     turbines  → lime/yellow-green (site markers; distinct from green)
+   ============================================================ */
+
+:root {
+  /* ── deployed — green ──────────────────────────────────────── */
+  --layer-deployed-color:    var(--_g-600);
+  --layer-deployed-bg:       var(--_g-500);
+  --layer-deployed-border:   var(--_g-400);
+  --layer-deployed-subtle:   var(--_g-50);
+
+  /* ── transit — brand blue ──────────────────────────────────── */
+  --layer-transit-color:     var(--_b-600);
+  --layer-transit-bg:        var(--_b-500);
+  --layer-transit-border:    var(--_b-400);
+  --layer-transit-subtle:    var(--_b-50);
+
+  /* ── flagged — orange ─────────────────────────────────────── */
+  --layer-flagged-color:     var(--_map-org-600);
+  --layer-flagged-bg:        var(--_map-org-400);
+  --layer-flagged-border:    var(--_map-org-300);
+  --layer-flagged-subtle:    hsl(25, 97%, 72%, 0.15);
+
+  /* ── hangar — indigo ──────────────────────────────────────── */
+  --layer-hangar-color:      var(--_map-ind-600);
+  --layer-hangar-bg:         var(--_map-ind-400);
+  --layer-hangar-border:     var(--_map-ind-300);
+  --layer-hangar-subtle:     hsl(248, 90%, 78%, 0.15);
+
+  /* ── heat — magenta ───────────────────────────────────────── */
+  --layer-heat-color:        var(--_map-mag-600);
+  --layer-heat-bg:           var(--_map-mag-400);
+  --layer-heat-border:       var(--_map-mag-300);
+  --layer-heat-subtle:       hsl(322, 80%, 74%, 0.15);
+
+  /* ── history — neutral gray ───────────────────────────────── */
+  --layer-history-color:     var(--_n-600);
+  --layer-history-bg:        var(--_n-500);
+  --layer-history-border:    var(--_n-400);
+  --layer-history-subtle:    var(--_n-100);
+
+  /* ── turbines — lime ──────────────────────────────────────── */
+  --layer-turbines-color:    var(--_map-lim-500);
+  --layer-turbines-bg:       var(--_map-lim-400);
+  --layer-turbines-border:   var(--_map-lim-300);
+  --layer-turbines-subtle:   hsl(84, 72%, 68%, 0.15);
+}
+
+/* ============================================================
+   §8  BREAKPOINT TOKENS  (SCAN mobile-first system)
+
+   These CSS custom properties record the canonical px thresholds
+   for the SCAN app's three responsive tiers.  They are:
+
+     • Reference values — consumed by TypeScript helpers
+       (src/lib/breakpoints.ts) via getComputedStyle() at runtime
+       to drive JS-side layout decisions (e.g. conditional rendering,
+       Mapbox camera constraints, modal vs. bottom-sheet switching).
+
+     • Documentation — a single source of truth so engineers can grep
+       for "--bp-" and find every breakpoint definition immediately.
+
+   IMPORTANT: CSS custom properties cannot appear inside @media
+   conditions (e.g. @media (min-width: var(--bp-md)) is invalid).
+   Use the hardcoded px values in media queries; use the tokens in JS.
+
+   Tier definitions:
+     sm  — 390px  Small phone (iPhone SE, Pixel 6a portrait)
+     md  — 640px  Large phone / phablet landscape (iPhone Pro Max)
+     lg  — 1024px Tablet (iPad, Surface Go) — full SCAN on larger glass
+
+   The INVENTORY dashboard uses its own shell breakpoints (§6) which
+   target ≥1025px (desktop) and 769–1024px (collapsed nav).
+   ============================================================ */
+
+:root {
+  /** Smallest phone threshold — 390 px */
+  --bp-sm: 390px;
+  /** Large phone / phablet threshold — 640 px */
+  --bp-md: 640px;
+  /** Tablet / wide-screen threshold — 1024 px */
+  --bp-lg: 1024px;
+
+  /**
+   * Unitless equivalents for arithmetic (e.g. calc(var(--bp-sm-raw) * 1px)).
+   * These may be read as integers by JS helpers.
+   */
+  --bp-sm-raw: 390;
+  --bp-md-raw: 640;
+  --bp-lg-raw: 1024;
+}
+
+
+/* ============================================================
+   §9  DENSITY MODES  (comfy / compact)
+
+   Two UI density modes for the INVENTORY dashboard tables, lists,
+   and detail panels.  Applied by setting data-density="comfy" or
+   data-density="compact" on any ancestor element (typically the
+   <html> or main layout shell).
+
+   Token groups:
+     --density-gap-{size}       — flex/grid gap between sibling elements
+     --density-pad-x            — horizontal cell / row padding
+     --density-pad-y            — vertical cell / row padding
+     --density-section-gap      — gap between top-level panel sections
+     --density-row-height-{size}— explicit row heights for data tables
+     --density-font-label       — label / caption font size
+     --density-font-body        — body / cell content font size
+     --density-font-heading     — section heading font size
+
+   Default (:root) values match comfy so the dashboard renders
+   correctly even when no data-density attribute is present.
+
+   Usage in component CSS:
+     padding-block: var(--density-pad-y);
+     font-size: var(--density-font-body);
+     height: var(--density-row-height-md);
+   ============================================================ */
+
+/* ── DEFAULT (comfy values) ─────────────────────────────────── */
+
+:root {
+  /* Gaps between sibling UI elements */
+  --density-gap-xs:          0.375rem;   /* 6px  — tight clusters */
+  --density-gap-sm:          0.625rem;   /* 10px — related items */
+  --density-gap-md:          1rem;       /* 16px — standard gap  */
+  --density-gap-lg:          1.5rem;     /* 24px — between groups */
+
+  /* Cell / row padding */
+  --density-pad-x:           1rem;       /* 16px — horizontal cell padding */
+  --density-pad-y:           0.75rem;    /* 12px — vertical cell padding   */
+
+  /* Panel section separation */
+  --density-section-gap:     1.5rem;     /* 24px — between panel sections  */
+
+  /* Row heights — explicit height for data rows, manifest lines, log entries */
+  --density-row-height-sm:   2.25rem;    /* 36px — secondary / sub-rows     */
+  --density-row-height-md:   3rem;       /* 48px — standard table rows      */
+  --density-row-height-lg:   3.75rem;    /* 60px — summary / header rows    */
+
+  /* Typography scale */
+  --density-font-label:      0.75rem;    /* 12px — captions, column headers */
+  --density-font-body:       0.9375rem;  /* 15px — cell text, body content  */
+  --density-font-heading:    1.0625rem;  /* 17px — panel / section headings */
+}
+
+/* ── COMFY — spacious, generous whitespace ─────────────────── */
+/*
+ * Matches :root defaults above; declared explicitly so that
+ * toggling [data-density="comfy"] always produces the correct
+ * result regardless of any inheritance from parent elements.
+ */
+
+[data-density="comfy"] {
+  --density-gap-xs:          0.375rem;   /* 6px  */
+  --density-gap-sm:          0.625rem;   /* 10px */
+  --density-gap-md:          1rem;       /* 16px */
+  --density-gap-lg:          1.5rem;     /* 24px */
+
+  --density-pad-x:           1rem;       /* 16px */
+  --density-pad-y:           0.75rem;    /* 12px */
+
+  --density-section-gap:     1.5rem;     /* 24px */
+
+  --density-row-height-sm:   2.25rem;    /* 36px */
+  --density-row-height-md:   3rem;       /* 48px */
+  --density-row-height-lg:   3.75rem;    /* 60px */
+
+  --density-font-label:      0.75rem;    /* 12px */
+  --density-font-body:       0.9375rem;  /* 15px */
+  --density-font-heading:    1.0625rem;  /* 17px */
+}
+
+/* ── COMPACT — dense, information-maximizing layout ─────────── */
+/*
+ * All values tightened relative to comfy.  Row heights are reduced
+ * so that more rows are visible without scrolling.  Font sizes drop
+ * one step on the Inter Tight scale to maintain legibility at a
+ * lower line count.
+ */
+
+[data-density="compact"] {
+  --density-gap-xs:          0.25rem;    /* 4px  — ultra-tight clusters */
+  --density-gap-sm:          0.375rem;   /* 6px  — related items        */
+  --density-gap-md:          0.625rem;   /* 10px — standard gap         */
+  --density-gap-lg:          1rem;       /* 16px — between groups       */
+
+  --density-pad-x:           0.625rem;   /* 10px — horizontal cell padding */
+  --density-pad-y:           0.375rem;   /* 6px  — vertical cell padding   */
+
+  --density-section-gap:     1rem;       /* 16px — between panel sections  */
+
+  --density-row-height-sm:   1.75rem;    /* 28px — secondary / sub-rows    */
+  --density-row-height-md:   2.25rem;    /* 36px — standard table rows     */
+  --density-row-height-lg:   2.75rem;    /* 44px — summary / header rows   */
+
+  --density-font-label:      0.6875rem;  /* 11px — captions, column headers */
+  --density-font-body:       0.8125rem;  /* 13px — cell text, body content  */
+  --density-font-heading:    0.9375rem;  /* 15px — panel / section headings */
+}
+
+/* ── REDUCED MOTION — no density-specific adjustments needed ──
+   Density tokens are dimension/size tokens, not animation tokens.
+   The @media (prefers-reduced-motion) block in §4 covers all
+   animation/transition suppression; nothing extra is required here.
+   ────────────────────────────────────────────────────────────── */
+
+
+/* ============================================================
+   §10  TYPOGRAPHY TOKENS
+
+   Font-family stacks as CSS custom properties so every component
+   can reference --font-ui or --font-mono rather than repeating
+   the full stack literals.  Two families are defined:
+
+     --font-ui    Inter Tight — primary UI typeface for headings,
+                  labels, buttons, and all body copy in INVENTORY
+                  and SCAN.  Falls back through Inter, then the
+                  OS system-ui sans-serif.
+
+     --font-mono  IBM Plex Mono — tabular data, numeric fields,
+                  code blocks, QR payloads, case IDs, audit hashes,
+                  and FedEx tracking numbers.  Falls back through
+                  common monospace faces.
+
+   Usage in component CSS:
+     font-family: var(--font-ui);
+     font-family: var(--font-mono);
+
+   The body element in globals.css already applies --font-ui.
+   Use --font-mono explicitly on data-display elements.
+   ============================================================ */
+
+:root {
+  /**
+   * Primary UI typeface — Inter Tight, with fallback chain.
+   * "Inter Tight" is the condensed variant of Inter, optimised for
+   * dense UI text at small sizes.  Loaded via Google Fonts in layout.tsx.
+   */
+  --font-ui:   "Inter Tight", "Inter", system-ui, -apple-system,
+               BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /**
+   * Monospace / tabular typeface — IBM Plex Mono.
+   * Used for all data-display contexts: case IDs, tracking numbers,
+   * audit hashes, code blocks, timestamps in the timeline.
+   */
+  --font-mono: "IBM Plex Mono", "Menlo", "Consolas", "Courier New", monospace;
+}
+
+
+/* Dark theme overrides for layer tokens */
+.theme-dark {
+  /* deployed */
+  --layer-deployed-color:    var(--_g-300);
+  --layer-deployed-bg:       var(--_g-400);
+  --layer-deployed-border:   var(--_g-500);
+  --layer-deployed-subtle:   var(--_g-700);
+
+  /* transit */
+  --layer-transit-color:     var(--_b-300);
+  --layer-transit-bg:        var(--_b-400);
+  --layer-transit-border:    var(--_b-500);
+  --layer-transit-subtle:    var(--_b-900);
+
+  /* flagged */
+  --layer-flagged-color:     var(--_map-org-300);
+  --layer-flagged-bg:        var(--_map-org-400);
+  --layer-flagged-border:    var(--_map-org-500);
+  --layer-flagged-subtle:    hsl(25, 88%, 40%, 0.25);
+
+  /* hangar */
+  --layer-hangar-color:      var(--_map-ind-300);
+  --layer-hangar-bg:         var(--_map-ind-400);
+  --layer-hangar-border:     var(--_map-ind-500);
+  --layer-hangar-subtle:     hsl(248, 68%, 43%, 0.25);
+
+  /* heat */
+  --layer-heat-color:        var(--_map-mag-300);
+  --layer-heat-bg:           var(--_map-mag-400);
+  --layer-heat-border:       var(--_map-mag-500);
+  --layer-heat-subtle:       hsl(322, 68%, 42%, 0.25);
+
+  /* history */
+  --layer-history-color:     var(--_n-400);
+  --layer-history-bg:        var(--_n-500);
+  --layer-history-border:    var(--_n-600);
+  --layer-history-subtle:    var(--_n-800);
+
+  /* turbines */
+  --layer-turbines-color:    var(--_map-lim-300);
+  --layer-turbines-bg:       var(--_map-lim-400);
+  --layer-turbines-border:   var(--_map-lim-500);
+  --layer-turbines-subtle:   hsl(84, 62%, 31%, 0.25);
 }

@@ -1,0 +1,205 @@
+/**
+ * HeatMapCanvas.module.css
+ *
+ * Styles for the self-contained Mapbox GL heat map canvas component.
+ *
+ * Design constraints:
+ *   • No hex literals — all colors via CSS custom properties (var(--*))
+ *   • WCAG AA contrast in both light and dark themes
+ *   • Reduced-motion: no animation unless explicitly enabled
+ *   • Typography: Inter Tight (UI), IBM Plex Mono (data)
+ */
+
+/* ── Root container ────────────────────────────────────────────────────────── */
+
+.root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 20rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--surface-sunken);
+}
+
+/* ── Fallback mode ─────────────────────────────────────────────────────────── */
+
+.fallbackRoot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  align-items: center;
+  justify-content: flex-start;
+  background: var(--surface-sunken);
+  border: 2px dashed var(--border-default);
+}
+
+.fallbackHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+.fallbackTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.fallbackHint {
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+}
+
+.fallbackCode {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  background: var(--surface-active);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  color: var(--ink-brand);
+}
+
+/* ── In-map heat toggle button ─────────────────────────────────────────────── */
+
+/**
+ * Positioned absolutely in the bottom-right corner of the map canvas.
+ * z-index 30 places it above Mapbox GL layers but below any overlay panels.
+ */
+.heatToggle {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1rem;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 1.25rem;
+  border: 1px solid var(--border-default);
+  background: var(--surface-overlay, rgba(255, 255, 255, 0.92));
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  box-shadow: var(--elevation-1);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* ── Fallback variant — positioned statically in the fallback layout ─────── */
+.fallbackRoot .heatToggle {
+  position: static;
+}
+
+.heatToggle:hover {
+  background: var(--surface-raised);
+  color: var(--ink-primary);
+  border-color: var(--border-strong);
+}
+
+.heatToggle:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.heatToggle[aria-pressed="true"],
+.heatToggleActive {
+  background: var(--surface-brand-subtle);
+  color: var(--ink-brand);
+  border-color: var(--border-brand);
+  font-weight: 600;
+}
+
+.heatToggle[aria-pressed="true"]:hover {
+  background: var(--surface-brand);
+  color: var(--ink-on-brand);
+  border-color: var(--border-brand);
+}
+
+/* ── Toggle icon — heat/fire SVG (pure CSS, no external SVG) ─────────────── */
+
+.heatToggleIcon {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 0.1875rem 0.1875rem 50% 50%;
+  background: currentColor;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.heatToggle[aria-pressed="true"] .heatToggleIcon {
+  opacity: 1;
+  /* Subtle gradient from brand-color palette to suggest heat.
+     End stop uses the M2 swatch-8 token (peak red density color). */
+  background: linear-gradient(
+    180deg,
+    var(--layer-heat-color, var(--ink-brand)) 0%,
+    var(--map-m2-swatch-8) 100%
+  );
+}
+
+/* ── Toggle label ─────────────────────────────────────────────────────────── */
+
+.heatToggleLabel {
+  font-size: 0.8125rem;
+}
+
+/* ── Toggle pip (on/off indicator dot) ───────────────────────────────────── */
+
+.heatTogglePip {
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 120ms ease;
+}
+
+.heatTogglePipOn {
+  background: var(--layer-heat-color, var(--ink-brand));
+}
+
+.heatTogglePipOff {
+  background: var(--border-strong);
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .heatToggle {
+    transition: none;
+  }
+  .heatTogglePip {
+    transition: none;
+  }
+}
+
+/* ── Dark theme overrides ──────────────────────────────────────────────────── */
+
+:global(.theme-dark) .heatToggle {
+  background: var(--surface-overlay, rgba(24, 24, 28, 0.92));
+  border-color: var(--border-default);
+  color: var(--ink-secondary);
+}
+
+:global(.theme-dark) .heatToggle:hover {
+  background: var(--surface-raised);
+  color: var(--ink-primary);
+}
+
+:global(.theme-dark) .heatToggle[aria-pressed="true"],
+:global(.theme-dark) .heatToggleActive {
+  background: var(--surface-brand-subtle);
+  color: var(--ink-brand);
+  border-color: var(--border-brand);
+}

@@ -1,0 +1,354 @@
+/**
+ * scan/base.css — SCAN App Global Base Stylesheet
+ *
+ * Dedicated fluid-layout foundation for the SkySpecs SCAN mobile-first web app.
+ * Enforces fluid layouts from 320 px (the narrowest supported phone width) through
+ * three responsive tiers:
+ *   sm  — 390 px  (standard phone: iPhone SE 3rd gen / iPhone 14 portrait)
+ *   md  — 640 px  (large phone / phablet landscape: iPhone Pro Max)
+ *   lg  — 1024 px (tablet: iPad, Surface Go)
+ *
+ * Structure:
+ *   §1  Box-sizing reset (SCAN scope)
+ *   §2  html / body minimum-width guard (prevents layout collapse below 320 px)
+ *   §3  SCAN typography tokens (fluid clamp values — 320 px → 1024 px)
+ *   §4  SCAN container tokens (padding, max-width, gap scale)
+ *   §5  Responsive token overrides (breakpoint steps for §3 & §4)
+ *   §6  SCAN-scoped fluid layout enforcer ([data-app="scan"])
+ *   §7  Fluid container utility class (.scan-fluid-container)
+ *
+ * Conventions:
+ *   • All color references use design tokens (var(--token)) — no hex literals.
+ *   • All font-size tokens use clamp() for smooth interpolation between the min
+ *     and max values. Breakpoint overrides pin discrete values where clamp does
+ *     not apply (e.g. specific layout shifts).
+ *   • Token names are prefixed --scan-* to avoid collision with the INVENTORY
+ *     dashboard tokens defined in src/styles/tokens/base.css.
+ *   • Breakpoint px values are hard-coded in @media queries (CSS custom
+ *     properties cannot appear inside @media conditions).
+ *
+ * Import order (src/app/layout.tsx or src/app/scan/layout.tsx):
+ *   1. src/styles/tokens/base.css          (design system tokens)
+ *   2. src/styles/tokens/breakpoints.css   (breakpoint reference tokens)
+ *   3. src/app/globals.css                 (global reset + SCAN utilities)
+ *   4. src/styles/scan/base.css            (← this file, SCAN fluid base)
+ */
+
+
+/* ============================================================
+   §1  BOX-SIZING RESET (SCAN scope)
+
+   The global reset in globals.css already applies box-sizing: border-box
+   to every element.  This SCAN-scoped block re-asserts the rule inside the
+   [data-app="scan"] subtree to:
+     a) Document the intent explicitly for SCAN-specific engineers.
+     b) Guard against any third-party or injected CSS that may override the
+        global rule (e.g. an inline widget loaded by a camera API polyfill).
+   ============================================================ */
+
+[data-app="scan"],
+[data-app="scan"] *,
+[data-app="scan"] *::before,
+[data-app="scan"] *::after {
+  box-sizing: border-box;
+}
+
+
+/* ============================================================
+   §2  HTML / BODY MINIMUM-WIDTH GUARD
+
+   Prevents the viewport from collapsing below 320 px — the width of the
+   smallest still-supported phone (iPhone SE 1st gen).  Without this,
+   content that cannot reflow (fixed-width images, code blocks, tables)
+   causes horizontal scrollbars on 320 px devices.
+
+   overflow-x: hidden on html removes any residual horizontal scroll that
+   survives despite the min-width floor; this mirrors the safeguard used
+   by Tailwind CSS and Bootstrap v5.
+
+   NOTE: These rules sit outside [data-app="scan"] because they must apply
+   to the root <html> and <body> elements — no data-app attribute is present
+   on those elements.  They are narrow enough (320 px only) to be harmless
+   on the INVENTORY dashboard where the minimum viewport is ≥ 768 px.
+   ============================================================ */
+
+html {
+  min-width: 320px;
+}
+
+body {
+  min-width: 320px;
+  overflow-x: hidden;
+}
+
+
+/* ============================================================
+   §3  SCAN TYPOGRAPHY TOKENS  (fluid clamp scale)
+
+   Defines --scan-fs-* custom properties on :root using CSS clamp() so
+   font sizes interpolate smoothly from the minimum phone width (320 px)
+   to the tablet breakpoint (1024 px) without discrete jumps.
+
+   Fluid formula:
+     preferred = calc(intercept + slope * 100vw)
+     where:
+       slope     = (max-px - min-px) / (max-vw - min-vw)
+       intercept = min-px - slope * min-vw       (in px, converted to rem)
+
+   Scale table (all values in px / rem at 16px base):
+   ┌──────────────┬──────────┬──────────┬──────────┬────────────────────────────────────────────┐
+   │ Token        │  320 px  │  640 px  │ 1024 px  │ clamp expression                           │
+   ├──────────────┼──────────┼──────────┼──────────┼────────────────────────────────────────────┤
+   │ --scan-fs-display  │ 22 / 1.375rem│ 24 / 1.5rem│ 28 / 1.75rem│ clamp(1.375rem, calc(1.20rem + 0.85vw), 1.75rem) │
+   │ --scan-fs-h1       │ 20 / 1.25rem │ 22 / 1.375rem│ 24 / 1.5rem│ clamp(1.25rem, calc(1.14rem + 0.57vw), 1.5rem) │
+   │ --scan-fs-h2       │ 17 / 1.0625rem│18 / 1.125rem│20 / 1.25rem│ clamp(1.0625rem, calc(0.98rem + 0.43vw), 1.25rem) │
+   │ --scan-fs-h3       │ 16 / 1rem   │ 17 / 1.0625rem│18 / 1.125rem│ clamp(1rem, calc(0.94rem + 0.28vw), 1.125rem) │
+   │ --scan-fs-body-lg  │ 15 / 0.9375rem│16 / 1rem │ 17 / 1.0625rem│ clamp(0.9375rem, calc(0.88rem + 0.28vw), 1.0625rem) │
+   │ --scan-fs-body     │ 14 / 0.875rem│ 15 / 0.9375rem│16 / 1rem│ clamp(0.875rem, calc(0.82rem + 0.28vw), 1rem) │
+   │ --scan-fs-small    │ 12 / 0.75rem│ 13 / 0.8125rem│14 / 0.875rem│ clamp(0.75rem, calc(0.69rem + 0.28vw), 0.875rem) │
+   │ --scan-fs-micro    │ 11 / 0.6875rem│12 / 0.75rem│12 / 0.75rem│ clamp(0.6875rem, calc(0.66rem + 0.14vw), 0.75rem) │
+   └──────────────┴──────────┴──────────┴──────────┴────────────────────────────────────────────┘
+
+   Line-height companions:
+     --scan-lh-tight    1.20  — display headings, large numerics
+     --scan-lh-snug     1.35  — subheadings, card titles
+     --scan-lh-normal   1.50  — body copy, form labels
+     --scan-lh-relaxed  1.625 — help text, description paragraphs
+
+   Letter-spacing companions:
+     --scan-ls-tight   -0.02em — headings (tightened tracking)
+     --scan-ls-normal   0em    — body copy
+     --scan-ls-wide     0.04em — overlines, data labels, badges
+     --scan-ls-wider    0.08em — all-caps labels (SCAN app badge)
+   ============================================================ */
+
+:root {
+  /* ── Display ─ large hero / page-level headings ─────────────
+     320 px: 22 px (1.375rem) → 1024 px: 28 px (1.75rem)
+     slope = 6/704 = 0.8523 vw  |  intercept = 19.27 px = 1.2046rem      */
+  --scan-fs-display:  clamp(1.375rem, calc(1.20rem + 0.85vw), 1.75rem);
+
+  /* ── H1 ─ primary screen heading ────────────────────────────
+     320 px: 20 px (1.25rem) → 1024 px: 24 px (1.5rem)
+     slope = 4/704 = 0.5682 vw  |  intercept = 18.18 px = 1.136rem       */
+  --scan-fs-h1:       clamp(1.25rem, calc(1.14rem + 0.57vw), 1.5rem);
+
+  /* ── H2 ─ section heading ────────────────────────────────────
+     320 px: 17 px (1.0625rem) → 1024 px: 20 px (1.25rem)
+     slope = 3/704 = 0.4261 vw  |  intercept = 15.64 px = 0.9775rem      */
+  --scan-fs-h2:       clamp(1.0625rem, calc(0.98rem + 0.43vw), 1.25rem);
+
+  /* ── H3 ─ subsection / card heading ─────────────────────────
+     320 px: 16 px (1rem) → 1024 px: 18 px (1.125rem)
+     slope = 2/704 = 0.2841 vw  |  intercept = 15.09 px = 0.9432rem      */
+  --scan-fs-h3:       clamp(1rem, calc(0.94rem + 0.28vw), 1.125rem);
+
+  /* ── Body Large ─ prominent body copy, form values ──────────
+     320 px: 15 px (0.9375rem) → 1024 px: 17 px (1.0625rem)
+     slope = 2/704 = 0.2841 vw  |  intercept = 14.09 px = 0.8807rem      */
+  --scan-fs-body-lg:  clamp(0.9375rem, calc(0.88rem + 0.28vw), 1.0625rem);
+
+  /* ── Body ─ standard body copy, labels ──────────────────────
+     320 px: 14 px (0.875rem) → 1024 px: 16 px (1rem)
+     slope = 2/704 = 0.2841 vw  |  intercept = 13.09 px = 0.8182rem      */
+  --scan-fs-body:     clamp(0.875rem, calc(0.82rem + 0.28vw), 1rem);
+
+  /* ── Small ─ supporting text, timestamps, metadata ──────────
+     320 px: 12 px (0.75rem) → 1024 px: 14 px (0.875rem)
+     slope = 2/704 = 0.2841 vw  |  intercept = 11.09 px = 0.6932rem      */
+  --scan-fs-small:    clamp(0.75rem, calc(0.69rem + 0.28vw), 0.875rem);
+
+  /* ── Micro ─ badges, overlines, fine print ───────────────────
+     320 px: 11 px (0.6875rem) → 1024 px: 12 px (0.75rem)
+     slope = 1/704 = 0.1420 vw  |  intercept = 10.55 px = 0.6591rem      */
+  --scan-fs-micro:    clamp(0.6875rem, calc(0.66rem + 0.14vw), 0.75rem);
+
+  /* ── Line heights ─────────────────────────────────────────── */
+  --scan-lh-tight:    1.2;
+  --scan-lh-snug:     1.35;
+  --scan-lh-normal:   1.5;
+  --scan-lh-relaxed:  1.625;
+
+  /* ── Letter spacing ──────────────────────────────────────── */
+  --scan-ls-tight:   -0.02em;
+  --scan-ls-normal:   0em;
+  --scan-ls-wide:     0.04em;
+  --scan-ls-wider:    0.08em;
+}
+
+
+/* ============================================================
+   §4  SCAN CONTAINER TOKENS  (base — 320 px+)
+
+   Defines fluid container dimensions consumed by:
+     • .scan-fluid-container utility class (§7)
+     • Page layout components (padding-inline: var(--scan-container-px))
+     • Section gap utilities (gap: var(--scan-section-gap))
+
+   Values at base (320 px):
+     --scan-container-px       1rem   (16 px) — inline page padding
+     --scan-container-max     40rem  (640 px) — comfortable reading width
+     --scan-container-max-lg  48rem  (768 px) — wider cap on tablet+
+     --scan-section-gap        1.5rem (24 px) — between major page sections
+     --scan-card-gap           1rem   (16 px) — between cards in a list
+     --scan-item-gap           0.75rem(12 px) — between list items
+
+   Fluid padding (clamp — avoids hard jump at each breakpoint):
+     --scan-container-px-fluid: 16 px at 320 px → 32 px at 1024 px
+     slope = 16/704 = 2.273 vw  |  intercept = 8.73 px = 0.545rem
+   ============================================================ */
+
+:root {
+  /* ── Horizontal page padding ─────────────────────────────── */
+  /** Step-value padding — overridden at each breakpoint (§5). */
+  --scan-container-px:       1rem;      /* 16 px — base (320 px+) */
+
+  /**
+   * Fluid continuous padding — interpolates from 16 px (320 px viewport)
+   * to 32 px (1024 px viewport) without breakpoint jumps.
+   * Use this when smooth scrolling aesthetics matter more than exact values.
+   */
+  --scan-container-px-fluid: clamp(1rem, calc(0.545rem + 2.273vw), 2rem);
+
+  /* ── Maximum content widths ──────────────────────────────── */
+  /** Phone/default: 640 px — single column form/action widths. */
+  --scan-container-max:      40rem;     /* 640 px */
+  /** Tablet+: 768 px — allows two-column reading layout. */
+  --scan-container-max-lg:   48rem;     /* 768 px */
+
+  /* ── Spacing scale ───────────────────────────────────────── */
+  /** Between major page sections (greeting / scan card / manual entry). */
+  --scan-section-gap:        1.5rem;    /* 24 px — base */
+  /** Between cards in a scrollable list. */
+  --scan-card-gap:           1rem;      /* 16 px — base */
+  /** Between rows within a card or list. */
+  --scan-item-gap:           0.75rem;   /* 12 px — base */
+}
+
+
+/* ============================================================
+   §5  RESPONSIVE TOKEN OVERRIDES  (breakpoint steps)
+
+   At each SCAN breakpoint, the step-value tokens (--scan-container-px,
+   --scan-section-gap, etc.) are bumped to their next tier value.
+
+   These overrides are applied on :root so they cascade to all SCAN
+   components without needing [data-app="scan"] specificity.
+
+   Typography clamp() values (§3) do NOT need overrides here — they
+   interpolate continuously via vw units.  Only layout spacing tokens
+   that benefit from stepped changes are overridden.
+   ============================================================ */
+
+/* ── sm — 390 px (standard phone) ───────────────────────────
+   Adds a small amount of breathing room on phones wider than 320 px
+   (e.g. iPhone 14, Pixel 7).  The container grows from 16 px → 20 px
+   horizontal padding, matching the iOS safe-area aesthetics.
+   ──────────────────────────────────────────────────────────── */
+@media (min-width: 390px) {
+  :root {
+    --scan-container-px:  1.25rem;   /* 20 px */
+  }
+}
+
+
+/* ── md — 640 px (large phone / phablet landscape) ───────────
+   Switches from narrow-phone to comfortable reading layout:
+     • Padding grows to 24 px — matches 1.5× the body font size
+     • Section gap grows to 32 px — more visual breathing room
+     • Card gap grows to 20 px — cards feel less cramped
+   ──────────────────────────────────────────────────────────── */
+@media (min-width: 640px) {
+  :root {
+    --scan-container-px:  1.5rem;    /* 24 px */
+    --scan-section-gap:   2rem;      /* 32 px */
+    --scan-card-gap:      1.25rem;   /* 20 px */
+  }
+}
+
+
+/* ── lg — 1024 px (tablet / wide glass) ─────────────────────
+   Full tablet layout:
+     • Padding grows to 32 px — comfortable at arm's length
+     • Container max-width expands to 768 px for two-column potential
+     • Section gap: 40 px — generous whitespace on larger screens
+     • Card gap: 24 px — cards clearly separated
+   ──────────────────────────────────────────────────────────── */
+@media (min-width: 1024px) {
+  :root {
+    --scan-container-px:  2rem;      /* 32 px */
+    --scan-container-max: var(--scan-container-max-lg);  /* 48rem / 768 px */
+    --scan-section-gap:   2.5rem;    /* 40 px */
+    --scan-card-gap:      1.5rem;    /* 24 px */
+  }
+}
+
+
+/* ============================================================
+   §6  SCAN-SCOPED FLUID LAYOUT ENFORCER  ([data-app="scan"])
+
+   Rules scoped to [data-app="scan"] — the root element set by
+   ScanShell (src/components/ScanShell/ScanShell.tsx) via the
+   `data-app="scan"` attribute on its outer <div>.
+
+   Fluid guarantees provided here:
+     • min-width: 320 px  — layout never collapses below the smallest
+       supported phone width regardless of the device's actual viewport.
+     • width: 100%        — fills the available viewport width on mobile.
+     • overflow-x: clip   — clips any overflowing child content rather
+       than creating a scrollbar; `clip` (vs `hidden`) preserves
+       position:sticky behaviour in descendant elements.
+
+   Typography base:
+     • font-size is NOT set here because globals.css body rule provides
+       the base (0.9375rem / 15 px).  Components use --scan-fs-* tokens.
+     • color and background are NOT set here; surface/ink tokens cascade
+       from the :root and .theme-dark rules in base.css.
+   ============================================================ */
+
+[data-app="scan"] {
+  /* ── Fluid floor ────────────────────────────────────────── */
+  min-width: 320px;
+
+  /* ── Full viewport fill ─────────────────────────────────── */
+  width: 100%;
+
+  /* ── Horizontal overflow guard ──────────────────────────── */
+  overflow-x: clip;
+}
+
+
+/* ============================================================
+   §7  FLUID CONTAINER UTILITY CLASS  (.scan-fluid-container)
+
+   A reusable content-wrapper class for SCAN page components.
+   Consumes the §4 container tokens so that all wrapping concerns
+   (max-width, centering, inline padding) live in a single place.
+
+   Complements the existing .scan-content class in globals.css:
+     • .scan-content      — 640 px fixed max-width cap
+     • .scan-fluid-container — respects --scan-container-max token,
+       which expands to 768 px on tablet via §5 breakpoint override.
+
+   Usage:
+     <div className="scan-fluid-container">   ← plain CSS global class
+     <div className={styles.page}>            ← CSS Module composition:
+                                                composes: scan-fluid-container from global
+
+   These two classes can be stacked as needed.
+   ============================================================ */
+
+.scan-fluid-container {
+  width: 100%;
+  max-width: var(--scan-container-max);
+  margin-inline: auto;
+  padding-inline: var(--scan-container-px);
+}
+
+/* Fluid variant — uses the smooth clamp padding instead of stepped values */
+.scan-fluid-container-smooth {
+  width: 100%;
+  max-width: var(--scan-container-max);
+  margin-inline: auto;
+  padding-inline: var(--scan-container-px-fluid);
+}

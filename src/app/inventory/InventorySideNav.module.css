@@ -1,0 +1,370 @@
+/**
+ * InventorySideNav.module.css — INVENTORY dashboard side navigation
+ *
+ * Styles the nav links list inside the AppShell.sideNav container.
+ *
+ * Structure (inside the 220px sideNav container):
+ *   .sideNav          — inner wrapper; full height, flex column
+ *   .navList          — <ul> with role="list" removing bullet styles
+ *   .navItem          — <li> wrapper
+ *   .navLink          — <a> rendered by next/link
+ *   .navIcon          — 16×16 SVG icon
+ *   .navLabel         — text label
+ *   .sectionHeading   — uppercase category label
+ *   .divider          — hairline separator between groups
+ *
+ * Active state:
+ *   .navLink[data-active="true"] applies the active fill + brand ink color.
+ *   The same selector drives the active icon tint.
+ *
+ * Responsive:
+ *   ≥ 1025px   Full sidebar (220px) — both icon + label visible
+ *   769–1024px Collapsed strip (52px) — icon only; label visually hidden
+ *              Section headings + divider also hidden to save space
+ *   ≤ 768px    Mobile overlay — labels visible again (drawer is full width)
+ *
+ * No hex literals — all colors via design-system CSS custom properties.
+ * Typography: Inter Tight.
+ */
+
+/* ── Inner wrapper ──────────────────────────────────────────────────── */
+
+/**
+ * .sideNav — fills the AppShell sideNav container.
+ * Flex column so nav lists stack and the bottom utility section can be
+ * pushed to the bottom with margin-top: auto on the last list.
+ */
+.sideNav {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.5rem 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Section heading ────────────────────────────────────────────────── */
+
+/**
+ * .sectionHeading — small uppercase category label above a nav group.
+ *
+ * Visually groups map-mode links and management links.
+ * Hidden in collapsed mode via @media (max-width: 1024px).
+ */
+.sectionHeading {
+  padding: 0.625rem 0.875rem 0.25rem;
+
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;     /* 11px */
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── Nav list ───────────────────────────────────────────────────────── */
+
+/**
+ * .navList — removes default list styling applied by globals.css reset.
+ * Provides a small left/right margin so links don't span edge-to-edge.
+ */
+.navList {
+  list-style: none;
+  padding: 0 0.375rem;
+  margin: 0;
+}
+
+/* ── Nav item ───────────────────────────────────────────────────────── */
+
+.navItem {
+  /* No extra margin — links carry their own padding */
+  margin: 0;
+}
+
+/* ── Nav link ───────────────────────────────────────────────────────── */
+
+/**
+ * .navLink — the <a> element rendered by next/link.
+ *
+ * Layout: horizontal flex with icon left + label right.
+ * Padding provides the touch target (min 40px height).
+ * Border-radius rounds the pill-shaped hover/active fill.
+ *
+ * Transitions:
+ *   background, color, and box-shadow animate on hover/active to match
+ *   the --shell-nav-transition timing from the AppShell.
+ *
+ * Active indicator:
+ *   A 3px inset left bar (box-shadow: inset 3px 0 0 var(--ink-brand))
+ *   acts as the active page indicator.  Uses box-shadow so it doesn't
+ *   affect layout or break the border-radius shape.  Transparent by
+ *   default so the transition starts from a zero-width state.
+ *
+ * Text overflow:
+ *   nowrap + overflow hidden + text-overflow ellipsis prevents the label
+ *   from wrapping inside the 220px container.
+ */
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;           /* 10px between icon and label */
+
+  padding: 0.5rem 0.625rem; /* 8px 10px — generous touch target */
+  border-radius: 0.375rem;  /* 6px — subtle pill shape */
+
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;      /* 14px */
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--ink-secondary);
+  text-decoration: none;
+
+  white-space: nowrap;
+  overflow: hidden;
+
+  /* Smooth state transitions */
+  background: var(--surface-sidebar-item);
+  /* Transparent indicator bar — transition target for active state */
+  box-shadow: inset 3px 0 0 transparent;
+  transition:
+    background var(--shell-nav-transition, 220ms ease),
+    color var(--shell-nav-transition, 220ms ease),
+    box-shadow var(--shell-nav-transition, 220ms ease);
+}
+
+/* ── Hover state ──────────────────────────────────────────────────── */
+
+.navLink:hover {
+  background: var(--surface-sidebar-hover);
+  color: var(--ink-primary);
+}
+
+/* ── Active state ─────────────────────────────────────────────────── */
+
+/**
+ * [data-active="true"] — current page / selected map mode.
+ *
+ * Three-part active signal:
+ *   1. Background fill — brand-tinted surface-sidebar-active
+ *   2. Text + icon color — ink-brand via currentColor
+ *   3. Left indicator bar — 3px inset box-shadow in ink-brand
+ *
+ * The indicator bar uses box-shadow (not border) so it:
+ *   • Does not shift layout / consume space
+ *   • Respects the element's border-radius corners
+ *   • Transitions smoothly from the transparent default
+ *
+ * aria-current="page" is also set on the active <a> element for
+ * screen reader / assistive technology visibility (see NavLink component).
+ */
+.navLink[data-active="true"] {
+  background: var(--surface-sidebar-active);
+  color: var(--ink-brand);
+  font-weight: 600;
+  /* Active page indicator — 3px left accent bar */
+  box-shadow: inset 3px 0 0 var(--ink-brand);
+}
+
+.navLink[data-active="true"]:hover {
+  /* Keep active fill and indicator on hover — don't switch to hover state */
+  background: var(--surface-sidebar-active);
+  color: var(--ink-brand);
+  box-shadow: inset 3px 0 0 var(--ink-brand);
+}
+
+/* ── Focus visible ────────────────────────────────────────────────── */
+
+.navLink:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+/* ── Nav icon ─────────────────────────────────────────────────────── */
+
+/**
+ * .navIcon — 16×16 SVG icon.
+ *
+ * flex-shrink: 0 prevents the icon from compressing when the label is long.
+ * color is inherited from .navLink so active/hover state changes the icon
+ * tint automatically via currentColor.
+ */
+.navIcon {
+  width: 1rem;          /* 16px */
+  height: 1rem;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+/* ── Nav label ────────────────────────────────────────────────────── */
+
+/**
+ * .navLabel — the text label alongside the icon.
+ *
+ * text-overflow: ellipsis clips long labels inside the 220px container.
+ * Visually hidden in collapsed mode via @media (max-width: 1024px).
+ */
+.navLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Divider ──────────────────────────────────────────────────────── */
+
+/**
+ * .divider — hairline separator between primary and secondary nav groups.
+ *
+ * Uses border-top rather than border (avoids double border with reset).
+ * Horizontal margin matches the list padding so it aligns with the items.
+ */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 0.5rem 0.875rem;
+}
+
+/* ── Collapsed mode (769–1024px) ──────────────────────────────────── */
+
+/**
+ * At medium viewports (769–1024px) the shell collapses the sidenav to
+ * var(--shell-sidenav-width-collapsed) = 52px.
+ *
+ * In this mode:
+ *   — Section headings are hidden (no room for text)
+ *   — Divider is kept but with reduced horizontal margin
+ *   — Nav labels are visually hidden (sr-only pattern)
+ *   — Nav links become centred icon squares
+ *   — The icon retains its 16×16 size
+ *
+ * title attribute on the <a> elements provides tooltip-style hover labels
+ * via the browser's native title tooltip mechanism.
+ */
+@media (max-width: 1024px) {
+  .sectionHeading {
+    /* Visually hidden but keep spacing in DOM */
+    overflow: hidden;
+    height: 0;
+    padding: 0;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .divider {
+    margin: 0.5rem 0.5rem;
+  }
+
+  .navList {
+    padding: 0 0.25rem;
+  }
+
+  .navLink {
+    /* Center the icon within the collapsed strip */
+    justify-content: center;
+    padding: 0.625rem 0;
+    gap: 0;
+  }
+
+  /*
+   * In collapsed icon-only mode the left indicator bar is suppressed
+   * because the icon is centred and a one-sided shadow would be off-axis.
+   * The background fill + icon brand color still signal the active state.
+   */
+  .navLink[data-active="true"] {
+    box-shadow: none;
+  }
+
+  .navLabel {
+    /* Visually hidden — screen reader accessible via aria-current */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+/* ── Mobile overlay (≤ 768px) ─────────────────────────────────────── */
+
+/**
+ * On mobile (≤ 768px) the sidenav becomes a full-width overlay drawer.
+ * Labels are visible again; layout matches the full desktop mode.
+ */
+@media (max-width: 768px) {
+  .sectionHeading {
+    /* Restore full display for the overlay drawer */
+    overflow: visible;
+    height: auto;
+    padding: 0.625rem 0.875rem 0.25rem;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .navList {
+    padding: 0 0.375rem;
+  }
+
+  .navLink {
+    justify-content: flex-start;
+    padding: 0.5rem 0.625rem;
+    gap: 0.625rem;
+  }
+
+  .navLabel {
+    /* Restore visible label in the mobile overlay */
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
+  }
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .navLink {
+    transition: none;
+  }
+}
+
+/* ── Dark theme ───────────────────────────────────────────────────────
+   All colors above reference semantic tokens that are overridden by the
+   .theme-dark class on <html> (base.css §3 and §5h):
+
+     --surface-sidebar        → --_n-900  (outer panel fill in AppShell)
+     --surface-sidebar-item   → transparent   (unchanged in dark)
+     --surface-sidebar-hover  → --_n-800  (nav link hover fill)
+     --surface-sidebar-active → --_b-900  (active/selected link fill — dark brand tint)
+
+     --ink-primary            → --_n-50   (primary text — nav links default)
+     --ink-secondary          → --_n-300  (nav link default color)
+     --ink-tertiary           → --_n-500  (section headings)
+     --ink-brand              → --_b-300  (active link text + icon + left indicator bar)
+
+     --border-subtle          → --_n-850  (divider between primary + secondary groups)
+     --border-focus           → --_b-400  (focus-visible outline on links)
+
+   The active nav link left indicator bar (inset 3px box-shadow) uses
+   --ink-brand which becomes --_b-300 in dark mode — a bright blue that
+   provides ≥ 4.5:1 contrast against --_b-900 (--surface-sidebar-active).
+
+   The DeploymentIcon SVG uses fill="var(--surface-sidebar)" as a cutout
+   to match the panel background.  In dark mode, --surface-sidebar is
+   --_n-900, so the cutout correctly matches the dark panel surface.
+
+   No component-level dark-mode overrides are needed — the token cascade
+   handles all color adjustments automatically.
+   ────────────────────────────────────────────────────────────────── */

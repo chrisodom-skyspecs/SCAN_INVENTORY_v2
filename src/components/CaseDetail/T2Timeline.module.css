@@ -1,0 +1,796 @@
+/**
+ * T2Timeline.module.css
+ *
+ * Full-height scrollable vertical spine timeline layout.
+ * The "timeline-is-the-page" structure for the T2 case detail slot.
+ *
+ * Design constraints:
+ *   • No hex literals — all colors via CSS custom properties (var(--*))
+ *   • WCAG AA contrast in both light and dark themes
+ *   • Reduced-motion: no transitions under prefers-reduced-motion
+ *   • Inter Tight for headings, labels, actor names, and metadata text
+ *   • IBM Plex Mono for timestamps, case labels, tracking numbers, and coordinates
+ *
+ * Token families used:
+ *   --surface-*         background surfaces
+ *   --border-*          border and divider lines
+ *   --ink-*             text colors (primary, secondary, tertiary, disabled, brand)
+ *   --layer-transit-*   transit-colored dots (shipped, inspection started)
+ *   --layer-deployed-*  success-colored dots (inspection completed, delivered)
+ *   --signal-error-*    error-colored dots (damage reported)
+ *   --surface-brand     brand-colored dots (status change, mission assigned)
+ *   --layer-history-*   neutral dots (custody handoff, template applied)
+ *   --elevation-focus   keyboard focus ring
+ *
+ * Spine anatomy:
+ *   .spineCol contains a .dot and an optional .thread (vertical line).
+ *   The .thread is hidden on the last event via :last-child.
+ *   The .dot receives data-variant="brand|transit|success|error|neutral"
+ *   and data-no-location="true" for missing-GPS visual treatment.
+ */
+
+/* ── Root container ──────────────────────────────────────────────────────── */
+
+/**
+ * .root fills the panel body without setting its own height or overflow.
+ * The CaseDetailPanel .body (overflow-y:auto, flex:1) handles scrolling.
+ * This keeps the vertical spine continuous from top to bottom of the event
+ * list — no extra nested scroll containers that would clip the spine thread.
+ */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+}
+
+/* ── Panel header ─────────────────────────────────────────────────────────── */
+
+/**
+ * .panelHeader is a sticky header that stays at the top of the .body scroll
+ * area so the event count and sort toggle are always visible.
+ *
+ * The negative top value compensates for the panel body's padding (1.25rem)
+ * so the header sits flush against the top edge of the scroll viewport.
+ * background-color matches the panel surface so events scroll beneath it.
+ */
+.panelHeader {
+  position: sticky;
+  top: -1.25rem; /* compensate for .body padding: 1.25rem */
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.875rem 0 0.625rem;
+  background-color: var(--surface-raised);
+  /* Subtle shadow so scrolling events slide under the header cleanly */
+  box-shadow: 0 1px 0 var(--border-subtle);
+  margin-bottom: 0.75rem;
+}
+
+.panelHeaderLeft {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.panelTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Event count badge — IBM Plex Mono for tabular numeric content */
+.countBadge {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  flex-shrink: 0;
+}
+
+/* Sort toggle — ghost button, no background by default */
+.sortToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+  user-select: none;
+}
+
+.sortToggle:hover {
+  background-color: var(--surface-hover);
+  color: var(--ink-primary);
+  border-color: var(--border-default);
+}
+
+.sortToggle:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sortToggle {
+    transition: none;
+  }
+}
+
+.sortIcon {
+  font-size: 0.75rem;
+  line-height: 1;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ── Case identity row ────────────────────────────────────────────────────── */
+
+.caseIdentity {
+  display: flex;
+  align-items: baseline;
+  gap: 0.625rem;
+  margin-bottom: 0.125rem;
+}
+
+/* Case label — IBM Plex Mono for code-like identifiers */
+.caseLabel {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ink-primary);
+  line-height: 1.25;
+}
+
+/* Current status — small subdued text alongside the case label */
+.currentStatus {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+}
+
+/* ── Vertical spine timeline wrapper ──────────────────────────────────────── */
+
+/**
+ * .timeline is now a <div role="group"> wrapper containing date-grouped
+ * <section> elements.  It is no longer a <ol> — the per-day <ol>s live inside
+ * each .dateGroup section.
+ *
+ * Carries the overall aria-label ("N lifecycle events for case LABEL") and the
+ * data-sort attribute for sort-order CSS queries in tests.
+ */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Date group section ────────────────────────────────────────────────────── */
+
+/**
+ * .dateGroup wraps one calendar day's worth of events.
+ * Contains a sticky .dateHeader + an .eventList <ol>.
+ */
+.dateGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Sticky date header ────────────────────────────────────────────────────── */
+
+/**
+ * Date headers (role="heading" aria-level={4}) pin to the top of the
+ * scrollable panel viewport beneath the panelHeader as the user scrolls.
+ *
+ * Sticky offset calculation
+ * ─────────────────────────
+ * The scroll ancestor (.body) has padding: 1.25rem.
+ * panelHeader uses top: -1.25rem to compensate and appear flush at the top.
+ * panelHeader visual height ≈ 2.375rem
+ *   (padding-top: 0.875rem + title line: ~0.875rem + padding-bottom: 0.625rem)
+ *
+ * So date headers should appear at panelHeader's visual bottom:
+ *   top = 2.375rem − 1.25rem (body-padding compensation) = 1.125rem
+ *
+ * z-index: 1 keeps date headers below the panelHeader (z-index: 2) so events
+ * scroll under date headers, and date headers scroll under the panelHeader.
+ *
+ * background-color: var(--surface-raised) matches the panel surface so
+ * scrolling events slide cleanly behind the opaque header chip.
+ */
+.dateHeader {
+  position: sticky;
+  top: 1.125rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3125rem 0;
+  background-color: var(--surface-raised);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-top: 0.375rem;
+  margin-bottom: 0.5rem;
+  /* Prevent content from bleeding through on fast scroll */
+  backdrop-filter: none;
+}
+
+/**
+ * Remove the top margin from the very first date header so it sits flush
+ * below the <hr> divider without extra whitespace.
+ */
+.dateGroup:first-child .dateHeader {
+  margin-top: 0;
+}
+
+/* Date label text — small uppercase caps like the panelTitle style family */
+.dateHeaderLabel {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  line-height: 1.5;
+  user-select: none;
+}
+
+/* Event count chip per date group */
+.dateHeaderCount {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-disabled);
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.3125rem;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+
+/* ── Per-day event ordered list ────────────────────────────────────────────── */
+
+/**
+ * .eventList is an <ol> within each .dateGroup section.
+ * It carries the semantic ordered-list structure for each day's events.
+ */
+.eventList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Single timeline event item ───────────────────────────────────────────── */
+
+.eventItem {
+  display: grid;
+  /**
+   * 2rem: spine column (dot + thread centered in this column)
+   * 1fr:  content column (event details, full remaining width)
+   */
+  grid-template-columns: 2rem 1fr;
+  grid-template-areas: "spine content";
+  gap: 0;
+  align-items: start;
+}
+
+/* ── Spine column ─────────────────────────────────────────────────────────── */
+
+.spineCol {
+  grid-area: spine;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding-top: 0.125rem; /* vertical align dot with first line of event type text */
+}
+
+/* ── Event dot ────────────────────────────────────────────────────────────── */
+
+/**
+ * Semantic-colored dot for each event type.
+ * Size is larger than JourneyTimeline's numbered badges — this is the primary
+ * view, so the dots carry more visual weight.
+ *
+ * Color is controlled via data-variant:
+ *   brand   — var(--surface-brand), white icon fill
+ *   transit — var(--layer-transit-bg)
+ *   success — var(--layer-deployed-bg)
+ *   error   — var(--signal-error-fill)
+ *   neutral — var(--layer-history-subtle), bordered
+ *
+ * data-no-location — dashed border signals missing GPS fix.
+ */
+.dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  z-index: 1;
+  /* Inner ring — surface-raised creates a "halo" between dot and thread */
+  box-shadow: 0 0 0 2px var(--surface-raised);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+
+  /* Default (neutral) */
+  background-color: var(--layer-history-subtle);
+  border: 1.5px solid var(--layer-history-border);
+}
+
+/* Variant: brand (status_change, mission_assigned) */
+.dot[data-variant="brand"] {
+  background-color: var(--surface-brand);
+  border-color: var(--surface-brand);
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3px var(--surface-brand);
+}
+
+/* Variant: transit (inspection_started, shipped) */
+.dot[data-variant="transit"] {
+  background-color: var(--layer-transit-bg);
+  border-color: var(--layer-transit-border);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+/* Variant: success (inspection_completed, delivered) */
+.dot[data-variant="success"] {
+  background-color: var(--layer-deployed-bg);
+  border-color: var(--layer-deployed-border);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+/* Variant: error (damage_reported) */
+.dot[data-variant="error"] {
+  background-color: var(--signal-error-fill);
+  border-color: var(--signal-error-border);
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3px var(--signal-error-border);
+}
+
+/* No-location indicator — dashed border, muted fill */
+.dot[data-no-location="true"] {
+  background-color: var(--surface-sunken);
+  border-style: dashed;
+  border-color: var(--border-default);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+/* First event — slightly larger dot to anchor the timeline visually */
+.eventItem[data-is-first="true"] .dot {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* Last event — accent ring to mark the most recent activity */
+.eventItem[data-is-last="true"] .dot {
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3.5px var(--border-brand);
+}
+
+/* Last + brand variant: single combined ring */
+.eventItem[data-is-last="true"] .dot[data-variant="brand"] {
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3.5px var(--surface-brand);
+}
+
+/* Last + error variant: error ring remains */
+.eventItem[data-is-last="true"] .dot[data-variant="error"] {
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3.5px var(--signal-error-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    transition: none;
+  }
+}
+
+/* ── Spine thread (vertical connector line) ────────────────────────────────── */
+
+/**
+ * The thread extends from below the dot to the top of the next event.
+ * It is hidden on the last event via CSS attribute selector so the spine
+ * appears continuous only while there are more events to connect.
+ *
+ * The thread takes flex: 1 so it stretches to exactly fill the gap between
+ * events (driven by the content column's height, not a fixed pixel value).
+ */
+.thread {
+  width: 1.5px;
+  flex: 1;
+  min-height: 1.5rem; /* minimum thread length to connect short events */
+  background-color: var(--border-default);
+  margin-top: 0.1875rem;
+  border-radius: 9999px;
+}
+
+/* Hide the thread when following the last event item */
+.eventItem[data-is-last="true"] .thread {
+  display: none;
+}
+
+/* ── Content column ────────────────────────────────────────────────────────── */
+
+.contentCol {
+  grid-area: content;
+  padding: 0 0 1.5rem 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+
+/* Tighter bottom padding on the last event — the thread is gone, so
+   visual weight is balanced by the panel's own bottom padding. */
+.eventItem[data-is-last="true"] .contentCol {
+  padding-bottom: 0.5rem;
+}
+
+/* ── Event header ─────────────────────────────────────────────────────────── */
+
+.eventHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+
+.eventType {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+  line-height: 1.3;
+}
+
+/* Damage reported: emphasize the label in error color */
+.eventItem[data-event-type="damage_reported"] .eventType {
+  color: var(--signal-error-text);
+}
+
+/* ── Actor + timestamp meta line ───────────────────────────────────────────── */
+
+.eventMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 0;  /* zero-size container; children set their own font-size */
+  line-height: 0;
+}
+
+.actorName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  line-height: 1.4;
+}
+
+/* Separator dot between actor and timestamp */
+.metaSep {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-disabled);
+  line-height: 1.4;
+  user-select: none;
+}
+
+/* Timestamp — IBM Plex Mono for data content */
+.timestamp {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+
+/* ── Event metadata detail line ────────────────────────────────────────────── */
+
+/**
+ * .eventDetail is the per-event-type metadata summary rendered below the meta
+ * line.  The detail spans vary by event type — see EventMetaDetail in the TSX.
+ */
+.eventDetail {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+  line-height: 1.4;
+}
+
+/* Status change: from → to transition labels */
+.statusFrom {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  text-transform: capitalize;
+}
+
+.statusArrow {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-disabled);
+  flex-shrink: 0;
+}
+
+.statusTo {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-primary);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Custody handoff: from user → to user */
+.custodyFrom {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+}
+
+.custodyTo {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+/* Shipment: tracking number */
+.trackingNumber {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-brand);
+  letter-spacing: 0.01em;
+}
+
+/* Shipment: route summary "Origin → Destination" */
+.routeSummary {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+}
+
+/* ── Location line ─────────────────────────────────────────────────────────── */
+
+.location {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  margin: 0;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.locationMissing {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.5625rem;
+  color: var(--ink-disabled);
+  font-style: italic;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Loading skeleton ──────────────────────────────────────────────────────── */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.25rem 0;
+}
+
+.skeletonItem {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  grid-template-areas: "spine content";
+  gap: 0;
+  align-items: start;
+}
+
+.skeletonSpineCol {
+  grid-area: spine;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding-top: 0.125rem;
+}
+
+.skeletonDot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  flex-shrink: 0;
+}
+
+.skeletonThread {
+  width: 1.5px;
+  height: 2.75rem;
+  background: var(--border-subtle);
+  margin-top: 0.1875rem;
+}
+
+.skeletonContentCol {
+  grid-area: content;
+  padding: 0 0 0.875rem 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+}
+
+.skeletonLine {
+  border-radius: 0.25rem;
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-hover) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 400% 100%;
+  animation: t2-shimmer 1.4s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonLine {
+    animation: none;
+  }
+}
+
+@keyframes t2-shimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.skeletonLineTitle {
+  height: 0.8125rem;
+  width: 55%;
+}
+
+.skeletonLineMeta {
+  height: 0.6875rem;
+  width: 70%;
+}
+
+.skeletonLineDetail {
+  height: 0.625rem;
+  width: 40%;
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied automatically when html.theme-dark is active.
+   Token cascade handles most color swaps; these selectors
+   address elements that need additional visual polish in
+   dark mode beyond what the token remapping provides.
+   ============================================================ */
+
+/*
+ * Panel header sticky background — surface-raised in dark mode needs
+ * a slightly stronger shadow to separate from scrolled-under events.
+ */
+:global(.theme-dark) .panelHeader {
+  box-shadow: 0 1px 0 var(--border-default);
+}
+
+/*
+ * Count badge border — subtle border is nearly invisible against dark
+ * sunken background; bump to default for chip shape readability.
+ */
+:global(.theme-dark) .countBadge {
+  border-color: var(--border-default);
+}
+
+/*
+ * Sort toggle — default border too faint on dark surface;
+ * use border-default for button outline readability.
+ */
+:global(.theme-dark) .sortToggle {
+  border-color: var(--border-default);
+}
+
+/*
+ * Spine thread — border-default in dark mode (--_n-800) provides better
+ * contrast against the dark surface than the light-mode value.
+ * thread already uses --border-default; this overrides to a stronger token
+ * so the vertical line is clearly visible in deep dark palette.
+ */
+:global(.theme-dark) .thread {
+  background-color: var(--border-strong);
+  opacity: 0.5;
+}
+
+/*
+ * Neutral dot (data-variant="neutral") — history-subtle is too close
+ * to the dark surface; add default border for shape definition.
+ */
+:global(.theme-dark) .dot {
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+:global(.theme-dark) .dot[data-no-location="true"] {
+  border-color: var(--border-default);
+}
+
+/*
+ * Damage type label — error text may need a slight brightness boost
+ * in dark mode for contrast; the token remapping handles this automatically
+ * via --signal-error-text dark override. No extra rule needed here.
+ */
+
+/*
+ * Skeleton shimmer — use surface-active (lighter in dark mode) for
+ * a more visible shimmer motion.
+ */
+:global(.theme-dark) .skeletonLine {
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-active) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 400% 100%;
+}
+
+:global(.theme-dark) .skeletonThread {
+  background-color: var(--border-default);
+}
+
+/*
+ * Date header — dark mode overrides.
+ *
+ * The sticky date header needs a stronger bottom border in dark mode so the
+ * dividing line between the header and the first event remains legible against
+ * the dark surface.  border-subtle (--_n-850) blends into the dark surface;
+ * border-default (--_n-800) provides 9 lightness points of contrast.
+ *
+ * The count chip border is bumped to border-default for the same reason.
+ */
+:global(.theme-dark) .dateHeader {
+  border-bottom-color: var(--border-default);
+  /* Strengthen the visual separation from scrolling content below */
+  box-shadow: 0 1px 0 var(--border-default);
+}
+
+:global(.theme-dark) .dateHeaderCount {
+  border-color: var(--border-default);
+  color: var(--ink-tertiary);
+}

@@ -1,0 +1,628 @@
+/**
+ * GlobalSearchModal.module.css — INVENTORY global search overlay
+ *
+ * Two-layer structure:
+ *   1. .backdrop  — full-viewport translucent scrim that captures backdrop clicks
+ *   2. .dialog    — centered panel with search input + results region
+ *
+ * Animation strategy:
+ *   We drive enter/exit via the `data-state` attribute on each element:
+ *     data-state="open"   → enter keyframe plays (fade-in + scale-up)
+ *     data-state="closed" → exit keyframe plays (fade-out + scale-down)
+ *
+ *   Two keyframe pairs:
+ *     @keyframes backdropIn / backdropOut — backdrop opacity
+ *     @keyframes dialogIn   / dialogOut   — dialog opacity + transform
+ *
+ *   Duration:
+ *     Enter: 200ms ease-out  (snappy appearance)
+ *     Exit:  180ms ease-in   (slightly faster disappearance, matches exitTimerRef)
+ *
+ * Design tokens (no hex literals):
+ *   --scrim-overlay         backdrop background
+ *   --surface-overlay       dialog background (white / dark surface)
+ *   --surface-raised        input background / hover fill
+ *   --surface-sunken        body / results area background
+ *   --surface-hover         hover fills
+ *   --surface-brand-subtle  results highlight tint
+ *   --border-subtle         dividers
+ *   --border-default        input border
+ *   --border-focus          focus ring color
+ *   --border-focus-ring     focus ring outer color
+ *   --ink-primary           primary text
+ *   --ink-secondary         secondary text
+ *   --ink-tertiary          placeholder / meta text
+ *   --ink-brand             brand-colored text (result match)
+ *   --elevation-4           dialog shadow
+ *   --elevation-focus       focus ring shadow
+ *
+ * Typography:
+ *   "Inter Tight" — UI labels, input, buttons
+ *   "IBM Plex Mono" — kbd hints, case IDs (data content)
+ *
+ * z-index:
+ *   .backdrop sits at z-index 900 — above the navbar (200) and side nav (100)
+ *   but below any future toast layer (1000+).
+ */
+
+/* ── Keyframes ───────────────────────────────────────────────────────────── */
+
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes backdropOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes dialogOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(-8px);
+  }
+}
+
+/* ── Screen-reader only utility ──────────────────────────────────────────── */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Backdrop ────────────────────────────────────────────────────────────── */
+
+/**
+ * .backdrop — full-viewport fixed overlay that dims the page behind the dialog.
+ *
+ * Positioned fixed so it covers the entire viewport regardless of scroll
+ * position or ancestor overflow constraints.  z-index 900 sits above all
+ * INVENTORY chrome (navbar z-200, sidenav z-100, nav-overlay z-150).
+ *
+ * The backdrop element itself is the click target for "click outside to close".
+ * The dialog panel stops click propagation so inner clicks don't reach here.
+ *
+ * backdrop-filter: blur(2px) — very subtle defocus on the page content.
+ * Not as heavy as the LabelPreviewModal (3px) to keep the map readable.
+ */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+
+  /* Scrim tint */
+  background-color: var(--scrim-overlay);
+
+  /* Centering for the dialog — horizontal center, slight top offset */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8vh;
+
+  /* Subtle backdrop blur */
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+
+  /* Prevent pointer events from leaking to underlying page content */
+  touch-action: none;
+}
+
+/* Entry animation */
+.backdrop[data-state="open"] {
+  animation: backdropIn 200ms ease-out both;
+}
+
+/* Exit animation */
+.backdrop[data-state="closed"] {
+  animation: backdropOut 180ms ease-in both;
+}
+
+/* ── Dialog panel ─────────────────────────────────────────────────────────── */
+
+/**
+ * .dialog — the search modal panel: input header + results body.
+ *
+ * Sizing:
+ *   width: min(92vw, 40rem) — responsive, never wider than 640px.
+ *   max-height: 70vh        — leaves breathing room at the bottom.
+ *
+ * Layout: flex column (header / divider / body), body scrolls.
+ */
+.dialog {
+  position: relative;
+  width: min(92vw, 40rem);
+  max-height: 70vh;
+
+  background: var(--surface-overlay);
+  border-radius: 0.875rem;
+  box-shadow: var(--elevation-4);
+  border: 1px solid var(--border-subtle);
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  /* Typography defaults */
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  color: var(--ink-primary);
+
+  /* Prevent the dialog from capturing backdrop clicks */
+  pointer-events: auto;
+}
+
+/* Entry animation */
+.dialog[data-state="open"] {
+  animation: dialogIn 200ms ease-out both;
+}
+
+/* Exit animation */
+.dialog[data-state="closed"] {
+  animation: dialogOut 180ms ease-in both;
+}
+
+/* ── Header — search form row ─────────────────────────────────────────────── */
+
+/**
+ * .header — full-width flex row containing the search form + close button.
+ *
+ * Padding: 0.75rem 0.875rem (12px top/bottom, 14px sides).
+ * height: ~52px — matches the navbar height for visual continuity.
+ * flex-shrink: 0 — never collapses when results area grows.
+ */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  flex-shrink: 0;
+}
+
+/* ── Search form ─────────────────────────────────────────────────────────── */
+
+/**
+ * .searchForm — flex row: [icon] [input] [clear button].
+ *
+ * flex: 1 fills available header space between the icon and the close button.
+ * Styled as a pill-shaped input group.
+ */
+.searchForm {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: 0.5rem;
+  min-width: 0;
+
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.searchForm:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--border-focus-ring, var(--border-focus));
+  outline: none;
+}
+
+/* ── Search icon ─────────────────────────────────────────────────────────── */
+
+.searchIcon {
+  width: 1.125rem;   /* 18px */
+  height: 1.125rem;
+  flex-shrink: 0;
+  color: var(--ink-tertiary);
+}
+
+/* ── Search input ─────────────────────────────────────────────────────────── */
+
+/**
+ * .searchInput — the main text input inside the search form.
+ *
+ * Appearance reset: removes native browser search-input chrome (clear button,
+ * magnifying glass icon, caret colour) for cross-browser consistency.
+ *
+ * flex: 1 + min-width: 0 — fills remaining space, prevents overflow.
+ */
+.searchInput {
+  flex: 1;
+  min-width: 0;
+
+  /* Reset */
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+
+  /* Typography */
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;   /* 15px */
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink-primary);
+
+  /* Suppress browser "x" in search input */
+}
+
+.searchInput::placeholder {
+  color: var(--ink-tertiary);
+  font-weight: 400;
+}
+
+/* Remove Webkit / Edge search cancel button (we render our own) */
+.searchInput::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ── Clear button ────────────────────────────────────────────────────────── */
+
+/**
+ * .clearButton — icon button that clears the search query.
+ *
+ * 24×24px touch target.  Only rendered when query is non-empty.
+ * Uses flex-shrink: 0 to stay pinned at the right edge of the input row.
+ */
+.clearButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;   /* 24px */
+  height: 1.5rem;
+  flex-shrink: 0;
+  padding: 0;
+
+  background: transparent;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  color: var(--ink-tertiary);
+
+  transition: background-color 100ms ease, color 100ms ease;
+}
+
+.clearButton:hover {
+  background-color: var(--surface-hover);
+  color: var(--ink-primary);
+}
+
+.clearButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.clearIcon {
+  width: 0.875rem;   /* 14px */
+  height: 0.875rem;
+}
+
+/* ── Close button ────────────────────────────────────────────────────────── */
+
+/**
+ * .closeButton — "Esc" badge button that closes the modal.
+ *
+ * Renders as a keyboard-hint pill rather than a standard icon button.
+ * The visual cue ("Esc") doubles as the label and reinforces the keyboard
+ * shortcut, keeping the cognitive load low.
+ */
+.closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 0.25rem;
+
+  transition: opacity 100ms ease;
+}
+
+.closeButton:hover {
+  opacity: 0.72;
+}
+
+.closeButton:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+  border-radius: 0.375rem;
+}
+
+/**
+ * .closeBadge — pill-shaped "Esc" chip that renders inside the close button.
+ *
+ * Visually communicates the keyboard shortcut.
+ * Uses IBM Plex Mono to match kbd-style hints in the navbar.
+ */
+.closeBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.3125rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;   /* 11px */
+  font-weight: 500;
+  color: var(--ink-secondary);
+  letter-spacing: 0.02em;
+  line-height: 1;
+
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* ── Divider ─────────────────────────────────────────────────────────────── */
+
+.divider {
+  height: 1px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+
+/**
+ * .body — scrollable results area.
+ *
+ * flex: 1 + min-height: 0 — fills remaining dialog height and enables
+ * overflow-y: auto scrolling without growing the dialog beyond max-height.
+ *
+ * padding: 0.75rem — breathing room around empty state / results.
+ */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+
+/**
+ * .emptyState — shown when the search query is empty.
+ *
+ * Centered column: icon → title → subtitle → keyboard shortcuts.
+ * Provides contextual guidance without feeling like an error.
+ */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2rem 1rem 1.5rem;
+  gap: 0.5rem;
+}
+
+.emptyIcon {
+  width: 2rem;   /* 32px */
+  height: 2rem;
+  color: var(--ink-tertiary);
+  opacity: 0.6;
+  margin-bottom: 0.25rem;
+}
+
+.emptyTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.emptySubtitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;   /* 13px */
+  font-weight: 400;
+  color: var(--ink-tertiary);
+  margin: 0;
+  line-height: 1.5;
+  max-width: 24rem;
+}
+
+/* ── Shortcut reference list ─────────────────────────────────────────────── */
+
+.shortcutList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-sunken);
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+  width: 100%;
+  max-width: 16rem;
+}
+
+.shortcutRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.shortcutKey {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+/**
+ * .kbd — keyboard key chip matching the navbar's keyboard hint style.
+ *
+ * IBM Plex Mono, 10px, sunken background, 1px border.
+ */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.3125rem;
+  border-radius: 0.25rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;   /* 10px */
+  font-weight: 500;
+  color: var(--ink-secondary);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.shortcutDesc {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;   /* 12px */
+  font-weight: 400;
+  color: var(--ink-tertiary);
+  line-height: 1.3;
+  margin: 0;
+}
+
+/* ── Results placeholder ─────────────────────────────────────────────────── */
+
+/**
+ * .resultsPlaceholder — shown when query is non-empty but search results are
+ * not yet implemented (subsequent AC).  Provides visual feedback that the
+ * query was accepted.
+ */
+.resultsPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 1.5rem 1rem;
+  gap: 0.375rem;
+}
+
+.resultsPlaceholderText {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.resultsQuery {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  color: var(--ink-brand);
+  font-weight: 600;
+}
+
+.resultsPlaceholderSub {
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+
+/**
+ * Suppress all animations for users who prefer reduced motion.
+ * The modal still appears/disappears but without any transform or fade.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .backdrop {
+    animation: none;
+  }
+
+  .dialog {
+    animation: none;
+  }
+
+  .backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+/**
+ * On very narrow screens (≤ 480px), the dialog expands to full width and
+ * slides in from the top rather than centering. This matches the pattern
+ * used by LabelPreviewModal on mobile.
+ */
+@media (max-width: 480px) {
+  .backdrop {
+    padding-top: 0;
+    align-items: flex-start;
+  }
+
+  .dialog {
+    width: 100vw;
+    max-height: 80dvh;
+    border-radius: 0 0 0.875rem 0.875rem;
+  }
+
+  @keyframes dialogIn {
+    from {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes dialogOut {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+  }
+}
+
+/* ── Dark theme ──────────────────────────────────────────────────────────── */
+
+/*
+ * All colors reference semantic tokens that are overridden by .theme-dark in
+ * base.css §3.  No additional rules are needed — the token layer handles it.
+ *
+ * The box-shadow (elevation-4) is also overridden in base.css §3 for dark mode.
+ */
