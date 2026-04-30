@@ -146,6 +146,15 @@ async function renderM1() {
   );
 }
 
+async function renderM1WithMapboxToken() {
+  const { M1FleetOverview } = await import("../M1FleetOverview");
+  render(
+    <LayerEngineProvider initialState={{ history: true, turbines: true }}>
+      <M1FleetOverview mapboxToken="test-mapbox-token" />
+    </LayerEngineProvider>
+  );
+}
+
 // ─── Helper: render with engine extractor ─────────────────────────────────────
 
 async function renderM1WithEngine(): Promise<{ engine: LayerEngine }> {
@@ -506,7 +515,18 @@ describe("M1FleetOverview — Filtered marker set (pin list)", () => {
   });
 });
 
-// ─── 7. Keyboard accessibility ────────────────────────────────────────────────
+// ─── 7. Mapbox-token overlay fallback ─────────────────────────────────────────
+
+describe("M1FleetOverview — Mapbox-token overlay fallback", () => {
+  it("renders history and turbine overlays in fallback mode inside M1's plain map container", async () => {
+    await renderM1WithMapboxToken();
+
+    expect(screen.getByTestId("turbine-layer-fallback")).toBeTruthy();
+    expect(screen.getByTestId("history-trail-fallback")).toBeTruthy();
+  });
+});
+
+// ─── 8. Keyboard accessibility ────────────────────────────────────────────────
 
 describe("M1FleetOverview — Layers button keyboard accessibility", () => {
   it("Enter key on focused button opens the panel", async () => {

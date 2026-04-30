@@ -473,10 +473,13 @@ export function M1FleetOverview({
                 Reads `state.turbines` from LayerEngine via useTurbineLayer.
                 showToggle renders an in-map toggle button at top-right.
                 showLegend renders a floating legend at bottom-left.
-                The Source+Layer children activate only when the toggle is ON.
+                M1 currently renders a plain map container, not react-map-gl's
+                <Map>, so use fallbackMode to avoid registering <Source>/<Layer>
+                without a Map context.
                 missionId scopes markers to the selected org (mission). */}
             <TurbineLayer
               missionId={org ?? null}
+              fallbackMode={true}
               showToggle={true}
               showLegend={true}
             />
@@ -484,9 +487,12 @@ export function M1FleetOverview({
             {/* History trails toggle + overlay.
                 Reads `state.history` from LayerEngine via useHistoryTrail.
                 showToggle renders an in-map button; showLegend shows the legend.
-                The Source+Layer children activate only when the toggle is ON. */}
+                M1 currently renders a plain map container, not react-map-gl's
+                <Map>, so use fallbackMode to avoid registering <Source>/<Layer>
+                without a Map context. */}
             <HistoryTrailLayer
               missionId={org ?? null}
+              fallbackMode={true}
               showToggle={true}
               showLegend={true}
             />
