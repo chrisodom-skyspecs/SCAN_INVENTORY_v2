@@ -67,6 +67,7 @@ import { useAuthFromKinde } from "@/lib/use-auth-from-kinde";
 import { ConvexThemeSync } from "@/components/ConvexThemeSync/ConvexThemeSync";
 import { ConvexDensitySync } from "@/components/ConvexDensitySync/ConvexDensitySync";
 import { ConvexLayoutSync } from "@/components/ConvexLayoutSync/ConvexLayoutSync";
+import { AuthSync } from "@/components/AuthSync/AuthSync";
 
 // ─── Convex client ────────────────────────────────────────────────────────────
 
@@ -141,6 +142,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return (
       <ThemeProvider>
         <KindeProvider>
+          <AuthSync />
           <UserIdentityProvider>{children}</UserIdentityProvider>
         </KindeProvider>
       </ThemeProvider>
@@ -156,6 +158,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
        * Components call useThemeContext() / useIsDark() from anywhere in the tree.
        */}
       <KindeProvider>
+        <AuthSync />
         {/*
          * ConvexProviderWithAuth sends the Kinde JWT as a Bearer token on every
          * Convex request.  `convex/auth.config.ts` configures Convex to verify

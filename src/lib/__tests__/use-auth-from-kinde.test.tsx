@@ -40,6 +40,7 @@ import { useAuthFromKinde } from "../use-auth-from-kinde";
 
 // useKindeBrowserClient state — mutated per-test via beforeEach/per-test setup
 const mockKindeState = {
+  accessToken: null as { sub?: string } | null,
   isAuthenticated: false as boolean | null,
   isLoading: true as boolean | null,
   getToken: vi.fn<() => string | null | undefined>(),
@@ -67,6 +68,7 @@ function setupKinde({
   token?: string | null;
   refreshError?: Error | null;
 } = {}) {
+  mockKindeState.accessToken = token ? { sub: "kinde_user_123" } : null;
   mockKindeState.isAuthenticated = isAuthenticated;
   mockKindeState.isLoading = isLoading;
   mockKindeState.getToken.mockReturnValue(token);
@@ -165,6 +167,13 @@ describe("useAuthFromKinde — authenticated state", () => {
     setupKinde({ isAuthenticated: true, isLoading: false, token: MOCK_TOKEN });
     const { result } = renderHook(() => useAuthFromKinde());
     expect(result.current.isLoading).toBe(false);
+  });
+
+  it("keeps Convex loading while Kinde token claims are not hydrated", () => {
+    setupKinde({ isAuthenticated: true, isLoading: false, token: null });
+    const { result } = renderHook(() => useAuthFromKinde());
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.isAuthenticated).toBe(false);
   });
 
   it("fetchAccessToken returns the Kinde access token string", async () => {

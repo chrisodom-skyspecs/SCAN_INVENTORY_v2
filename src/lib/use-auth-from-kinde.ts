@@ -102,16 +102,20 @@ export interface ConvexAuthAdapter {
  * </ConvexProviderWithAuth>
  */
 export function useAuthFromKinde(): ConvexAuthAdapter {
-  const { isAuthenticated, isLoading, getToken, refreshData } =
+  const { accessToken, isAuthenticated, isLoading, getToken, refreshData } =
     useKindeBrowserClient();
 
+  const authenticated = isAuthenticated ?? false;
+  const tokenClaimsReady = !authenticated || accessToken != null;
+  const convexIsLoading = (isLoading ?? true) || (authenticated && !tokenClaimsReady);
+
   return {
-    // `?? true` ensures we return loading=true when the Kinde client has not
-    // yet resolved its state — prevents premature unauthenticated requests.
-    isLoading: isLoading ?? true,
+    // Keep Convex paused until Kinde has hydrated the token claims. Kinde can
+    // briefly report an authenticated session before getToken() is ready.
+    isLoading: convexIsLoading,
 
     // `?? false` ensures we default to not-authenticated (safe default).
-    isAuthenticated: isAuthenticated ?? false,
+    isAuthenticated: authenticated && tokenClaimsReady,
 
     fetchAccessToken: async ({
       forceRefreshToken,

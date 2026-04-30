@@ -57,6 +57,10 @@ export type {
   TemplateItem,
 } from "../../convex/caseTemplates";
 
+interface UseCaseTemplateQueryOptions {
+  enabled?: boolean;
+}
+
 // ─── useCaseTemplates ─────────────────────────────────────────────────────────
 
 /**
@@ -80,8 +84,12 @@ export type {
  *   return <KitSelect kits={kits} />;
  * }
  */
-export function useCaseTemplates() {
-  const templates = useQuery(api.caseTemplates.listCaseTemplates, {});
+export function useCaseTemplates(options: UseCaseTemplateQueryOptions = {}) {
+  const { enabled = true } = options;
+  const templates = useQuery(
+    api.caseTemplates.listCaseTemplates,
+    enabled ? {} : "skip"
+  );
 
   const kits: Array<{ id: string; name: string }> =
     templates?.map((t: { _id: string; name: string }) => ({ id: t._id, name: t.name })) ?? [];
@@ -112,8 +120,12 @@ export function useCaseTemplates() {
  *   return <TemplateList templates={templates ?? []} />;
  * }
  */
-export function useAllCaseTemplates() {
-  const templates = useQuery(api.caseTemplates.getAllTemplates, {});
+export function useAllCaseTemplates(options: UseCaseTemplateQueryOptions = {}) {
+  const { enabled = true } = options;
+  const templates = useQuery(
+    api.caseTemplates.getAllTemplates,
+    enabled ? {} : "skip"
+  );
 
   return {
     templates,
@@ -144,10 +156,14 @@ export function useAllCaseTemplates() {
  *   return <ItemList items={template.items} />;
  * }
  */
-export function useCaseTemplateById(templateId: string | null) {
+export function useCaseTemplateById(
+  templateId: string | null,
+  options: UseCaseTemplateQueryOptions = {}
+) {
+  const { enabled = true } = options;
   return useQuery(
     api.caseTemplates.getCaseTemplateById,
-    templateId !== null ? { templateId: templateId as Id<"caseTemplates"> } : "skip",
+    enabled && templateId !== null ? { templateId: templateId as Id<"caseTemplates"> } : "skip",
   );
 }
 

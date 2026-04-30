@@ -42,6 +42,10 @@ export type {
   MissionStatus,
 } from "../../convex/missions";
 
+interface UseMissionQueryOptions {
+  enabled?: boolean;
+}
+
 // ─── useMissions ──────────────────────────────────────────────────────────────
 
 /**
@@ -65,8 +69,12 @@ export type {
  *   return <OrgSelect orgs={orgs} />;
  * }
  */
-export function useMissions() {
-  const missions = useQuery(api.missions.listMissions, {});
+export function useMissions(options: UseMissionQueryOptions = {}) {
+  const { enabled = true } = options;
+  const missions = useQuery(
+    api.missions.listMissions,
+    enabled ? {} : "skip"
+  );
 
   const orgs: Array<{ id: string; name: string }> =
     missions?.map((m: { _id: string; name: string }) => ({ id: m._id, name: m.name })) ?? [];
@@ -98,8 +106,12 @@ export function useMissions() {
  *   return <MissionList missions={missions ?? []} />;
  * }
  */
-export function useActiveMissions() {
-  const missions = useQuery(api.missions.listMissions, { status: "active" });
+export function useActiveMissions(options: UseMissionQueryOptions = {}) {
+  const { enabled = true } = options;
+  const missions = useQuery(
+    api.missions.listMissions,
+    enabled ? { status: "active" } : "skip"
+  );
 
   const orgs: Array<{ id: string; name: string }> =
     missions?.map((m: { _id: string; name: string }) => ({ id: m._id, name: m.name })) ?? [];
@@ -136,9 +148,13 @@ export function useActiveMissions() {
  *   return <span>{mission.name}</span>;
  * }
  */
-export function useMissionById(missionId: string | null) {
+export function useMissionById(
+  missionId: string | null,
+  options: UseMissionQueryOptions = {}
+) {
+  const { enabled = true } = options;
   return useQuery(
     api.missions.getMissionById,
-    missionId !== null ? { missionId: missionId as Id<"missions"> } : "skip",
+    enabled && missionId !== null ? { missionId: missionId as Id<"missions"> } : "skip",
   );
 }

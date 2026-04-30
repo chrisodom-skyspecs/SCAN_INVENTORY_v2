@@ -42,6 +42,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 import { M1FleetOverview } from "@/components/Map/M1FleetOverview";
 import { M2SiteDetail } from "@/components/Map/M2SiteDetail";
 import { M3TransitTracker } from "@/components/Map/M3TransitTracker";
@@ -240,7 +241,12 @@ export function InventoryMapClient({
   // userId is passed to useDefaultLayoutOnCaseChange to scope localStorage reads.
   // Empty string ("") is passed while Kinde is still loading — the hook handles
   // this gracefully (treats it as "no preference stored").
-  const { id: userId } = useKindeUser({ fallbackName: "Operator" });
+  const {
+    id: userId,
+    isAuthenticated,
+    isLoading: isAuthLoading,
+  } = useKindeUser({ fallbackName: "Operator" });
+  const { accessToken } = useKindeBrowserClient();
 
   // ── Default layout on case selection / status change ─────────────────────────
   //
@@ -500,8 +506,9 @@ export function InventoryMapClient({
   //
   // Both hooks return empty arrays while loading (subscriptions pending),
   // which renders the dropdowns with only the "All" option until data arrives.
-  const { orgs } = useMissions();
-  const { kits } = useCaseTemplates();
+  const canLoadFilterData = !isAuthLoading && isAuthenticated && accessToken != null;
+  const { orgs } = useMissions({ enabled: canLoadFilterData });
+  const { kits } = useCaseTemplates({ enabled: canLoadFilterData });
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
