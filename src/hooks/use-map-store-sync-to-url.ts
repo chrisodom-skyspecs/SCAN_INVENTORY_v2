@@ -75,6 +75,7 @@ import { useEffect, useRef } from "react";
 
 import { MapStateStore } from "@/stores/map-state-store";
 import { encodeMapUrlState } from "@/lib/map-url-params";
+import { writeBrowserHistoryUrl } from "@/lib/browser-history";
 
 // ─── Options ──────────────────────────────────────────────────────────────────
 
@@ -177,9 +178,7 @@ export function useMapStoreSyncToUrl(
       // ── Write to browser history ────────────────────────────────────────
       // replaceState updates the address bar without triggering a navigation
       // event, keeping React and Next.js router state untouched.
-      if (typeof window !== "undefined") {
-        window.history.replaceState(null, "", url);
-      }
+      writeBrowserHistoryUrl(url);
     });
 
     // Tear down the subscription when the component unmounts or when the

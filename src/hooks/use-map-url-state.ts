@@ -21,8 +21,8 @@
  * Write path (state → URL):
  *   setMapState(patch) merges the patch with the current state via
  *   mergeMapUrlState (encodes only non-default params), then:
- *     replace=true  → window.history.replaceState(null, "", url)
- *     replace=false → window.history.pushState(null, "", url)
+ *     replace=true  → window.history.replaceState(currentState, "", url)
+ *     replace=false → window.history.pushState(currentState, "", url)
  *   After writing to the browser history, setMapState also calls the internal
  *   React state setter so that hook consumers re-render immediately.
  *
@@ -49,6 +49,7 @@ import {
   mergeMapUrlState,
   sanitizeMapDeepLink,
 } from "@/lib/map-url-params";
+import { writeBrowserHistoryUrl } from "@/lib/browser-history";
 
 // ─── Hook options ─────────────────────────────────────────────────────────────
 
@@ -168,13 +169,7 @@ export function useMapUrlState(
       // history.replaceState / pushState update the address bar and the
       // browser's history stack without triggering a Next.js navigation event,
       // preventing unnecessary re-renders of the full page tree.
-      if (typeof window !== "undefined") {
-        if (replace) {
-          window.history.replaceState(null, "", url);
-        } else {
-          window.history.pushState(null, "", url);
-        }
-      }
+      writeBrowserHistoryUrl(url, replace);
 
       // ── Update React state ────────────────────────────────────────────────
       // history.replaceState does not update useSearchParams(), so we must

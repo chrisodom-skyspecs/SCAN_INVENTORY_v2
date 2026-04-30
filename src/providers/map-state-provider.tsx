@@ -63,6 +63,7 @@ import {
   mergeMapUrlState,
   sanitizeMapDeepLink,
 } from "@/lib/map-url-params";
+import { writeBrowserHistoryUrl } from "@/lib/browser-history";
 import type {
   MapEphemeralState,
   MapState,
@@ -254,13 +255,7 @@ export function MapStateProvider({
       const url = qs ? `${resolvedPathname}?${qs}` : resolvedPathname;
 
       // ── Write to browser history (no navigation side-effects) ────────
-      if (typeof window !== "undefined") {
-        if (replace) {
-          window.history.replaceState(null, "", url);
-        } else {
-          window.history.pushState(null, "", url);
-        }
-      }
+      writeBrowserHistoryUrl(url, replace);
 
       // ── Update React state ───────────────────────────────────────────
       // history.replaceState does not update useSearchParams(), so we
@@ -289,13 +284,7 @@ export function MapStateProvider({
         pathnameRef.current ?? defaultPathnameRef.current;
 
       // Write bare pathname (no query string = all defaults)
-      if (typeof window !== "undefined") {
-        if (replace) {
-          window.history.replaceState(null, "", resolvedPathname);
-        } else {
-          window.history.pushState(null, "", resolvedPathname);
-        }
-      }
+      writeBrowserHistoryUrl(resolvedPathname, replace);
 
       // Reset local state to defaults
       setUrlStateInternal(MAP_URL_STATE_DEFAULTS);
