@@ -1,0 +1,15 @@
+---
+description: Git commits must use Conventional Commits format
+alwaysApply: true
+---
+
+# Conventional Commits
+
+All new commits in this repository must follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+- **Subject line:** `type(optional-scope): concise imperative description` (about 50 chars or less for the description; no trailing period).
+- **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert` (use the closest fit).
+- **Body:** Optional; use for rationale, breaking changes (`BREAKING CHANGE:`), or bullet lists when helpful.
+- **Examples:** `feat(scan): add damage photo capture`, `fix(convex): guard null shipment id`, `chore: remove local scratch files`.
+
+When proposing or creating commits (including via automation), use this format. Historical commits may predate this rule.
