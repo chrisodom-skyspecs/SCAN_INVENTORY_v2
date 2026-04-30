@@ -1,5 +1,5 @@
 /**
- * convex/lib/geo-bin.ts
+ * convex/lib/geo_bin.ts
  *
  * Geographic grid-cell binning utilities for server-side use within Convex
  * query functions.
@@ -32,7 +32,7 @@
  *   lng_center = (tileX + 0.5) / 2^z × 360 − 180
  *   lat_center = atan(sinh(π × (1 − 2 × (tileY + 0.5) / 2^z))) × (180/π)
  *
- * @module convex/lib/geo-bin
+ * @module convex/lib/geo_bin
  */
 
 // ─── Public types ─────────────────────────────────────────────────────────────

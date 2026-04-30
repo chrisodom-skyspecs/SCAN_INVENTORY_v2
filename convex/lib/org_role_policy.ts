@@ -1,5 +1,5 @@
 /**
- * convex/lib/org-role-policy.ts
+ * convex/lib/org_role_policy.ts
  *
  * Pure (no Convex runtime dependency) helpers for organization membership
  * role-policy enforcement.

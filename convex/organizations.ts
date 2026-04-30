@@ -41,7 +41,7 @@ import {
   CONTRACTOR_FORBIDDEN_ROLES as _CONTRACTOR_FORBIDDEN_ROLES,
   validateContractorOrgAssignment,
   contractorRoleViolationMessage,
-} from "./lib/org-role-policy";
+} from "./lib/org_role_policy";
 
 // ─── Auth guard ────────────────────────────────────────────────────────────────
 
@@ -699,9 +699,9 @@ export const removeOrgMember = mutation({
 /**
  * Re-export the contractor forbidden roles constant so callers that import from
  * convex/organizations.ts (e.g., the admin UI) can reference the policy without
- * also importing from convex/lib/org-role-policy.ts.
+ * also importing from convex/lib/org_role_policy.ts.
  *
- * The canonical definition lives in convex/lib/org-role-policy.ts (pure module,
+ * The canonical definition lives in convex/lib/org_role_policy.ts (pure module,
  * unit-testable) and is aliased here for ergonomic re-export.
  */
 export const CONTRACTOR_FORBIDDEN_ROLES: ReadonlySet<string> = _CONTRACTOR_FORBIDDEN_ROLES;
