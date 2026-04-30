@@ -72,7 +72,7 @@
  *   ✓ is idempotent (skips images already in the sprite)
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   createStopMarkerSVG,
   createStopMarkerElement,

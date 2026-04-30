@@ -67,7 +67,7 @@ import type {
   KindePermission,
   KindeRoles,
 } from "@kinde-oss/kinde-auth-nextjs/types";
-import { isValidRole, type Role } from "../../convex/rbac";
+import { isValidRole, type Role } from "./rbac-client";
 
 // ─── Re-export token helpers ──────────────────────────────────────────────────
 //

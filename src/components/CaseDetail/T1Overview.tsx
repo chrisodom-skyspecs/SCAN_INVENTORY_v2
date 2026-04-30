@@ -63,7 +63,7 @@ import { InlineHolderEditor } from "./InlineHolderEditor";
 import { LabelManagementPanel } from "../LabelManagementPanel";
 import { QcSignOffHistory } from "./QcSignOffHistory";
 import { useCurrentUser } from "../../hooks/use-current-user";
-import { OPERATIONS } from "../../../convex/rbac";
+import { OPERATIONS } from "@/lib/rbac-client";
 import styles from "./T1Overview.module.css";
 import shared from "./shared.module.css";
 import type { CaseStatus } from "../../../convex/cases";

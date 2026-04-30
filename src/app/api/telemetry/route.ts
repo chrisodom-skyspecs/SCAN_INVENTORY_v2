@@ -143,7 +143,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ accepted: result.accepted }, { status: 200 });
   } catch (err) {
-    console.error("[POST /api/telemetry] Convex mutation failed:", err);
-    return jsonError("Internal server error", 500);
+    console.warn(
+      "[POST /api/telemetry] Dropping telemetry batch after Convex mutation failure:",
+      err
+    );
+    return NextResponse.json(
+      { accepted: 0, dropped: events.length },
+      { status: 202 }
+    );
   }
 }

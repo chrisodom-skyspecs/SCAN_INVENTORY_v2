@@ -45,7 +45,7 @@ import { useState } from "react";
 import { useDamagePhotoReportsWithUrls, useDamageReportsByCase } from "../../hooks/use-damage-reports";
 import { useChecklistWithInspection } from "../../hooks/use-checklist";
 import type { DamagePhotoReportWithUrl, DamageReport } from "../../hooks/use-damage-reports";
-import type { ChecklistWithInspection } from "../../../convex/checklists";
+import type { ChecklistWithInspection } from "@/lib/checklist-summary";
 import { StatusPill } from "../StatusPill";
 import shared from "./shared.module.css";
 import styles from "./DossierEvidencePanel.module.css";

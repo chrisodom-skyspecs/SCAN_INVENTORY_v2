@@ -38,7 +38,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCurrentUser } from "../../hooks/use-current-user";
-import type { Role } from "../../../convex/rbac";
+import type { Role } from "@/lib/rbac-client";
 import styles from "./ScanRoleGate.module.css";
 
 // ─── Props ────────────────────────────────────────────────────────────────────

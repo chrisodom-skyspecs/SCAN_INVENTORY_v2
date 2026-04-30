@@ -486,6 +486,7 @@ export function useMapParams(): UseMapParamsReturn {
     caseWindow: mapState.window,
     panelOpen: mapState.panelOpen,
     layers: mapState.layers,
+    slayers: mapState.slayers,
     // Writers
     setView,
     setActiveCaseId,
@@ -496,6 +497,8 @@ export function useMapParams(): UseMapParamsReturn {
     setPanelOpen,
     setLayers,
     toggleLayer,
+    setSlayers,
+    toggleSemanticLayer,
     setParams,
   };
 }

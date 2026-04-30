@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.production
+!.env.local.example
+
+.vercel
+node_modules
+.next
+out
+coverage
+test-results
+*.tsbuildinfo
+.DS_Store

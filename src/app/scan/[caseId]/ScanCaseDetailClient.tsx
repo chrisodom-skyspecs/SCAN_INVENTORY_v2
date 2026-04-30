@@ -53,7 +53,7 @@ import { useFedExTracking } from "../../../hooks/use-fedex-tracking";
 import { StatusPill } from "../../../components/StatusPill";
 import { TrackingStatus } from "../../../components/TrackingStatus";
 import { useCurrentUser } from "../../../hooks/use-current-user";
-import { OPERATIONS } from "../../../../convex/rbac";
+import { OPERATIONS } from "@/lib/rbac-client";
 import type { CaseStatus } from "../../../../convex/cases";
 import styles from "./page.module.css";
 

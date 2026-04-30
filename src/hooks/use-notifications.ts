@@ -24,7 +24,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -65,6 +65,8 @@ export function useNotifications(
   userId: string | null | undefined,
   limit = 20,
 ): UseNotificationsResult {
+  const { isAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
+
   // ── Convex subscriptions ──────────────────────────────────────────────────
   //
   // `skipWhenNoUser` prevents the query from running before userId resolves.
@@ -72,8 +74,9 @@ export function useNotifications(
   // (the special sentinel from convex/react), but we use the conditional
   // undefined approach which is idiomatic for optional queries.
 
-  const skipWhenNoUser = userId ? { userId } : "skip";
-  const skipWithLimit = userId ? { userId, limit } : "skip";
+  const canQuery = Boolean(userId) && isAuthenticated && !isConvexAuthLoading;
+  const skipWhenNoUser = canQuery ? { userId } : "skip";
+  const skipWithLimit = canQuery ? { userId, limit } : "skip";
 
   // Unread count — reactive badge number
   const rawUnreadCount = useQuery(
@@ -94,7 +97,9 @@ export function useNotifications(
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
-  const isLoading = rawUnreadCount === undefined || rawNotifications === undefined;
+  const isLoading =
+    isConvexAuthLoading ||
+    (canQuery && (rawUnreadCount === undefined || rawNotifications === undefined));
   const unreadCount = rawUnreadCount ?? 0;
   const notifications: Notification[] = (rawNotifications ?? []).map((n) => ({
     id: n.id,

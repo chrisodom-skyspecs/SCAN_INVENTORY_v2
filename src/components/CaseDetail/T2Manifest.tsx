@@ -57,7 +57,7 @@ import CustodySection from "./CustodySection";
 import { LabelManagementPanel } from "../LabelManagementPanel";
 import { QcSignOffHistory } from "./QcSignOffHistory";
 import { useCurrentUser } from "../../hooks/use-current-user";
-import { OPERATIONS } from "../../../convex/rbac";
+import { OPERATIONS } from "@/lib/rbac-client";
 import shared from "./shared.module.css";
 import styles from "./T2Manifest.module.css";
 import type { ManifestItemStatus, ChecklistWithInspection } from "../../queries/checklist";

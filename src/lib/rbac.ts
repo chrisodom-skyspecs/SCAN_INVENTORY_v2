@@ -6,7 +6,7 @@
  *
  * This module is the single import point for all RBAC symbols in client-side
  * code.  It re-exports the canonical constants and pure helpers from the
- * `convex/rbac` module (the server-side source of truth) and augments them with
+ * `rbac-client` module (the browser-safe RBAC source) and augments them with
  * a small set of client-oriented convenience utilities.
  *
  * Why this module exists
@@ -20,7 +20,7 @@
  * Rather than importing directly from `"../../convex/rbac"` (a relative path
  * that breaks if files are moved), both apps import from `"@/lib/rbac"`.  That
  * alias resolves via tsconfig `paths` to this file, which in turn imports from
- * the Convex module.  If the Convex module path changes, only this one file
+ * the browser-safe module.  If the RBAC module path changes, only this one file
  * needs updating.
  *
  * Usage
@@ -94,12 +94,12 @@ export {
 
   // Permission matrix snapshot (for admin UI / docs)
   getPermissionMatrix,
-} from "../../convex/rbac";
+} from "./rbac-client";
 
 export type {
   Role,
   Operation,
-} from "../../convex/rbac";
+} from "./rbac-client";
 
 // ─── Client-side convenience utilities ───────────────────────────────────────
 //
@@ -113,9 +113,9 @@ import {
   ALL_ROLES,
   isValidRole,
   getAllowedRolesForOperation,
-} from "../../convex/rbac";
+} from "./rbac-client";
 
-import type { Role, Operation } from "../../convex/rbac";
+import type { Role, Operation } from "./rbac-client";
 
 /**
  * Returns `true` if any of the provided `roles` is permitted to perform

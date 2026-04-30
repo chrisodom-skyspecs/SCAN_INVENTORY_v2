@@ -1,0 +1,17 @@
+---
+description: Commit, push, and production deployment workflow
+alwaysApply: true
+---
+
+# Commit, Push, Deploy
+
+When asked to save work, deploy, or sync to remote:
+
+- Run `git status --short --branch`, review relevant `git diff`, and inspect recent `git log --oneline -5` before committing.
+- Include all intended tracked and untracked files, but never commit secrets (`.env*`, credentials, tokens, key material) unless explicitly requested and confirmed safe.
+- Use Conventional Commits: `type(optional-scope): concise imperative description`.
+- After committing, run `git status --short --branch`; if the branch is ahead, push to the tracked remote.
+- For production frontend checks, prefer the Git-triggered Vercel deployment after pushing `main`. Do not run a local Vercel deploy from a dirty tree unless explicitly requested.
+- Verify Vercel with `npx vercel@latest ls <project>` until the new production deployment is `Ready` or `Error`.
+- If deployment errors, inspect logs with `npx vercel@latest inspect <deployment-url> --logs`, fix the blocking issue in a new Conventional Commit, push again, and re-check Vercel.
+- Report the pushed commit hash(es), deployment URL, final deployment status, and any files intentionally left uncommitted.

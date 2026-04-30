@@ -74,7 +74,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { buildSummary } from "../../convex/checklistHelpers";
+import { buildSummary } from "@/lib/checklist-summary";
 
 // Re-export types so consumers can import them from the hook module.
 export type {

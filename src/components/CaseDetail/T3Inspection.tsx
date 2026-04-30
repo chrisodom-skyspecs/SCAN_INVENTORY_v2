@@ -32,10 +32,10 @@ import { QcChecklistPanel } from "./QcChecklistPanel";
 import { QcSignOffForm } from "../QcSignOffForm/QcSignOffForm";
 import { QcSignOffHistory } from "./QcSignOffHistory";
 import { useCurrentUser } from "../../hooks/use-current-user";
-import { OPERATIONS } from "../../../convex/rbac";
+import { OPERATIONS } from "@/lib/rbac-client";
 import shared from "./shared.module.css";
 import styles from "./T3Inspection.module.css";
-import type { ChecklistWithInspection, ManifestItemStatus } from "../../../convex/checklists";
+import type { ChecklistWithInspection, ManifestItemStatus } from "@/lib/checklist-summary";
 import type { StatusKind } from "../StatusPill/StatusPill";
 import type { CaseStatus } from "../../../convex/cases";
 

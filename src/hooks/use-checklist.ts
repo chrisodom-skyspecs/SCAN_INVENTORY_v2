@@ -68,6 +68,7 @@
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { MANIFEST_ITEM_STATUSES } from "@/lib/checklist-summary";
 
 // Re-export types so consumers can import them from the hook module.
 export type {
@@ -75,10 +76,10 @@ export type {
   ChecklistItem,
   ChecklistSummary,
   ChecklistWithInspection,
-} from "../../convex/checklists";
+} from "@/lib/checklist-summary";
 
 // Re-export constant for status iteration in UI components.
-export { MANIFEST_ITEM_STATUSES } from "../../convex/checklists";
+export { MANIFEST_ITEM_STATUSES };
 
 // ─── useChecklistByCase ───────────────────────────────────────────────────────
 

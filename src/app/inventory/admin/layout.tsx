@@ -48,7 +48,7 @@ import { type ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { getServerUserRoles } from "@/lib/kinde";
-import { ROLES } from "../../../../convex/rbac";
+import { ROLES } from "@/lib/rbac-client";
 import { InventoryRoleGate } from "@/components/InventoryRoleGate";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────

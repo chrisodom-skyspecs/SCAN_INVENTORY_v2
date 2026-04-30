@@ -50,7 +50,7 @@ import {
   ROLES,
   type Role,
   type Operation,
-} from "../../convex/rbac";
+} from "@/lib/rbac-client";
 
 // ─── Return type ─────────────────────────────────────────────────────────────
 
@@ -141,7 +141,7 @@ export function useCurrentUser(): CurrentUserState {
   // get written to the Convex `users` table on login sync — the two are
   // always in sync after the first /api/auth/sync call completes.
   const { accessToken } = useKindeBrowserClient();
-  const rawRoles = accessToken?.roles ?? [];
+  const rawRoles = Array.isArray(accessToken?.roles) ? accessToken.roles : [];
   // Filter to only recognised SkySpecs role keys (admin, technician, pilot)
   const roles: Role[] = rawRoles
     .map((r) => r.key)

@@ -43,7 +43,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { ROLES, type Role } from "../../../convex/rbac";
+import { ROLES, type Role } from "@/lib/rbac-client";
 import styles from "./InventoryRoleGate.module.css";
 
 // ─── Props ────────────────────────────────────────────────────────────────────

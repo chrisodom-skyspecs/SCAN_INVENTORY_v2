@@ -21,7 +21,7 @@
 "use client";
 
 import { useCurrentUser } from "../../hooks/use-current-user";
-import type { Role } from "../../../convex/rbac";
+import type { Role } from "@/lib/rbac-client";
 import styles from "./ScanUserRoleBadge.module.css";
 
 // ─── Props ────────────────────────────────────────────────────────────────────

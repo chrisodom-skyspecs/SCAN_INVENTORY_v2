@@ -81,7 +81,7 @@
 
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { buildSummary } from "../../convex/checklistHelpers";
+import { buildSummary } from "@/lib/checklist-summary";
 import type { Id } from "../../convex/_generated/dataModel";
 
 // Re-export result types so consumers can import them from the hook module.
@@ -89,25 +89,14 @@ export type {
   ScanCheckInResult,
   UpdateChecklistItemResult,
   InspectionResult,
-} from "../../convex/scan";
-
-// Re-export canonical mutations/scan result types
-export type {
   CheckInCaseResult,
   LogScanOnlyResult,
-} from "../../convex/mutations/scan";
-
-// Re-export the immutable scan history result type
-export type { RecordScanEventResult } from "../../convex/scanActions";
-
-export type { ShipCaseResult } from "../../convex/shipping";
-
-export type { HandoffCustodyResult } from "../../convex/custodyHandoffs";
-
-export type {
+  RecordScanEventResult,
+  ShipCaseResult,
+  HandoffCustodyResult,
   AssociateQRCodeResult,
   QrCodeValidationResult,
-} from "../../convex/qrCodes";
+} from "@/types/scan-results";
 
 // ─── useScanCheckIn ───────────────────────────────────────────────────────────
 

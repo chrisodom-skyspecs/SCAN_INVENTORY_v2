@@ -69,8 +69,7 @@ import {
   type ReactNode,
 } from "react";
 import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
-import type { Role } from "../../convex/rbac";
-import { ALL_ROLES } from "../../convex/rbac";
+import { ALL_ROLES, type Role } from "@/lib/rbac-client";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -176,7 +175,7 @@ function resolveDisplayName(
 function extractRoles(
   accessTokenRoles: Array<{ id: string; key: string; name: string }> | undefined | null,
 ): Role[] {
-  if (!accessTokenRoles || accessTokenRoles.length === 0) return [];
+  if (!Array.isArray(accessTokenRoles) || accessTokenRoles.length === 0) return [];
 
   // Cast to readonly for the `includes` check
   const validRoleSet: ReadonlyArray<string> = ALL_ROLES;

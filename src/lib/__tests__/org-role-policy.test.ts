@@ -1,7 +1,7 @@
 /**
  * src/lib/__tests__/org-role-policy.test.ts
  *
- * Unit tests for convex/lib/org-role-policy.ts — the pure role-policy helpers
+ * Unit tests for convex/lib/org_role_policy.ts — the pure role-policy helpers
  * that enforce the contractor org membership constraint.
  *
  * Coverage
@@ -41,7 +41,7 @@ import {
   validateContractorOrgAssignment,
   contractorRoleViolationMessage,
   type ContractorValidationResult,
-} from "../../../convex/lib/org-role-policy";
+} from "../../../convex/lib/org_role_policy";
 
 // ─── CONTRACTOR_FORBIDDEN_ROLES ───────────────────────────────────────────────
 

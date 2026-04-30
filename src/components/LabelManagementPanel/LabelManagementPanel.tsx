@@ -56,7 +56,7 @@ import { useKindeUser } from "@/hooks/use-kinde-user";
 import type {
   GenerateQRCodeResult,
   AssociateQRCodeResult,
-} from "../../../convex/qrCodes";
+} from "@/types/scan-results";
 import styles from "./LabelManagementPanel.module.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

@@ -45,7 +45,7 @@ import { useChecklistByCase } from "../../hooks/use-checklist";
 import { useDamageReportEvents } from "../../hooks/use-damage-reports";
 import { LabelManagementPanel } from "../LabelManagementPanel";
 import { useCurrentUser } from "../../hooks/use-current-user";
-import { OPERATIONS } from "../../../convex/rbac";
+import { OPERATIONS } from "@/lib/rbac-client";
 import {
   useShipmentsByCase,
   useShipmentEventsForAudit,

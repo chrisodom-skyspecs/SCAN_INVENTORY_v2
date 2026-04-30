@@ -276,7 +276,7 @@ export function parseConvexFieldError(err: unknown): ConvexFieldError {
   }
 
   // Pattern 1: "[FIELD:fieldName] message"
-  const fieldMatch = raw.match(/^\[FIELD:([A-Za-z][A-Za-z0-9_]*)\]\s*(.*)/s);
+  const fieldMatch = raw.match(/^\[FIELD:([A-Za-z][A-Za-z0-9_]*)\]\s*([\s\S]*)/);
   if (fieldMatch) {
     return {
       fieldName: fieldMatch[1],
@@ -285,7 +285,7 @@ export function parseConvexFieldError(err: unknown): ConvexFieldError {
   }
 
   // Pattern 2: "[ERROR_CODE] message" — form-level coded error
-  const codeMatch = raw.match(/^\[[A-Z][A-Z0-9_]*\]\s*(.*)/s);
+  const codeMatch = raw.match(/^\[[A-Z][A-Z0-9_]*\]\s*([\s\S]*)/);
   if (codeMatch) {
     const strippedMessage = codeMatch[1].trim();
     return {

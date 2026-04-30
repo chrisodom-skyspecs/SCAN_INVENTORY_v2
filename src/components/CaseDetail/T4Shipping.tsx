@@ -47,7 +47,7 @@ import { TrackingStatus } from "../TrackingStatus";
 import CustodySection from "./CustodySection";
 import { LabelManagementPanel } from "../LabelManagementPanel";
 import { useCurrentUser } from "../../hooks/use-current-user";
-import { OPERATIONS } from "../../../convex/rbac";
+import { OPERATIONS } from "@/lib/rbac-client";
 import shared from "./shared.module.css";
 import styles from "./T4Shipping.module.css";
 

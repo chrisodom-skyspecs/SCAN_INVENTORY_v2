@@ -55,163 +55,19 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { ConvexHttpClient } from "convex/browser";
 
 import { api } from "../../../../../convex/_generated/api";
 import {
-  CONVEX_ERROR_CODE_TO_API_CODE,
-  TRACKING_API_ERROR_MESSAGES,
-  TRACKING_API_STATUS_MAP,
-  type TrackingApiErrorBody,
-  type TrackingApiErrorCode,
   type TrackingApiResult,
   type TrackingApiStatus,
-  type TrackingApiSuccessBody,
 } from "@/types/tracking-api";
 import {
-  parseFedExErrorCode,
-  type FedExTrackingErrorCode,
-} from "@/lib/fedex-tracking-errors";
-
-// ─── Cache headers ────────────────────────────────────────────────────────────
-
-/**
- * Tracking data is real-time.  Caching even briefly would surface stale
- * shipment state on the dashboard and the SCAN app.  These headers are
- * applied to every response (200 + every error code).
- */
-const REALTIME_CACHE_HEADERS = {
-  "Cache-Control": "no-store",
-  Pragma: "no-cache",
-} as const;
-
-// ─── Tracking number format validator ─────────────────────────────────────────
-
-/**
- * Reject obviously invalid tracking numbers before issuing an upstream call.
- * Mirrors `isValidFedExTrackingNumber` in convex/fedex/trackShipment.ts.
- *
- * Accepted formats:
- *   • 10+ digit numeric strings  (Express, Ground, SmartPost, Ground 96)
- *   • "DT" + 12+ digits           (Door Tag)
- *
- * The handler still surfaces an upstream `INVALID_TRACKING_NUMBER` error if
- * FedEx itself rejects a value that passes this check (the function only
- * rejects input that is structurally implausible).
- */
-function isValidFedExTrackingNumber(value: string): boolean {
-  const tn = value.trim();
-  if (!tn) return false;
-  if (/^DT\d{12,}$/i.test(tn)) return true;
-  if (/^\d{10,}$/.test(tn)) return true;
-  return false;
-}
-
-// ─── Response builders ────────────────────────────────────────────────────────
-
-/**
- * Build a typed success response.  Always sets HTTP 200 and the
- * no-cache headers; the body matches {@link TrackingApiSuccessBody}.
- */
-function ok(data: TrackingApiResult): NextResponse<TrackingApiSuccessBody> {
-  const body: TrackingApiSuccessBody = { ok: true, data };
-  return NextResponse.json(body, {
-    status: 200,
-    headers: REALTIME_CACHE_HEADERS,
-  });
-}
-
-/**
- * Build a typed error response.
- *
- * @param code     Machine-readable error code consumers branch on.
- * @param message  Optional override; defaults to the message in
- *                 {@link TRACKING_API_ERROR_MESSAGES}.  The message must
- *                 not contain credentials or internal stack traces.
- */
-function fail(
-  code: TrackingApiErrorCode,
-  message?: string,
-): NextResponse<TrackingApiErrorBody> {
-  const status = TRACKING_API_STATUS_MAP[code];
-  const body: TrackingApiErrorBody = {
-    ok: false,
-    code,
-    message: message ?? TRACKING_API_ERROR_MESSAGES[code],
-    status,
-  };
-  return NextResponse.json(body, {
-    status,
-    headers: REALTIME_CACHE_HEADERS,
-  });
-}
-
-// ─── Convex error translation ─────────────────────────────────────────────────
-
-/**
- * Translate a thrown error from `ConvexHttpClient.action` to a typed
- * HTTP error response.
- *
- * The Convex action throws plain `Error` instances with bracketed prefixes
- * (e.g. `[NOT_FOUND] tracking number not found …`).  This helper:
- *
- *   1. Extracts the bracketed code via `parseFedExErrorCode`.
- *   2. Maps it to a {@link TrackingApiErrorCode} via
- *      `CONVEX_ERROR_CODE_TO_API_CODE`.
- *   3. Strips the `[CODE]` prefix from the message before forwarding it.
- *
- * Errors without a recognised prefix become UNKNOWN_ERROR (HTTP 500).
- *
- * Exported for unit testing; the route uses it internally.
- */
-export function translateConvexError(
-  err: unknown,
-): NextResponse<TrackingApiErrorBody> {
-  const raw =
-    err instanceof Error
-      ? err.message
-      : typeof err === "string"
-        ? err
-        : "";
-
-  const convexCode = parseFedExErrorCode(raw);
-
-  if (convexCode === null) {
-    // No recognised bracket prefix — also handle the special [AUTH_REQUIRED]
-    // prefix thrown by the action's `requireAuth` guard, since that code is
-    // not a member of FedExTrackingErrorCode.
-    if (raw.startsWith("[AUTH_REQUIRED]")) {
-      return fail("AUTH_REQUIRED");
-    }
-    return fail("UNKNOWN_ERROR", raw || undefined);
-  }
-
-  const apiCode: TrackingApiErrorCode =
-    CONVEX_ERROR_CODE_TO_API_CODE[convexCode as FedExTrackingErrorCode] ??
-    "UNKNOWN_ERROR";
-
-  // Strip the bracket prefix to keep error messages tidy in the response body.
-  const cleanedMessage = raw.replace(/^\[[A-Z_]+\]\s*/, "").trim();
-  return fail(apiCode, cleanedMessage || undefined);
-}
-
-// ─── Convex client factory ────────────────────────────────────────────────────
-
-/**
- * Lazily create a `ConvexHttpClient` for the configured deployment.
- *
- * Returning `null` lets the caller surface a SERVICE_UNAVAILABLE response
- * rather than crashing the route handler when env config is missing in
- * preview deployments or local dev without `.env.local`.
- *
- * Exported for unit testing; production callers should use the route's
- * internal call site.
- */
-export function getConvexClient(): ConvexHttpClient | null {
-  const url = process.env.NEXT_PUBLIC_CONVEX_URL;
-  if (!url) return null;
-  return new ConvexHttpClient(url);
-}
+  fail,
+  getConvexClient,
+  isValidFedExTrackingNumber,
+  ok,
+  translateConvexError,
+} from "./tracking-route-helpers";
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 

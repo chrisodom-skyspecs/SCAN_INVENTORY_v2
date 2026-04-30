@@ -568,6 +568,7 @@ describe("round-trip encode → decode", () => {
       window: "T3",
       panelOpen: true,
       layers: ["heat", "labels"],
+      slayers: ["deployed", "flagged"],
       org: "org111",
       kit: "kit222",
       at: new Date("2025-08-15T10:00:00.000Z"),
@@ -581,6 +582,7 @@ describe("round-trip encode → decode", () => {
     expect(decoded.window).toBe(original.window);
     expect(decoded.panelOpen).toBe(original.panelOpen);
     expect(decoded.layers).toEqual(original.layers);
+    expect(decoded.slayers).toEqual(original.slayers);
     expect(decoded.org).toBe(original.org);
     expect(decoded.kit).toBe(original.kit);
     expect(decoded.at?.toISOString()).toBe(original.at?.toISOString());

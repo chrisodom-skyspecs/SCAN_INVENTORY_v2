@@ -49,11 +49,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
+import { GET } from "../route";
 import {
-  GET,
   translateConvexError,
   getConvexClient,
-} from "../route";
+} from "../tracking-route-helpers";
 import {
   TRACKING_API_STATUS_MAP,
   TRACKING_API_ERROR_CODES,

@@ -54,12 +54,8 @@ import { type ChangeEvent, useId, useState, useMemo, useCallback } from "react";
 import { useMapParams } from "@/hooks/use-map-params";
 import { useCaseMapData } from "@/hooks/use-case-map-data";
 import { useM2JourneyStopsBatch } from "@/hooks/use-m2-journey-stops";
-import type { JourneyStop } from "@/hooks/use-m2-journey-stops";
 import { MAP_VIEW_VALUES, type MapView } from "@/types/map";
 import { useIsDark } from "@/providers/theme-provider";
-import { JourneyPathLine } from "./JourneyPathLine";
-import type { PathStop } from "./JourneyPathLine";
-import { StopMarker } from "./StopMarker";
 import { JourneyStopLayer } from "./JourneyStopLayer";
 import { ReplayScrubber } from "./ReplayScrubber";
 import { M2StopSidebar } from "./M2StopSidebar";
@@ -74,16 +70,6 @@ import styles from "./M2SiteDetail.module.css";
  */
 const MAPBOX_STYLE_LIGHT = "mapbox://styles/mapbox/outdoors-v12";
 const MAPBOX_STYLE_DARK  = "mapbox://styles/mapbox/dark-v11";
-
-// ─── Stable Mapbox GL source / layer IDs ─────────────────────────────────────
-
-/**
- * Scoped source and layer IDs for the M2 journey path line.
- * These are distinct from JourneyStopLayer's IDs ("inventory-journey-path-source")
- * so both can coexist on the same Mapbox map without ID collisions.
- */
-const M2_JOURNEY_PATH_SOURCE_ID = "m2-journey-path-source";
-const M2_JOURNEY_PATH_LAYER_ID  = "m2-journey-path-layer";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -237,59 +223,6 @@ export function M2SiteDetail({
     if (!selectedCaseId || !batchJourneys) return undefined;
     return batchJourneys.find((j) => j.caseId === selectedCaseId) ?? null;
   }, [selectedCaseId, batchJourneys]);
-
-  // ── Derive geo-referenced stops ─────────────────────────────────────────────
-  //
-  // Filter to stops that have valid WGS84 coordinates.  These stops can be:
-  //   1. Rendered as numbered StopMarker badges (HTML DOM overlays)
-  //   2. Connected by the JourneyPathLine (Mapbox GL line layer)
-  //
-  // Stops without coordinates (e.g., admin events, hangar check-ins) are
-  // excluded here but still appear in the JourneyStopLayer fallback timeline.
-  const geoStops = useMemo((): JourneyStop[] => {
-    if (!selectedJourney) return [];
-    return selectedJourney.stops.filter(
-      (s) =>
-        s.hasCoordinates &&
-        s.location.lat !== undefined &&
-        s.location.lng !== undefined
-    );
-  }, [selectedJourney]);
-
-  // ── Active stop index filtering (Sub-AC 3) ──────────────────────────────────
-  //
-  // visibleGeoStops — geo-referenced stops filtered by the active stop index.
-  //   When selectedStopIndex is null: all geo-referenced stops are visible.
-  //   When selectedStopIndex is N:    only stops with stopIndex ≤ N are shown.
-  //
-  // This powers the "replay cursor" UX: clicking stop #3 hides stops 4+ from
-  // the map so the user sees the journey path only up to that point in time.
-  // Real-time updates happen synchronously because data is already in memory —
-  // clicking a stop badge triggers setSelectedStopIndex → React re-renders →
-  // useMemo recomputes visibleGeoStops → map updates within one frame.
-  const visibleGeoStops = useMemo((): JourneyStop[] => {
-    if (selectedStopIndex === null) return geoStops;
-    return geoStops.filter((s) => s.stopIndex <= selectedStopIndex);
-  }, [geoStops, selectedStopIndex]);
-
-  // ── Derive path stops for JourneyPathLine ───────────────────────────────────
-  //
-  // visiblePathStops — flat coordinate pairs derived from visibleGeoStops.
-  // When selectedStopIndex is null, all path stops are included (full journey
-  // path rendered).  When selectedStopIndex is N, the path line is truncated
-  // at stop N — JourneyPathLine only connects stops 1..N.
-  //
-  // PathStop is the flat coordinate type that JourneyPathLine accepts.
-  // We extract lat/lng from each geo-referenced stop so JourneyPathLine
-  // does not need to know about the M2CaseJourney shape.
-  const visiblePathStops = useMemo((): PathStop[] =>
-    visibleGeoStops.map((s) => ({
-      stopIndex: s.stopIndex,
-      lat: s.location.lat!,
-      lng: s.location.lng!,
-    })),
-    [visibleGeoStops]
-  );
 
   // ── Total stop count for the selected case ──────────────────────────────────
   const selectedStopCount = selectedJourney?.stopCount ?? 0;
@@ -528,20 +461,9 @@ export function M2SiteDetail({
            *   data-stop-count      — number of journey stops for selected case
            *   data-batch-journey-count — number of batch journeys loaded
            *
-           * Stop overlay children (Sub-AC 3 wiring):
-           *
-           *   JourneyPathLine — path line renderer
-           *     Receives pathStops[] derived from useM2JourneyStopsBatch.
-           *     Renders a Mapbox GL LineString from the selected case's
-           *     geo-referenced stops. Scoped source/layer IDs (m2-journey-*)
-           *     ensure no conflicts with other map layers.
-           *     Returns null when fewer than 2 geo-referenced stops exist.
-           *
-           *   StopMarker — numbered HTML DOM badge overlays
-           *     One StopMarker per geo-referenced stop in the selected journey.
-           *     Each receives its stop data (stopIndex, lat, lng, eventType,
-           *     locationName, actorName) from the batch subscription result.
-           *     Clicking a marker badge updates selectedStopIndex.
+           * Note: this is currently a plain Mapbox integration container, not a
+           * react-map-gl <Map>. Do not render react-map-gl Source/Marker children
+           * here; they require Map context and will crash when context is absent.
            */
           <>
             <div
@@ -561,76 +483,6 @@ export function M2SiteDetail({
                   : undefined
               }
             >
-              {/*
-               * JourneyPathLine — path line renderer (Sub-AC 3)
-               *
-               * Connects geo-referenced journey stops with a Mapbox GL LineString.
-               * visiblePathStops is derived from visibleGeoStops, which is
-               * filtered by selectedStopIndex:
-               *   useM2JourneyStopsBatch(visibleCaseIds)
-               *     → batchJourneys → selectedJourney → geoStops
-               *     → visibleGeoStops (filtered by activeStopIndex)
-               *     → visiblePathStops
-               *
-               * When selectedStopIndex is null, all path stops are included
-               * (full journey path).  When set to N, only stops 1..N are passed,
-               * truncating the path line at the active cursor position.
-               *
-               * JourneyPathLine returns null automatically when:
-               *   • visiblePathStops is empty (no case selected, or index=0)
-               *   • fewer than 2 geo-referenced stops are visible
-               *
-               * Uses scoped source/layer IDs to avoid Mapbox GL source conflicts
-               * with other layers (e.g., history trails, turbine sites).
-               */}
-              <JourneyPathLine
-                stops={visiblePathStops}
-                sourceId={M2_JOURNEY_PATH_SOURCE_ID}
-                layerId={M2_JOURNEY_PATH_LAYER_ID}
-              />
-
-              {/*
-               * StopMarker badges — only visible stops (Sub-AC 3)
-               *
-               * visibleGeoStops is derived from geoStops filtered by
-               * selectedStopIndex:
-               *   batchJourneys → selectedJourney → geoStops
-               *   → visibleGeoStops (filtered by activeStopIndex)
-               *
-               * When selectedStopIndex is null, all geo-referenced stops are
-               * rendered.  When set to N, only stops with stopIndex ≤ N are
-               * rendered — stops beyond the active cursor are hidden.
-               *
-               * isLast reflects the last stop in visibleGeoStops (the stop at
-               * the active cursor), not the last stop in the full journey.
-               * This ensures the "latest stop" blue badge always appears at the
-               * current cursor position rather than at the journey's final stop.
-               *
-               * Each marker:
-               *   • Displays the 1-based stop sequence number
-               *   • Uses isFirst/isLast props to color-code endpoints (green/blue)
-               *   • Responds to click with handleStopClick → selectedStopIndex
-               *   • Shows a selection ring when isSelected=true
-               *
-               * Only rendered when selectedJourney is resolved (not undefined/null).
-               * Empty visibleGeoStops renders nothing (no markers visible yet).
-               */}
-              {selectedJourney != null &&
-                visibleGeoStops.map((stop, i) => (
-                  <StopMarker
-                    key={stop.eventId}
-                    stopIndex={stop.stopIndex}
-                    longitude={stop.location.lng!}
-                    latitude={stop.location.lat!}
-                    isFirst={i === 0}
-                    isLast={i === visibleGeoStops.length - 1}
-                    isSelected={selectedStopIndex === stop.stopIndex}
-                    eventType={stop.eventType}
-                    locationName={stop.location.locationName}
-                    actorName={stop.actorName}
-                    onClick={handleStopClick}
-                  />
-                ))}
             </div>
 
             {/*

@@ -110,7 +110,7 @@ function makeRecord(
   return {
     _id: id,
     _creationTime: signedOffAt,
-    caseId: CASE_ID as unknown as import("../../../convex/_generated/dataModel").Id<"cases">,
+    caseId: CASE_ID as unknown as import("../../../../convex/_generated/dataModel").Id<"cases">,
     status,
     signedOffBy:     extras?.signedOffBy ?? "user-abc",
     signedOffByName: extras?.signedOffByName ?? "Alice Reviewer",
