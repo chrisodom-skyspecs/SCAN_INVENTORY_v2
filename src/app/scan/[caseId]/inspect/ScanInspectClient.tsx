@@ -72,7 +72,7 @@ import {
 } from "../../../../hooks/use-scan-mutations";
 import { useServerStateReconciliation } from "../../../../hooks/use-server-state-reconciliation";
 import { StatusPill } from "../../../../components/StatusPill";
-import { InspectionStatusBar } from "../../../../components/ItemStatusBadge";
+import { ChecklistStatusCounts } from "../../../../components/ItemStatusBadge";
 import { ReconciliationBanner } from "../../../../components/ReconciliationBanner";
 import type { ChecklistItem, ManifestItemStatus } from "../../../../hooks/use-scan-queries";
 import type { Id } from "../../../../../convex/_generated/dataModel";
@@ -102,20 +102,23 @@ const STATUS_ACTIONS: Record<
 };
 
 // ─── Sub-component: Progress bar ─────────────────────────────────────────────
+//
+// Sub-AC 2: ProgressBar uses ChecklistStatusCounts to display aggregate counts
+// for verified, flagged, and missing items derived from the item list data.
+// The count derivation is owned by ChecklistStatusCounts — ProgressBar passes
+// the raw items array and lets the sub-component compute the summary.
 
 interface ProgressBarProps {
-  total: number;
-  ok: number;
-  damaged: number;
-  missing: number;
-  unchecked: number;
+  /** Full item list — counts are derived by ChecklistStatusCounts (Sub-AC 2). */
+  items: ChecklistItem[];
+  /** Pre-computed progress percentage from the checklist summary. */
   progressPct: number;
 }
 
-function ProgressBar({ total, ok, damaged, missing, unchecked, progressPct }: ProgressBarProps) {
+function ProgressBar({ items, progressPct }: ProgressBarProps) {
   return (
     <div className={styles.progressSection}>
-      {/* Progress bar */}
+      {/* Progress track */}
       <div
         className={styles.progressBarTrack}
         role="progressbar"
@@ -131,20 +134,24 @@ function ProgressBar({ total, ok, damaged, missing, unchecked, progressPct }: Pr
         />
       </div>
 
-      {/* Counts row — ItemStatusBadge primitives with icon + distinct coloring */}
+      {/*
+        Counts row — Sub-AC 2: ChecklistStatusCounts derives aggregate counts
+        (verified / flagged / missing / unchecked) from the item list in a
+        single pass.  Callers simply pass the items array; no pre-computation
+        required here.  showUnchecked=true so technicians can see remaining
+        work alongside completed counts in the inspection progress section.
+      */}
       <div className={styles.progressCounts}>
         <span className={styles.progressPct}>{progressPct}% reviewed</span>
-        {/* InspectionStatusBar handles verified/flagged/missing/unchecked coloring */}
-        <InspectionStatusBar
-          verified={ok}
-          flagged={damaged}
-          missing={missing}
-          unchecked={unchecked}
+        <ChecklistStatusCounts
+          items={items}
+          showUnchecked
           size="sm"
+          aria-label="Checklist item status counts"
         />
       </div>
 
-      {total === 0 && (
+      {items.length === 0 && (
         <p className={styles.noItemsNote}>
           No items in checklist. Apply a case template to add items.
         </p>
@@ -865,13 +872,15 @@ export function ScanInspectClient({ caseId }: ScanInspectClientProps) {
 
       <hr className={styles.divider} aria-hidden="true" />
 
-      {/* ── Progress summary ─────────────────────────────────────────── */}
+      {/*
+        ── Progress summary — Sub-AC 2: ChecklistStatusCounts ─────────
+        ProgressBar now accepts the raw items array and passes it to
+        ChecklistStatusCounts, which derives verified/flagged/missing/
+        unchecked counts internally (Sub-AC 2 pattern).
+        progressPct comes from the live Convex summary subscription.
+      */}
       <ProgressBar
-        total={summary.total}
-        ok={summary.ok}
-        damaged={summary.damaged}
-        missing={summary.missing}
-        unchecked={summary.unchecked}
+        items={items}
         progressPct={summary.progressPct}
       />
 

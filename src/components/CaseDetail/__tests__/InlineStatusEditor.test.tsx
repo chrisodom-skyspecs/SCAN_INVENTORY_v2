@@ -325,4 +325,133 @@ describe("InlineStatusEditor", () => {
       expect(screen.getByTestId("inline-status-idle")).toBeTruthy();
     });
   });
+
+  // ── QC dispatch gate error ────────────────────────────────────────────────
+  //
+  // Tests for the [QC_APPROVAL_REQUIRED] guard added to updateCaseStatus.
+  // When an operator attempts to set status to "transit_out" without an
+  // approved QC sign-off, the mutation throws [QC_APPROVAL_REQUIRED] and
+  // the UI must display a clear, actionable error explaining the requirement.
+
+  it("16. QC_APPROVAL_REQUIRED error shows qc-dispatch-error-banner", async () => {
+    mockMutationFn.mockRejectedValueOnce(
+      new Error(
+        "[QC_APPROVAL_REQUIRED] updateCaseStatus: Case \"SKY-001\" " +
+          "(case-abc) cannot be dispatched — QC sign-off status is " +
+          '"not_submitted". A QC sign-off with status "approved" is required.'
+      )
+    );
+
+    renderEditor("assembled");
+    fireEvent.click(screen.getByRole("button", { name: "Edit case status" }));
+
+    const select = screen.getByTestId("inline-status-select") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "transit_out" } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("inline-status-save-btn"));
+    });
+
+    await waitFor(() => {
+      // Generic error container is shown
+      expect(screen.getByTestId("inline-status-error")).toBeTruthy();
+      // QC-specific banner is rendered
+      expect(screen.getByTestId("qc-dispatch-error-banner")).toBeTruthy();
+    });
+  });
+
+  it("17. QC_APPROVAL_REQUIRED banner contains QC-specific message text", async () => {
+    mockMutationFn.mockRejectedValueOnce(
+      new Error(
+        "[QC_APPROVAL_REQUIRED] updateCaseStatus: cannot be dispatched — " +
+          'QC sign-off status is "pending".'
+      )
+    );
+
+    renderEditor("assembled");
+    fireEvent.click(screen.getByRole("button", { name: "Edit case status" }));
+
+    const select = screen.getByTestId("inline-status-select") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "transit_out" } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("inline-status-save-btn"));
+    });
+
+    await waitFor(() => {
+      const banner = screen.getByTestId("qc-dispatch-error-banner");
+      // Banner text must mention QC sign-off / dispatch approval requirement
+      expect(banner.textContent).toMatch(/QC sign-off/i);
+      expect(banner.textContent).toMatch(/dispatch/i);
+    });
+  });
+
+  it("18. QC_APPROVAL_REQUIRED: data-qc-error attribute is set on error container", async () => {
+    mockMutationFn.mockRejectedValueOnce(
+      new Error("[QC_APPROVAL_REQUIRED] cannot dispatch without approval")
+    );
+
+    renderEditor("assembled");
+    fireEvent.click(screen.getByRole("button", { name: "Edit case status" }));
+
+    const select = screen.getByTestId("inline-status-select") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "transit_out" } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("inline-status-save-btn"));
+    });
+
+    await waitFor(() => {
+      const errorContainer = screen.getByTestId("inline-status-error");
+      expect(errorContainer.getAttribute("data-qc-error")).toBe("true");
+    });
+  });
+
+  it("19. Generic errors do NOT show qc-dispatch-error-banner", async () => {
+    mockMutationFn.mockRejectedValueOnce(new Error("Internal server error"));
+
+    renderEditor("assembled");
+    fireEvent.click(screen.getByRole("button", { name: "Edit case status" }));
+
+    const select = screen.getByTestId("inline-status-select") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "transit_out" } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("inline-status-save-btn"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("inline-status-error")).toBeTruthy();
+      // QC banner must NOT be present for a generic error
+      expect(screen.queryByTestId("qc-dispatch-error-banner")).toBeNull();
+    });
+  });
+
+  it("20. QC_APPROVAL_REQUIRED: Retry returns to editing mode", async () => {
+    mockMutationFn.mockRejectedValueOnce(
+      new Error("[QC_APPROVAL_REQUIRED] dispatch blocked")
+    );
+
+    renderEditor("assembled");
+    fireEvent.click(screen.getByRole("button", { name: "Edit case status" }));
+
+    const select = screen.getByTestId("inline-status-select") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "transit_out" } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("inline-status-save-btn"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("qc-dispatch-error-banner")).toBeTruthy();
+    });
+
+    // Click Retry — should go back to editing so the user can choose a
+    // different status or wait for QC approval and try again.
+    fireEvent.click(screen.getByRole("button", { name: "Retry status update" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("inline-status-editing")).toBeTruthy();
+    });
+  });
 });

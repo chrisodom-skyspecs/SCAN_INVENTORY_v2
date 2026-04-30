@@ -306,6 +306,146 @@ describe("C -- setCaseWindow history entry semantics", () => {
 });
 
 // ============================================================================
+// C2. setAt -- HISTORY ENTRY CONTROL (AC 110203 Sub-AC 3)
+//
+// Verifies that the `at` timestamp control is wired to the URL state hook so
+// that timestamp changes update URL params via shallow routing
+// (window.history.replaceState / pushState) WITHOUT triggering a Next.js
+// navigation event or a full page reload.
+//
+// The wiring chain under test:
+//   <input type="datetime-local"> onChange
+//     → handleAtChange(e) in M2/M3/M4/M5 components
+//     → setAt(date) from useMapParams()
+//     → setMapUrlState({ at }, options) in useMapParams
+//     → window.history.replaceState (replace:true default)
+//     → window.history.pushState   (replace:false explicit opt-in)
+//
+// This block proves the URL writes happen via the History API (no router
+// navigation), satisfying the "shallow routing without full reloads"
+// requirement of AC 110203 Sub-AC 3.
+// ============================================================================
+
+describe("C2 -- setAt history entry semantics (AC 110203 Sub-AC 3)", () => {
+  it("C2.1: setAt(date) calls history.replaceState by default (shallow routing)", () => {
+    const { result } = renderMapParams();
+
+    act(() => {
+      result.current.setAt(new Date("2025-08-15T10:00:00Z"));
+    });
+
+    expect(replaceStateSpy).toHaveBeenCalledOnce();
+    expect(pushStateSpy).not.toHaveBeenCalled();
+  });
+
+  it("C2.2: setAt(date, { replace:false }) calls history.pushState (new history entry)", () => {
+    const { result } = renderMapParams();
+
+    act(() => {
+      result.current.setAt(new Date("2025-08-15T10:00:00Z"), { replace: false });
+    });
+
+    expect(pushStateSpy).toHaveBeenCalledOnce();
+    expect(replaceStateSpy).not.toHaveBeenCalled();
+  });
+
+  it("C2.3: setAt(date) encodes at=<ISO 8601> in the URL", () => {
+    const at = new Date("2025-08-15T10:00:00.000Z");
+    const { result } = renderMapParams();
+
+    act(() => {
+      result.current.setAt(at);
+    });
+
+    const url = getSpyUrl(replaceStateSpy);
+    const qs = new URL(url, "http://x").searchParams;
+    expect(qs.get("at")).toBe(at.toISOString());
+  });
+
+  it("C2.4: setAt(null) clears the at param from the URL (return to live)", () => {
+    _searchParamsString = `at=${encodeURIComponent("2025-08-15T10:00:00.000Z")}`;
+    const { result } = renderMapParams();
+
+    act(() => {
+      result.current.setAt(null);
+    });
+
+    const url = getSpyUrl(replaceStateSpy);
+    expect(url).not.toContain("at=");
+  });
+
+  it("C2.5: setAt updates React state so consumers re-render with the new value", () => {
+    const { result } = renderMapParams();
+    expect(result.current.at).toBeNull();
+
+    const target = new Date("2025-09-01T08:30:00.000Z");
+    act(() => {
+      result.current.setAt(target);
+    });
+
+    expect(result.current.at).not.toBeNull();
+    expect(result.current.at?.toISOString()).toBe(target.toISOString());
+  });
+
+  it("C2.6: setAt preserves other URL params (org/kit/view/case) unchanged", () => {
+    _searchParamsString = "view=M3&org=org-1&kit=kit-2&case=case-x&panel=1";
+    const { result } = renderMapParams();
+
+    act(() => {
+      result.current.setAt(new Date("2025-08-15T10:00:00.000Z"));
+    });
+
+    const url = getSpyUrl(replaceStateSpy);
+    const qs = new URL(url, "http://x").searchParams;
+    expect(qs.get("view")).toBe("M3");
+    expect(qs.get("org")).toBe("org-1");
+    expect(qs.get("kit")).toBe("kit-2");
+    expect(qs.get("case")).toBe("case-x");
+    expect(qs.get("panel")).toBe("1");
+    expect(qs.get("at")).toBe("2025-08-15T10:00:00.000Z");
+  });
+
+  it("C2.7: rapid setAt calls (e.g., scrubber drag) all use replaceState — no history bloat", () => {
+    const { result } = renderMapParams();
+
+    const stamps = [
+      new Date("2025-08-15T10:00:00.000Z"),
+      new Date("2025-08-15T10:05:00.000Z"),
+      new Date("2025-08-15T10:10:00.000Z"),
+      new Date("2025-08-15T10:15:00.000Z"),
+    ];
+
+    act(() => {
+      stamps.forEach((d) => result.current.setAt(d));
+    });
+
+    expect(replaceStateSpy).toHaveBeenCalledTimes(stamps.length);
+    expect(pushStateSpy).not.toHaveBeenCalled();
+    // Final URL reflects the last setAt value
+    const finalUrl = getSpyUrl(replaceStateSpy, stamps.length - 1);
+    expect(finalUrl).toContain(`at=${encodeURIComponent(stamps[stamps.length - 1]!.toISOString())}`);
+  });
+
+  it("C2.8: setAt -> simulate Back -> at returns to previous value (shallow nav round-trip)", () => {
+    _searchParamsString = "";
+    const { result } = renderMapParams();
+    expect(result.current.at).toBeNull();
+
+    const target = new Date("2025-08-15T10:00:00.000Z");
+    act(() => {
+      result.current.setAt(target, { replace: false });
+    });
+    expect(result.current.at?.toISOString()).toBe(target.toISOString());
+
+    act(() => {
+      window.history.pushState(null, "", "/inventory");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(result.current.at).toBeNull();
+  });
+});
+
+// ============================================================================
 // D. BACK-NAVIGATION SIMULATION
 //
 // Simulates browser back/forward by:

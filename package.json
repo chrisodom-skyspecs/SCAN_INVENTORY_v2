@@ -12,7 +12,10 @@
     "test:watch": "vitest",
     "test:latency": "vitest run src/lib/__tests__/convex-endpoint-latency.test.ts src/lib/__tests__/convex-endpoint-latency.bench.test.ts src/app/api/cases/map/__tests__/route.latency.test.ts",
     "seed": "npx convex run seed:seedDatabase",
-    "seed:reset": "npx convex run seed:seedDatabase '{\"clearExisting\":true}'"
+    "seed:reset": "npx convex run seed:seedDatabase '{\"clearExisting\":true}'",
+    "smoke": "node scripts/smoke-test.mjs",
+    "smoke:preview": "BASE_URL=https://skyspecs-inventory.vercel.app CONVEX_URL=https://judicious-dove-740.convex.cloud CONVEX_SITE_URL=https://judicious-dove-740.convex.site node scripts/smoke-test.mjs",
+    "smoke:local": "BASE_URL=http://localhost:3000 CONVEX_URL=https://judicious-dove-740.convex.cloud CONVEX_SITE_URL=https://judicious-dove-740.convex.site node scripts/smoke-test.mjs"
   },
   "dependencies": {
     "@auth/core": "^0.37.0",

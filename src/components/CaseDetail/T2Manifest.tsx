@@ -51,15 +51,18 @@ import {
   getTrackingUrl,
 } from "../../hooks/use-shipment-status";
 import type { ShipmentRecord } from "../../hooks/use-shipment-status";
+import { useCaseById } from "../../hooks/use-case-status";
 import { StatusPill } from "../StatusPill";
 import CustodySection from "./CustodySection";
 import { LabelManagementPanel } from "../LabelManagementPanel";
+import { QcSignOffHistory } from "./QcSignOffHistory";
 import { useCurrentUser } from "../../hooks/use-current-user";
 import { OPERATIONS } from "../../../convex/rbac";
 import shared from "./shared.module.css";
 import styles from "./T2Manifest.module.css";
 import type { ManifestItemStatus, ChecklistWithInspection } from "../../queries/checklist";
 import type { StatusKind } from "../StatusPill/StatusPill";
+import type { CaseStatus } from "../../../convex/cases";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -215,6 +218,21 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
   const { can } = useCurrentUser();
   const canManageLabels = can(OPERATIONS.QR_CODE_GENERATE);
 
+  // ── Live case-detail subscription (Sub-AC 2: useQuery for live updates) ──
+  //
+  // useCaseById wraps `useQuery(api.cases.getCaseById, { caseId })` so the
+  // T2 Manifest panel receives push updates whenever the case row changes
+  // — status transitions, custody handoffs, location updates, label edits.
+  // Convex re-evaluates and pushes within ~100–300 ms of any SCAN app
+  // mutation that touches the cases table, satisfying the ≤ 2-second
+  // real-time fidelity SLA.  The case header below uses these live values
+  // so operators always see the current case identity / status without a
+  // page reload.  Returns:
+  //   undefined → loading (no header rendered)
+  //   null      → not found (no header rendered)
+  //   Doc<"cases"> → live case document
+  const caseDoc = useCaseById(caseId);
+
   // useChecklistWithInspection is a real-time subscription via Convex.
   // Convex re-runs getChecklistWithInspection whenever any manifestItem or
   // inspections row for this case changes — the T2 manifest view updates
@@ -251,6 +269,23 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
     return (
       <div className={styles.manifest} data-testid="t2-manifest">
         {/*
+          ── Live case-detail header — Sub-AC 2 useQuery integration ───────
+          Subscribes via useCaseById (api.cases.getCaseById) so the case
+          label and status pill always reflect the current Convex state.
+          Updates within ~100–300 ms of any SCAN app or admin status edit.
+          Hidden while caseDoc is loading (undefined) or not found (null).
+        */}
+        {caseDoc && (
+          <div
+            className={styles.caseContext}
+            data-testid="t2-case-context"
+            aria-label="Case context"
+          >
+            <span className={styles.caseContextLabel}>{caseDoc.label}</span>
+            <StatusPill kind={caseDoc.status as CaseStatus} />
+          </div>
+        )}
+        {/*
           ── Shipment status banner — real-time via useLatestShipment ──────
           Shown even when no items exist — the case could be in transit
           without a completed template application.
@@ -269,6 +304,20 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
         <div className={styles.custodyRow}>
           <CustodySection caseId={caseId} variant="compact" />
         </div>
+
+        {/*
+          ── QC Sign-off History — compact recent decisions (Sub-AC 4) ────
+          QcSignOffHistory subscribes to api["queries/qcSignOff"].getQcSignOffHistory
+          via the useQcSignOffHistory Convex real-time hook.  Updates from any
+          submitQcSignOff mutation arrive within ~100–300 ms, satisfying the
+          ≤ 2-second real-time fidelity requirement between SCAN app actions
+          and the INVENTORY dashboard.
+
+          limit={3} shows the three most recent QC decisions; a truncation
+          notice directs operators to the T5 Audit panel for the full trail.
+        */}
+        <hr className={shared.divider} />
+        <QcSignOffHistory caseId={caseId} limit={3} />
 
         {/*
           ── QR Label Management — operator-permission-gated ──────────────
@@ -291,6 +340,24 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
 
   return (
     <div className={styles.manifest} data-testid="t2-manifest">
+      {/*
+        ── Live case-detail header — Sub-AC 2 useQuery integration ───────
+        Subscribes via useCaseById (api.cases.getCaseById) so the case
+        label and status pill always reflect the current Convex state.
+        Updates within ~100–300 ms of any SCAN app or admin status edit
+        — for example, a pilot updating status from "deployed" to
+        "transit_in" propagates to this header without a page reload.
+      */}
+      {caseDoc && (
+        <div
+          className={styles.caseContext}
+          data-testid="t2-case-context"
+          aria-label="Case context"
+        >
+          <span className={styles.caseContextLabel}>{caseDoc.label}</span>
+          <StatusPill kind={caseDoc.status as CaseStatus} />
+        </div>
+      )}
       {/*
         ── Shipment status banner — real-time via useLatestShipment ──────
         Sub-AC 36d-4: useLatestShipment subscribes to
@@ -510,6 +577,20 @@ export default function T2Manifest({ caseId, onNavigateToShipping }: T2ManifestP
       <div className={styles.custodyRow}>
         <CustodySection caseId={caseId} variant="compact" />
       </div>
+
+      {/*
+        ── QC Sign-off History — compact recent decisions (Sub-AC 4) ────
+        QcSignOffHistory subscribes to api["queries/qcSignOff"].getQcSignOffHistory
+        via the useQcSignOffHistory Convex real-time hook.  Updates from any
+        submitQcSignOff mutation arrive within ~100–300 ms, satisfying the
+        ≤ 2-second real-time fidelity requirement between SCAN app actions
+        and the INVENTORY dashboard.
+
+        limit={3} shows the three most recent QC decisions; a truncation
+        notice directs operators to the T5 Audit panel for the full trail.
+      */}
+      <hr className={shared.divider} />
+      <QcSignOffHistory caseId={caseId} limit={3} />
 
       {/*
         ── QR Label Management — operator-permission-gated ──────────────

@@ -45,6 +45,16 @@ import { useKindeUser } from "../../../../hooks/use-kinde-user";
 import { useServerStateReconciliation } from "../../../../hooks/use-server-state-reconciliation";
 import { StatusPill } from "../../../../components/StatusPill";
 import { ReconciliationBanner } from "../../../../components/ReconciliationBanner";
+import { FieldError } from "../../../../components/FieldError";
+import {
+  required,
+  fedexTrackingNumber,
+  composeValidators,
+  maxLength,
+  parseConvexFieldError,
+  extractConvexErrorCode,
+  shouldShowError,
+} from "../../../../lib/form-validation";
 import { trackEvent } from "../../../../lib/telemetry.lib";
 import { TelemetryEventName } from "../../../../types/telemetry.types";
 import styles from "./page.module.css";
@@ -150,12 +160,47 @@ function CaseNotFound({ caseId }: { caseId: string }) {
 interface TrackingEntryFormProps {
   caseId: string;
   caseLabel: string;
+  /** Current lifecycle status of the case (e.g. "hangar", "assembled"). */
+  caseStatus: string;
+  /**
+   * Current QC sign-off status from cases.qcSignOffStatus.
+   * Undefined means "not yet submitted".
+   * "approved" → QC cleared for dispatch.
+   * "pending" / "rejected" / undefined → blocked for outbound dispatch.
+   */
+  qcSignOffStatus: "pending" | "approved" | "rejected" | undefined;
   onSuccess: () => void;
 }
+
+// ─── Validators for the tracking entry form ───────────────────────────────────
+
+const validateTrackingNumber = composeValidators(
+  required("FedEx tracking number is required."),
+  fedexTrackingNumber()
+);
+
+const validateDestinationName = maxLength(
+  120,
+  "Destination name must be 120 characters or fewer."
+);
+
+const validateNotes = maxLength(
+  500,
+  "Notes must be 500 characters or fewer."
+);
+
+// ─── Statuses from which shipping is outbound (toward field site) ────────────
+// These mirror the OUTBOUND_SHIPPABLE_STATUSES constant in convex/mutations/ship.ts.
+// Used for proactive QC gate: if the case is in one of these statuses and the
+// QC sign-off is not "approved", show the gate banner before the technician
+// even attempts to submit the form.
+const OUTBOUND_SHIPPABLE_STATUSES = new Set(["hangar", "assembled", "received"]);
 
 function TrackingEntryForm({
   caseId,
   caseLabel,
+  caseStatus,
+  qcSignOffStatus,
   onSuccess,
 }: TrackingEntryFormProps) {
   // useShipCase wraps api.shipping.shipCase — the authoritative ship mutation.
@@ -198,6 +243,39 @@ function TrackingEntryForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // ── Sub-AC 3: QC dispatch gate state ──────────────────────────────────────
+  // Set to true when the server returns [QC_APPROVAL_REQUIRED], signalling
+  // that an operator/admin must approve the case in INVENTORY before dispatch.
+  // The flag persists until the user explicitly dismisses it or successfully
+  // retries (in case QC approval arrives in the background).
+  const [qcGateBlocked, setQcGateBlocked] = useState(false);
+
+  // Proactive QC gate: derive from props whether this case is blocked for
+  // outbound dispatch before the form is even submitted.  This surfaces the
+  // error immediately when the technician opens the ship screen, avoiding a
+  // wasted network round-trip.
+  //   isOutbound — true when the current case status would produce "transit_out"
+  //   isQcBlocked — true when isOutbound AND QC is not approved
+  const isOutbound = OUTBOUND_SHIPPABLE_STATUSES.has(caseStatus);
+  const isQcBlockedProactive = isOutbound && qcSignOffStatus !== "approved";
+
+  // ── Sub-AC 2: Inline validation state ────────────────────────────────────
+  // touchedFields: tracks which fields the user has focused+blurred at least
+  // once.  Errors are hidden until a field is touched OR submit is attempted.
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  // fieldErrors: per-field error messages surfaced from Convex mutation errors
+  // or client-side validation.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // ── Derived: client-side validation errors ────────────────────────────────
+  const trackingNumberError =
+    validateTrackingNumber(trackingNumber) ?? fieldErrors.trackingNumber ?? null;
+  const destinationNameError =
+    validateDestinationName(destinationName) ?? fieldErrors.destinationName ?? null;
+  const notesError =
+    validateNotes(notes) ?? fieldErrors.notes ?? null;
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus tracking number input on mount (mobile keyboard shows immediately)
@@ -207,11 +285,44 @@ function TrackingEntryForm({
     return () => clearTimeout(t);
   }, []);
 
+  // ── Blur handler — marks field as touched ─────────────────────────────────
+  const handleFieldBlur = useCallback((fieldName: string) => {
+    setTouchedFields((prev) => {
+      const next = new Set(prev);
+      next.add(fieldName);
+      return next;
+    });
+  }, []);
+
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+
+      // ── Sub-AC 2: Client-side validation before sending to Convex ──────────
+      // Mark submit as attempted so all field errors become visible.
+      setSubmitAttempted(true);
+
       const tn = trackingNumber.trim();
-      if (!tn) return;
+
+      // Run validators on all required fields
+      const tnError = validateTrackingNumber(tn);
+      const destError = validateDestinationName(destinationName);
+      const notesErr = validateNotes(notes);
+
+      if (tnError || destError || notesErr) {
+        // Surface validation errors inline; abort mutation
+        setFieldErrors({
+          ...(tnError ? { trackingNumber: tnError } : {}),
+          ...(destError ? { destinationName: destError } : {}),
+          ...(notesErr ? { notes: notesErr } : {}),
+        });
+        // Focus the first invalid field
+        if (tnError) inputRef.current?.focus();
+        return;
+      }
+
+      // Clear stale field-level errors on a clean submit
+      setFieldErrors({});
 
       setIsSubmitting(true);
       setSubmitError(null);
@@ -286,11 +397,44 @@ function TrackingEntryForm({
         // ── Sub-AC 2c: Cancel pending record — Convex rolled back ──────────
         reconciliation.cancelMutation(mutationId);
 
-        setSubmitError(
-          err instanceof Error
-            ? err.message
-            : "Failed to record shipment. Check the tracking number and try again."
-        );
+        // ── Sub-AC 3: QC dispatch gate error ────────────────────────────────
+        // Detect the [QC_APPROVAL_REQUIRED] error code before falling through
+        // to the generic error handling path.  When detected, activate the
+        // dedicated QC gate banner — a mobile-optimized, prominent message that
+        // makes it unambiguous to the technician that QC approval is required
+        // and prevents them from retrying the dispatch until it is resolved.
+        const errorCode = extractConvexErrorCode(err);
+        if (errorCode === "QC_APPROVAL_REQUIRED") {
+          setQcGateBlocked(true);
+          setSubmitError(null);
+          setFieldErrors({});
+          // Scroll to top of form so the banner is immediately visible
+          inputRef.current?.closest("form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
+
+        // ── Sub-AC 2: Surface Convex errors at field level ──────────────────
+        // Parse the Convex error to determine whether it maps to a specific
+        // form field (e.g. "[FIELD:trackingNumber] Invalid format") or is a
+        // form-level error (e.g. "[RATE_LIMITED] Try again later").
+        const parsed = parseConvexFieldError(err);
+        const knownFields = ["trackingNumber", "originName", "destinationName", "notes"];
+
+        // Clear any previous QC gate error when a new non-QC error arrives
+        setQcGateBlocked(false);
+
+        if (parsed.fieldName && knownFields.includes(parsed.fieldName)) {
+          // Field-specific error — show inline below the field
+          setFieldErrors({ [parsed.fieldName]: parsed.message });
+          setSubmitError(null);
+        } else {
+          // Form-level error — show in banner
+          setFieldErrors({});
+          setSubmitError(
+            parsed.message ||
+            "Failed to record shipment. Check the tracking number and try again."
+          );
+        }
       } finally {
         setIsSubmitting(false);
       }
@@ -298,12 +442,81 @@ function TrackingEntryForm({
     [caseId, shipCase, trackingNumber, originName, destinationName, notes, onSuccess, userId, userName, reconciliation]
   );
 
+  // ── Determine if the submit button should be disabled ───────────────────────
+  // Block submission when:
+  //   a) The form is currently submitting (prevents double-submit)
+  //   b) No tracking number has been entered (primary required field)
+  //   c) QC approval is proactively blocked OR the server returned a QC gate error
+  //      The submit button re-enables once the QC issue is resolved and the
+  //      technician dismisses the banner (sets qcGateBlocked = false) — at that
+  //      point the Convex subscription will have updated qcSignOffStatus as well.
+  const isSubmitDisabled = isSubmitting || !trackingNumber.trim() || isQcBlockedProactive || qcGateBlocked;
+
   return (
     <div className={styles.section} data-testid="tracking-entry-form">
       {/* Section header */}
       <div className={styles.sectionHeader}>
         <h2 className={styles.sectionTitle}>Ship This Case</h2>
       </div>
+
+      {/* ── Sub-AC 3: Proactive QC gate banner ─────────────────────────────
+          Shown immediately when the case is in an outbound-shippable status
+          but has not received QC approval.  This saves the technician a wasted
+          network round-trip before reaching the server gate.  The banner is
+          also shown after the server returns [QC_APPROVAL_REQUIRED].        */}
+      {(isQcBlockedProactive || qcGateBlocked) && (
+        <div
+          className={styles.qcGateBanner}
+          role="alert"
+          aria-live="assertive"
+          data-testid="qc-gate-banner"
+        >
+          {/* Warning icon */}
+          <svg
+            className={styles.qcGateIcon}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <div className={styles.qcGateBody}>
+            <p className={styles.qcGateTitle}>QC Approval Required</p>
+            <p className={styles.qcGateMessage}>
+              This case must be approved by an operator or admin via{" "}
+              <strong>INVENTORY</strong> before it can be dispatched.
+              {qcSignOffStatus === "rejected" && (
+                <> The previous QC review was <strong>rejected</strong> — a new approval is needed.</>
+              )}
+              {(!qcSignOffStatus || qcSignOffStatus === "pending") && qcGateBlocked && (
+                <> QC sign-off has not been submitted or is still pending.</>
+              )}
+            </p>
+            <p className={styles.qcGateAction}>
+              Contact your operations team to approve this case, then return here to complete dispatch.
+            </p>
+            {/* Dismiss button — only shown after a server-side gate error.
+                Proactive gate auto-dismisses when qcSignOffStatus becomes "approved"
+                via Convex real-time subscription. */}
+            {qcGateBlocked && !isQcBlockedProactive && (
+              <button
+                type="button"
+                className={styles.qcGateDismiss}
+                onClick={() => setQcGateBlocked(false)}
+                aria-label="Dismiss QC gate error"
+              >
+                Dismiss
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <p className={styles.formLead}>
         Enter the FedEx tracking number for{" "}
@@ -327,20 +540,50 @@ function TrackingEntryForm({
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
-            className={styles.fieldInput}
+            className={[
+              styles.fieldInput,
+              shouldShowError("trackingNumber", touchedFields, submitAttempted) && trackingNumberError
+                ? styles.fieldInputInvalid
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             placeholder="e.g. 794644823741"
             value={trackingNumber}
-            onChange={(e) => setTrackingNumber(e.target.value)}
+            onChange={(e) => {
+              setTrackingNumber(e.target.value);
+              // Clear field-level Convex error when user edits
+              if (fieldErrors.trackingNumber) {
+                setFieldErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.trackingNumber;
+                  return next;
+                });
+              }
+            }}
+            onBlur={() => handleFieldBlur("trackingNumber")}
             disabled={isSubmitting}
             required
             aria-required="true"
+            aria-invalid={
+              shouldShowError("trackingNumber", touchedFields, submitAttempted) && !!trackingNumberError
+                ? true
+                : undefined
+            }
             aria-describedby={
-              submitError ? "tracking-form-error" : "tracking-number-hint"
+              shouldShowError("trackingNumber", touchedFields, submitAttempted) && trackingNumberError
+                ? "trackingNumber-error"
+                : "tracking-number-hint"
             }
           />
-          <span id="tracking-number-hint" className={styles.fieldHint}>
-            Enter the 12– or 22-digit FedEx tracking number from the shipping label.
-          </span>
+          {/* Inline field error — shown after blur or submit attempt */}
+          {shouldShowError("trackingNumber", touchedFields, submitAttempted) && trackingNumberError ? (
+            <FieldError id="trackingNumber-error" error={trackingNumberError} />
+          ) : (
+            <span id="tracking-number-hint" className={styles.fieldHint}>
+              Enter the 12– or 22-digit FedEx tracking number from the shipping label.
+            </span>
+          )}
         </div>
 
         {/* Optional route info — collapsible on mobile */}
@@ -371,12 +614,38 @@ function TrackingEntryForm({
               <input
                 id="destinationName"
                 type="text"
-                className={styles.fieldInput}
+                className={[
+                  styles.fieldInput,
+                  shouldShowError("destinationName", touchedFields, submitAttempted) && destinationNameError
+                    ? styles.fieldInputInvalid
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 placeholder="e.g. SkySpecs HQ"
                 value={destinationName}
-                onChange={(e) => setDestinationName(e.target.value)}
+                onChange={(e) => {
+                  setDestinationName(e.target.value);
+                  if (fieldErrors.destinationName) {
+                    setFieldErrors((prev) => { const n = { ...prev }; delete n.destinationName; return n; });
+                  }
+                }}
+                onBlur={() => handleFieldBlur("destinationName")}
                 disabled={isSubmitting}
+                aria-invalid={
+                  shouldShowError("destinationName", touchedFields, submitAttempted) && !!destinationNameError
+                    ? true
+                    : undefined
+                }
+                aria-describedby={
+                  shouldShowError("destinationName", touchedFields, submitAttempted) && destinationNameError
+                    ? "destinationName-error"
+                    : undefined
+                }
               />
+              {shouldShowError("destinationName", touchedFields, submitAttempted) && destinationNameError && (
+                <FieldError id="destinationName-error" error={destinationNameError} />
+              )}
             </div>
 
             <div className={styles.fieldGroup}>
@@ -385,13 +654,40 @@ function TrackingEntryForm({
               </label>
               <textarea
                 id="shipmentNotes"
-                className={styles.fieldTextarea}
+                className={[
+                  styles.fieldTextarea,
+                  shouldShowError("notes", touchedFields, submitAttempted) && notesError
+                    ? styles.fieldInputInvalid
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 placeholder="Any notes for the operations team"
                 rows={2}
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                  if (fieldErrors.notes) {
+                    setFieldErrors((prev) => { const n = { ...prev }; delete n.notes; return n; });
+                  }
+                }}
+                onBlur={() => handleFieldBlur("notes")}
                 disabled={isSubmitting}
+                aria-invalid={
+                  shouldShowError("notes", touchedFields, submitAttempted) && !!notesError
+                    ? true
+                    : undefined
+                }
+                aria-describedby={
+                  shouldShowError("notes", touchedFields, submitAttempted) && notesError
+                    ? "shipmentNotes-error"
+                    : undefined
+                }
+                maxLength={505}
               />
+              {shouldShowError("notes", touchedFields, submitAttempted) && notesError && (
+                <FieldError id="shipmentNotes-error" error={notesError} />
+              )}
             </div>
           </div>
         </details>
@@ -441,8 +737,13 @@ function TrackingEntryForm({
         <button
           type="submit"
           className={[styles.ctaButton, styles.ctaButtonPrimary].join(" ")}
-          disabled={isSubmitting || !trackingNumber.trim()}
+          disabled={isSubmitDisabled}
           aria-busy={isSubmitting}
+          aria-describedby={
+            (isQcBlockedProactive || qcGateBlocked)
+              ? "qc-gate-banner"
+              : undefined
+          }
         >
           {isSubmitting ? (
             <>
@@ -924,6 +1225,10 @@ export function ScanShipmentClient({ caseId }: ScanShipmentClientProps) {
         <TrackingEntryForm
           caseId={caseId}
           caseLabel={caseDoc.label}
+          caseStatus={caseDoc.status}
+          qcSignOffStatus={
+            caseDoc.qcSignOffStatus as "pending" | "approved" | "rejected" | undefined
+          }
           onSuccess={handleShipmentCreated}
         />
       ) : (

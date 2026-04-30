@@ -97,6 +97,9 @@ export type {
   LogScanOnlyResult,
 } from "../../convex/mutations/scan";
 
+// Re-export the immutable scan history result type
+export type { RecordScanEventResult } from "../../convex/scanActions";
+
 export type { ShipCaseResult } from "../../convex/shipping";
 
 export type { HandoffCustodyResult } from "../../convex/custodyHandoffs";
@@ -801,6 +804,68 @@ export function useCheckInCase() {
  */
 export function useLogScanOnly() {
   return useMutation(api.mutations.scan.logScanOnly);
+}
+
+// ─── useRecordScanEvent ───────────────────────────────────────────────────────
+
+/**
+ * Returns the immutable QR scan history mutation from convex/scanActions.ts.
+ *
+ * `recordScanEvent` is the dedicated write for the append-only `scans` history
+ * table. It records EVERY QR code scan performed in the SCAN mobile app — even
+ * "lookup" scans that do not advance case status — so that the T5 audit panel,
+ * "Last seen N minutes ago" displays, and per-user activity feeds reflect the
+ * full physical-scan history.
+ *
+ * When to call this hook
+ * ──────────────────────
+ * From the QR scanner action handler (QrScannerClient) immediately after a
+ * scanned QR code has been resolved to a case via `getCaseByQrIdentifier`.
+ * Calling here ensures the scan log row is written before the user navigates
+ * to the case detail page or any downstream workflow (check-in, inspect,
+ * damage, ship, handoff). Each downstream workflow may also write its own
+ * additional scan rows when its specific action runs (e.g. checkInCase writes
+ * a scan row keyed to the status transition).
+ *
+ * Reactive query invalidations (≤ 2-second real-time fidelity)
+ * ────────────────────────────────────────────────────────────
+ * The single INSERT into `scans` invalidates:
+ *   getScansByCase(caseId)         — T5 scan activity timeline
+ *   getLastScanForCase(caseId)     — "Last scanned N min ago"
+ *   getScansByUser(scannedBy)      — SCAN app "My Activity" tab
+ *   getRecentScans()               — fleet-wide recent scan feed
+ *
+ * All subscribed dashboard sessions and SCAN app views receive the updated
+ * results within ~100–300 ms, satisfying the ≤ 2-second SLA.
+ *
+ * Why a separate hook (vs. useLogScanOnly / useCheckInCase)
+ * ──────────────────────────────────────────────────────────
+ * `recordScanEvent` is the write path the QR scan action handler invokes the
+ * moment a QR code is decoded — before the technician chooses a workflow.
+ * It is intentionally minimal: no status transition, no inspection creation,
+ * no events-table write. The other hooks are higher-level operations that
+ * subsume this write inside richer transactions.
+ *
+ * Usage (QrScannerClient on successful resolution):
+ *   const recordScan = useRecordScanEvent();
+ *
+ *   await recordScan({
+ *     caseId:        resolvedCase._id,        // resolved via getCaseByQrIdentifier
+ *     qrPayload:     decodedRawValue,         // exactly what the camera read
+ *     scannedBy:     currentUser.id,          // Kinde user ID
+ *     scannedByName: currentUser.name,        // display name
+ *     scannedAt:     Date.now(),              // client clock
+ *     lat:           position?.coords.latitude,
+ *     lng:           position?.coords.longitude,
+ *     locationName:  reverseGeocodedName,
+ *     scanContext:   "lookup",                // pre-workflow scan
+ *   });
+ *
+ * Returns:
+ *   RecordScanEventResult { scanId, caseId, scannedAt }
+ */
+export function useRecordScanEvent() {
+  return useMutation(api.scanActions.recordScanEvent);
 }
 
 // ─── Canonical checklist mutation hooks ──────────────────────────────────────

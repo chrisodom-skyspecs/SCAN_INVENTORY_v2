@@ -282,6 +282,52 @@
   --ink-on-neutral-subtle: var(--_n-700);
 
   /* ──────────────────────────────────────────────────────────
+     INK — TYPOGRAPHY HIERARCHY  (foreground colors per role)
+
+     Semantic aliases that map the typographic hierarchy to the
+     ink ramp.  Use these when the role of the text is the
+     primary signal (e.g. a section heading, a form label, a
+     caption) rather than a generic primary/secondary level.
+
+     Hierarchy (from most prominent to least):
+       display    — hero / oversized marketing-style text
+       heading    — section / panel / page headings (h1–h6)
+       subheading — secondary heading, eyebrow text
+       body       — default body / paragraph text
+       body-strong— emphasized body (≈ <strong>) — slightly darker
+       label      — form labels, table column headers, button text
+       caption    — small captions, meta, helper text under inputs
+       overline   — uppercase eyebrow / tag-style micro-label
+       code       — monospace data / IDs / tracking numbers
+       placeholder— input placeholder text (de-emphasized)
+
+     Each token aliases an existing --ink-* hierarchy step so
+     the ramp remains the single source of truth — themed once
+     in the dark overrides below.
+     ────────────────────────────────────────────────────────── */
+
+  /** Display — hero text on landing / empty states */
+  --ink-display:           var(--ink-primary);
+  /** Heading — h1–h6, panel titles, page titles */
+  --ink-heading:           var(--ink-primary);
+  /** Subheading — eyebrow / second-tier heading */
+  --ink-subheading:        var(--ink-secondary);
+  /** Body — default paragraph / sentence text */
+  --ink-body:              var(--ink-primary);
+  /** Body strong — emphasized body copy (slightly darker than body) */
+  --ink-body-strong:       var(--_n-950);
+  /** Label — form field labels, table column headers, button text */
+  --ink-label:             var(--ink-secondary);
+  /** Caption — small captions, helper text under inputs, meta */
+  --ink-caption:           var(--ink-tertiary);
+  /** Overline — uppercase eyebrow / tag-style micro-label */
+  --ink-overline:          var(--ink-tertiary);
+  /** Code — monospace text (case IDs, tracking numbers, payloads) */
+  --ink-code:              var(--ink-primary);
+  /** Placeholder — input placeholder text */
+  --ink-placeholder:       var(--ink-tertiary);
+
+  /* ──────────────────────────────────────────────────────────
      ICON  (icon / glyph foreground colors)
 
      Dedicated icon tokens decoupled from text ink so that icon
@@ -611,6 +657,79 @@
   --signal-danger-text-subtle:   var(--signal-error-text-subtle);
   --signal-danger-border:        var(--signal-error-border);
 
+  /* ── status — public alias namespace ─────────────────────────
+     `--status-{kind}-{slot}` is a public-facing alias that maps
+     1:1 to the canonical `--signal-{kind}-{slot}` ramp.  Provided
+     so component CSS can use the more colloquial "status" naming
+     (e.g. `var(--status-danger)` in tracking widgets) without
+     falling back through `var(--status-…, var(--ink-…))`.
+
+     Kinds covered: status (= neutral) | success | warning | error
+                    | info | danger (= error)
+
+     Slots covered: fill | fill-subtle | text | text-subtle | border
+                    + a default 1-arg form that maps to the
+                    fill-subtle text color (most common usage).
+
+     Override `--signal-*` once and `--status-*` follows
+     automatically — single source of truth preserved.
+     ────────────────────────────────────────────────────────── */
+
+  /* generic "status" → maps to neutral (the default status indicator) */
+  --status-fill:            var(--signal-neutral-fill);
+  --status-fill-subtle:     var(--signal-neutral-fill-subtle);
+  --status-text:            var(--signal-neutral-text);
+  --status-text-subtle:     var(--signal-neutral-text-subtle);
+  --status-border:          var(--signal-neutral-border);
+
+  /* success */
+  --status-success:         var(--signal-success-text-subtle);
+  --status-success-fill:    var(--signal-success-fill);
+  --status-success-fill-subtle: var(--signal-success-fill-subtle);
+  --status-success-text:    var(--signal-success-text);
+  --status-success-text-subtle: var(--signal-success-text-subtle);
+  --status-success-border:  var(--signal-success-border);
+
+  /* warning */
+  --status-warning:         var(--signal-warning-text-subtle);
+  --status-warning-fill:    var(--signal-warning-fill);
+  --status-warning-fill-subtle: var(--signal-warning-fill-subtle);
+  --status-warning-text:    var(--signal-warning-text);
+  --status-warning-text-subtle: var(--signal-warning-text-subtle);
+  --status-warning-border:  var(--signal-warning-border);
+
+  /* error */
+  --status-error:           var(--signal-error-text-subtle);
+  --status-error-fill:      var(--signal-error-fill);
+  --status-error-fill-subtle: var(--signal-error-fill-subtle);
+  --status-error-text:      var(--signal-error-text);
+  --status-error-text-subtle: var(--signal-error-text-subtle);
+  --status-error-border:    var(--signal-error-border);
+
+  /* info */
+  --status-info:            var(--signal-info-text-subtle);
+  --status-info-fill:       var(--signal-info-fill);
+  --status-info-fill-subtle: var(--signal-info-fill-subtle);
+  --status-info-text:       var(--signal-info-text);
+  --status-info-text-subtle: var(--signal-info-text-subtle);
+  --status-info-border:     var(--signal-info-border);
+
+  /* danger (alias of error — used by SCAN tracking + destructive flows) */
+  --status-danger:          var(--signal-danger-text-subtle);
+  --status-danger-fill:     var(--signal-danger-fill);
+  --status-danger-fill-subtle: var(--signal-danger-fill-subtle);
+  --status-danger-text:     var(--signal-danger-text);
+  --status-danger-text-subtle: var(--signal-danger-text-subtle);
+  --status-danger-border:   var(--signal-danger-border);
+
+  /* neutral (explicit alias; same as the unprefixed --status-* group) */
+  --status-neutral:         var(--signal-neutral-text-subtle);
+  --status-neutral-fill:    var(--signal-neutral-fill);
+  --status-neutral-fill-subtle: var(--signal-neutral-fill-subtle);
+  --status-neutral-text:    var(--signal-neutral-text);
+  --status-neutral-text-subtle: var(--signal-neutral-text-subtle);
+  --status-neutral-border:  var(--signal-neutral-border);
+
   /* ── custody states ──────────────────────────────────────────
      Status colors for the case custody chain — visualizes who
      currently holds physical custody of a case and the state of
@@ -783,6 +902,25 @@
   --ink-on-caution-subtle: var(--_a-200);
   --ink-on-critical-subtle: var(--_r-200);
   --ink-on-neutral-subtle: var(--_n-200);
+
+  /* ── Typography hierarchy ink — dark theme overrides ──────
+     The hierarchy aliases mostly track --ink-primary /
+     --ink-secondary / --ink-tertiary, which already have dark
+     overrides above.  --ink-body-strong is the only token that
+     needs an explicit dark anchor (the lightest neutral) so
+     emphasized body copy reads slightly brighter than --ink-body
+     against the deep --_n-950 canvas.
+     ────────────────────────────────────────────────────────── */
+  --ink-display:           var(--ink-primary);
+  --ink-heading:           var(--ink-primary);
+  --ink-subheading:        var(--ink-secondary);
+  --ink-body:              var(--ink-primary);
+  --ink-body-strong:       var(--_n-0);
+  --ink-label:             var(--ink-secondary);
+  --ink-caption:           var(--ink-tertiary);
+  --ink-overline:          var(--ink-tertiary);
+  --ink-code:              var(--ink-primary);
+  --ink-placeholder:       var(--ink-tertiary);
 
   /* ── Icon — dark theme overrides ──────────────────────────
      Icon tokens alias ink-* tokens (which have their own dark

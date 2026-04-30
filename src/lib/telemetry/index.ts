@@ -163,6 +163,35 @@ export type {
   DeviceContext,
 } from "@/types/telemetry.types";
 
+// ─── Event catalog (typed runtime registry) ───────────────────────────────────
+
+/**
+ * The runtime-queryable event catalog and validation helpers.
+ *
+ * The catalog is the single source of truth for every event's metadata
+ * (category, app, spec §23 domain, required fields, optional fields).  Use
+ * it for documentation generators, server-side validators, and analytics
+ * tooling that needs to introspect events at runtime.
+ *
+ * See `lib/telemetry/catalog.ts` for the full event registry and JSDoc.
+ */
+export {
+  TELEMETRY_EVENT_CATALOG,
+  TELEMETRY_EVENT_CATALOG_ENTRIES,
+  TELEMETRY_EVENT_BASE_FIELDS,
+  getCatalogEntry,
+  getEventsByCategory,
+  getEventsByApp,
+  getEventsByDomain,
+  getAllEventNames,
+  validateTelemetryEvent,
+} from "./catalog";
+export type {
+  TelemetryCatalogDomain,
+  TelemetryCatalogEntry,
+  TelemetryValidationResult,
+} from "./catalog";
+
 // ─── Distributive-Omit helper ─────────────────────────────────────────────────
 
 /**

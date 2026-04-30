@@ -29,6 +29,28 @@ import { ScanShell } from "@/components/ScanShell";
 import { ScanLogoutButton } from "@/components/ScanLogoutButton";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { ThemeToggle } from "@/components/ThemeToggle";
+
+// ─── Design system stylesheet wiring (Sub-AC 5.2) ──────────────────────────────
+//
+// Explicitly import the design-token stylesheets at the SCAN segment's root
+// layout so the SCAN app entry point is self-contained and not reliant on
+// inheritance from the root `src/app/layout.tsx`.  Mirrors the equivalent
+// imports in `src/app/inventory/layout.tsx` so each App Router segment can be
+// reasoned about independently.
+//
+// Import order matters — it matches the documented order at the top of
+// `src/styles/scan/base.css`:
+//   1. tokens/base.css         — semantic surface / ink / border / status tokens
+//   2. tokens/breakpoints.css  — page-level responsive tier tokens
+//   3. globals.css             — base reset + SCAN utility classes (cascades
+//                                 from the root layout; no re-import needed)
+//   4. scan/base.css           — SCAN fluid mobile-first base (consumes the
+//                                 tokens above; must therefore load AFTER them)
+//
+// Component CSS Modules under `/scan/*` consume these tokens via `var(--…)`
+// references — no hex / hsl / oklch literals are permitted in component code.
+import "../../styles/tokens/base.css";
+import "../../styles/tokens/breakpoints.css";
 import "../../styles/scan/base.css";
 import styles from "./layout.module.css";
 

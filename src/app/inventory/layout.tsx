@@ -85,6 +85,25 @@ import { AppShell } from "./AppShell";
 import { InventorySideNav } from "./InventorySideNav";
 import { InventoryShell } from "./InventoryShell";
 
+// ─── Design system token stylesheets ──────────────────────────────────────────
+//
+// Wire the design system token stylesheets directly into the INVENTORY app
+// root layout so that the INVENTORY dashboard explicitly owns its design
+// system dependency.  The root layout (src/app/layout.tsx) already imports
+// these stylesheets globally; importing them here is defense-in-depth — it
+// guarantees the INVENTORY routes always have access to the canonical design
+// tokens (surface, ink, border, elevation, breakpoints) regardless of how the
+// global layout evolves.
+//
+// Next.js App Router de-duplicates identical CSS imports across route
+// segments, so this does not double-ship CSS to the browser.
+//
+// All component code under /inventory consumes these tokens via var(...)
+// references (e.g. var(--surface-base), var(--ink-primary)) — no hex literals
+// permitted.
+import "../../styles/tokens/base.css";
+import "../../styles/tokens/breakpoints.css";
+
 // ─── Feature flags ─────────────────────────────────────────────────────────────
 
 /**

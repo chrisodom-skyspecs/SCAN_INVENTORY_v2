@@ -37,3 +37,7 @@ export { DossierMapPanel } from "./DossierMapPanel";
 export type { DossierMapPanelProps } from "./DossierMapPanel";
 export { DossierEvidencePanel } from "./DossierEvidencePanel";
 export type { DossierEvidencePanelProps } from "./DossierEvidencePanel";
+export { QcChecklistPanel } from "./QcChecklistPanel";
+export type { QcChecklistPanelProps } from "./QcChecklistPanel";
+export { QcSignOffHistory } from "./QcSignOffHistory";
+export type { QcSignOffHistoryProps } from "./QcSignOffHistory";

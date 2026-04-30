@@ -50,6 +50,14 @@
 import { mutation, query } from "./_generated/server";
 import type { Auth, UserIdentity } from "convex/server";
 import { v } from "convex/values";
+import {
+  detectQrCodeConflict,
+  formatQrCodeConflictMessage,
+  type QrCodeCaseRow,
+  type QrCodeConflictDeps,
+} from "./qrCodeHelpers";
+import { buildCreateAuditRecord } from "./qrAssociationAuditHelpers";
+import { toQrAssociationEventInsert } from "./qrAssociationEventInsert";
 
 // ─── Shared status literal validator ─────────────────────────────────────────
 
@@ -1372,18 +1380,30 @@ export const generateQrCode = mutation({
       ? `${args.baseUrl.trim().replace(/\/$/, "")}/${args.caseId}?uid=${uuid}`
       : `case:${args.caseId}:uid:${uuid}`;
 
-    // ── Uniqueness check via by_qr_code index — O(log n) ─────────────────────
+    // ── Centralized duplicate-QR detection ────────────────────────────────────
     // UUID collision is astronomically unlikely, but we guard for consistency.
-    const conflicting = await ctx.db
-      .query("cases")
-      .withIndex("by_qr_code", (q) => q.eq("qrCode", qrCode))
-      .first();
+    // Routing through the shared `detectQrCodeConflict` helper keeps every QR
+    // write path on the same uniqueness rule.
+    const generateConflictDeps: QrCodeConflictDeps = {
+      findCaseByQrCode: async (qr) => {
+        const row = await ctx.db
+          .query("cases")
+          .withIndex("by_qr_code", (q) => q.eq("qrCode", qr))
+          .first();
+        return row === null
+          ? null
+          : ({ _id: row._id, label: row.label, qrCode: row.qrCode } as QrCodeCaseRow);
+      },
+    };
 
-    if (conflicting !== null) {
+    const generateConflictOutcome = await detectQrCodeConflict(qrCode, args.caseId, generateConflictDeps);
+
+    if (generateConflictOutcome.kind === "conflict") {
       // UUID collision detected (practically impossible — indicates a bug).
       throw new Error(
         `generateQrCode: Generated QR code collides with an existing mapping ` +
-        `on case "${conflicting.label}" (ID: ${conflicting._id}). ` +
+        `on case "${generateConflictOutcome.conflictingCaseLabel}" ` +
+        `(ID: ${generateConflictOutcome.conflictingCaseId}). ` +
         `Please retry — this is an extremely rare UUID collision.`
       );
     }
@@ -1397,6 +1417,23 @@ export const generateQrCode = mutation({
     });
 
     // ── Immutable audit event ─────────────────────────────────────────────────
+    // Append a row to the dedicated `qr_association_events` audit table
+    // (introduced by AC 240303 sub-AC 3) AND mirror onto the generic
+    // `events` timeline so the T5 case-detail view continues to render.
+    const auditRecord = buildCreateAuditRecord({
+      caseId:       String(args.caseId),
+      qrCode,
+      qrCodeSource: "generated",
+      reasonCode:   "initial_association",
+      actorId:      args.userId,
+      actorName:    args.userName,
+      timestamp:    now,
+    });
+    const qrAssociationEventId = await ctx.db.insert(
+      "qr_association_events",
+      toQrAssociationEventInsert(auditRecord, args.caseId),
+    );
+
     await ctx.db.insert("events", {
       caseId:    args.caseId,
       eventType: "note_added",
@@ -1404,11 +1441,12 @@ export const generateQrCode = mutation({
       userName:  args.userName,
       timestamp: now,
       data: {
-        action:       "qr_code_generated",
+        action:               "qr_code_generated",
         qrCode,
-        qrCodeSource: "generated",
+        qrCodeSource:         "generated",
         uuid,
-        caseLabel:    caseDoc.label,
+        caseLabel:            caseDoc.label,
+        qrAssociationEventId: String(qrAssociationEventId),
       },
     });
 
@@ -1548,20 +1586,30 @@ export const setQrCode = mutation({
       };
     }
 
-    // ── 4. Uniqueness check via by_qr_code index — O(log n) ──────────────────
-    // A QR code may only be mapped to one case at a time.  The by_qr_code
-    // index makes this check O(log n) instead of a full table scan.
-    const conflicting = await ctx.db
-      .query("cases")
-      .withIndex("by_qr_code", (q) => q.eq("qrCode", qrCode))
-      .first();
+    // ── 4. Centralized duplicate-QR detection ─────────────────────────────────
+    // A QR code may only be mapped to one case at a time.  Routing through
+    // the shared `detectQrCodeConflict` helper enforces the uniqueness rule
+    // identically across `setQrCode`, `updateQrCode`, `generateQrCode`,
+    // `generateQRCodeForCase`, and `associateQRCodeToCase`.  The helper uses
+    // the `by_qr_code` index for an O(log n) point read.
+    const conflictDeps: QrCodeConflictDeps = {
+      findCaseByQrCode: async (qr) => {
+        const row = await ctx.db
+          .query("cases")
+          .withIndex("by_qr_code", (q) => q.eq("qrCode", qr))
+          .first();
+        return row === null
+          ? null
+          : ({ _id: row._id, label: row.label, qrCode: row.qrCode } as QrCodeCaseRow);
+      },
+    };
 
-    if (conflicting !== null && conflicting._id !== args.caseId) {
+    const conflictOutcome = await detectQrCodeConflict(qrCode, args.caseId, conflictDeps);
+
+    if (conflictOutcome.kind === "conflict") {
       throw new Error(
-        `setQrCode: QR code "${qrCode}" is already mapped to case ` +
-        `"${conflicting.label}" (ID: ${conflicting._id}). ` +
-        `Each QR code may only be associated with one case at a time. ` +
-        `Use updateQrCode on the conflicting case to reassign it first.`
+        formatQrCodeConflictMessage("setQrCode", conflictOutcome) +
+        ` Use updateQrCode on the conflicting case to reassign it first.`
       );
     }
 
@@ -1574,6 +1622,30 @@ export const setQrCode = mutation({
     });
 
     // ── 6. Immutable audit event ──────────────────────────────────────────────
+    // Append a row to the dedicated `qr_association_events` audit table
+    // (introduced by AC 240303 sub-AC 3) AND mirror onto the generic
+    // `events` timeline so the T5 case-detail view continues to render.
+    const previousSetQrCode = caseDoc.qrCode?.trim();
+    const setAuditRecord = buildCreateAuditRecord({
+      caseId:               String(args.caseId),
+      qrCode,
+      qrCodeSource:         args.source,
+      reasonCode:           previousSetQrCode && previousSetQrCode.length > 0
+                              ? "label_replacement"
+                              : "initial_association",
+      previousQrCode:       previousSetQrCode && previousSetQrCode.length > 0
+                              ? previousSetQrCode
+                              : null,
+      previousQrCodeSource: caseDoc.qrCodeSource ?? null,
+      actorId:              args.userId,
+      actorName:            args.userName,
+      timestamp:            now,
+    });
+    const setQrAssociationEventId = await ctx.db.insert(
+      "qr_association_events",
+      toQrAssociationEventInsert(setAuditRecord, args.caseId),
+    );
+
     await ctx.db.insert("events", {
       caseId:    args.caseId,
       eventType: "note_added",
@@ -1581,12 +1653,13 @@ export const setQrCode = mutation({
       userName:  args.userName,
       timestamp: now,
       data: {
-        action:            "qr_code_set",
+        action:               "qr_code_set",
         qrCode,
-        qrCodeSource:      args.source,
-        previousQrCode:    caseDoc.qrCode ?? null,
+        qrCodeSource:         args.source,
+        previousQrCode:       caseDoc.qrCode ?? null,
         previousQrCodeSource: caseDoc.qrCodeSource ?? null,
-        caseLabel:         caseDoc.label,
+        caseLabel:            caseDoc.label,
+        qrAssociationEventId: String(setQrAssociationEventId),
       },
     });
 
@@ -1730,22 +1803,27 @@ export const updateQrCode = mutation({
       };
     }
 
-    // ── 4. Uniqueness check via by_qr_code index — O(log n) ──────────────────
-    // The new QR code must not be in use on a different case.
-    // It IS allowed on this same case (idempotent update is caught above;
-    // changing only source is allowed and skips uniqueness concern since the
-    // QR payload value is unchanged).
-    const conflicting = await ctx.db
-      .query("cases")
-      .withIndex("by_qr_code", (q) => q.eq("qrCode", qrCode))
-      .first();
+    // ── 4. Centralized duplicate-QR detection ─────────────────────────────────
+    // The new QR code must not be in use on a DIFFERENT case.  Reusing on the
+    // same case is allowed (the source-only change branch is caught by the
+    // idempotency check above).  Routing through the shared helper keeps the
+    // uniqueness rule consistent across every QR write path.
+    const updateConflictDeps: QrCodeConflictDeps = {
+      findCaseByQrCode: async (qr) => {
+        const row = await ctx.db
+          .query("cases")
+          .withIndex("by_qr_code", (q) => q.eq("qrCode", qr))
+          .first();
+        return row === null
+          ? null
+          : ({ _id: row._id, label: row.label, qrCode: row.qrCode } as QrCodeCaseRow);
+      },
+    };
 
-    if (conflicting !== null && conflicting._id !== args.caseId) {
-      throw new Error(
-        `updateQrCode: QR code "${qrCode}" is already mapped to case ` +
-        `"${conflicting.label}" (ID: ${conflicting._id}). ` +
-        `Each QR code may only be associated with one case at a time.`
-      );
+    const updateConflictOutcome = await detectQrCodeConflict(qrCode, args.caseId, updateConflictDeps);
+
+    if (updateConflictOutcome.kind === "conflict") {
+      throw new Error(formatQrCodeConflictMessage("updateQrCode", updateConflictOutcome));
     }
 
     // ── 5. Persist the updated QR code mapping ────────────────────────────────
@@ -1758,6 +1836,28 @@ export const updateQrCode = mutation({
 
     // ── 6. Immutable audit event ──────────────────────────────────────────────
     // Record both previous and new values so the T5 panel can render a diff.
+    //
+    // Append a row to the dedicated `qr_association_events` audit table
+    // (introduced by AC 240303 sub-AC 3) AND mirror onto the generic
+    // `events` timeline so the T5 case-detail view continues to render.
+    // The `updateQrCode` flow always uses reasonCode "label_replacement"
+    // when a prior QR existed, or "initial_association" when not.
+    const updateAuditRecord = buildCreateAuditRecord({
+      caseId:               String(args.caseId),
+      qrCode,
+      qrCodeSource:         args.source,
+      reasonCode:           previousQrCode ? "label_replacement" : "initial_association",
+      previousQrCode,
+      previousQrCodeSource,
+      actorId:              args.userId,
+      actorName:            args.userName,
+      timestamp:            now,
+    });
+    const updateQrAssociationEventId = await ctx.db.insert(
+      "qr_association_events",
+      toQrAssociationEventInsert(updateAuditRecord, args.caseId),
+    );
+
     await ctx.db.insert("events", {
       caseId:    args.caseId,
       eventType: "note_added",
@@ -1765,12 +1865,13 @@ export const updateQrCode = mutation({
       userName:  args.userName,
       timestamp: now,
       data: {
-        action:               "qr_code_updated",
+        action:                "qr_code_updated",
         qrCode,
-        qrCodeSource:         args.source,
+        qrCodeSource:          args.source,
         previousQrCode,
         previousQrCodeSource,
-        caseLabel:            caseDoc.label,
+        caseLabel:             caseDoc.label,
+        qrAssociationEventId:  String(updateQrAssociationEventId),
       },
     });
 
@@ -1890,6 +1991,33 @@ export const updateCaseStatus = mutation({
         previousStatus,
         newStatus:      args.newStatus,
       };
+    }
+
+    // ── 2b. QC sign-off guard for outbound dispatch ──────────────────────────
+    //
+    // When an operator manually sets the status to "transit_out" via the
+    // INVENTORY dashboard inline editor, enforce the same QC approval gate
+    // applied by the SCAN app's `recordShipment` and `scanCheckIn` mutations.
+    //
+    // A case may only be dispatched (transition to "transit_out") when its
+    // QC sign-off status is "approved".  Cases with no sign-off (undefined /
+    // "not_submitted"), "pending", or "rejected" QC status are blocked until
+    // an operator or admin submits an approval via the T1/T3 QC Sign-Off panel.
+    //
+    // Error code: [QC_APPROVAL_REQUIRED]
+    // Resolution: have an admin or operator submit a QC approval for this case
+    //             via the INVENTORY dashboard (T1/T3 QC Sign-Off panel) before
+    //             attempting to dispatch again.
+    if (args.newStatus === "transit_out" && caseDoc.qcSignOffStatus !== "approved") {
+      const currentQcStatus = caseDoc.qcSignOffStatus ?? "not_submitted";
+      throw new Error(
+        `[QC_APPROVAL_REQUIRED] updateCaseStatus: Case "${caseDoc.label}" ` +
+          `(${args.caseId}) cannot be dispatched — QC sign-off status is ` +
+          `"${currentQcStatus}". A QC sign-off with status "approved" is ` +
+          `required before a case can be dispatched (transitioned to ` +
+          `"transit_out"). Have an admin or operator submit a QC approval via ` +
+          `the INVENTORY dashboard (T1/T3 QC Sign-Off panel) before proceeding.`
+      );
     }
 
     // ── 3. Persist the status change ─────────────────────────────────────────

@@ -41,6 +41,7 @@
 
 import { action, internalAction, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import type { Auth, UserIdentity } from "convex/server";
 import {
@@ -342,6 +343,122 @@ export const getShipmentById = internalQuery({
   args: { shipmentId: v.id("shipments") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.shipmentId);
+  },
+});
+
+// ─── listActiveShipmentIdsInternal — internal query ───────────────────────────
+
+/**
+ * Internal query: list the IDs of every shipment that is still in flight.
+ *
+ * "Active" means the shipment has not reached a terminal state (i.e. the
+ * status is one of `label_created`, `picked_up`, `in_transit`, or
+ * `out_for_delivery`).  Terminal rows ("delivered" / "exception") are
+ * excluded since further FedEx polling would be wasted work.
+ *
+ * Unlike the public {@link listActiveShipments} query, this internal variant
+ * does NOT require an authenticated caller — it is only invoked by the
+ * scheduled `pollActiveShipments` cron action which runs as the system.
+ *
+ * Implementation notes:
+ *   • Uses the `by_status` index on `shipments.status` for each active bucket
+ *     (O(log n + |bucket|) per read).
+ *   • Returns `Id<"shipments">` only (not the full row) to keep the payload
+ *     small — the action then schedules `refreshShipmentTracking` per ID,
+ *     which will itself re-fetch the row.
+ *   • Per-bucket cap (`limitPerStatus`, default 250) prevents the cron from
+ *     running away on pathological data sets.
+ */
+export const listActiveShipmentIdsInternal = internalQuery({
+  args: {
+    /**
+     * Optional per-status cap.  Defaults to 250.  Total shipments scheduled
+     * per cron run is at most 4 × this value (one bucket per active status).
+     */
+    limitPerStatus: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<Array<{ shipmentId: Id<"shipments"> }>> => {
+    const perLimit = Math.min(args.limitPerStatus ?? 250, 1_000);
+
+    // Read each active-status bucket via the by_status index in parallel.
+    // Convex queries cannot OR across indexed values, so we union the four
+    // buckets in memory.  Active rows are typically a small slice of the
+    // overall shipments table (<< 1000), so this is well within budget.
+    const [labelCreated, pickedUp, inTransit, outForDelivery] = await Promise.all([
+      ctx.db
+        .query("shipments")
+        .withIndex("by_status", (q) => q.eq("status", "label_created"))
+        .take(perLimit),
+      ctx.db
+        .query("shipments")
+        .withIndex("by_status", (q) => q.eq("status", "picked_up"))
+        .take(perLimit),
+      ctx.db
+        .query("shipments")
+        .withIndex("by_status", (q) => q.eq("status", "in_transit"))
+        .take(perLimit),
+      ctx.db
+        .query("shipments")
+        .withIndex("by_status", (q) => q.eq("status", "out_for_delivery"))
+        .take(perLimit),
+    ]);
+
+    return [...labelCreated, ...pickedUp, ...inTransit, ...outForDelivery].map(
+      (row) => ({ shipmentId: row._id }),
+    );
+  },
+});
+
+// ─── pollActiveShipments — internal action (cron entry point) ────────────────
+
+/**
+ * Internal action: orchestrator invoked by the scheduled cron job.
+ *
+ * Reads every active shipment via {@link listActiveShipmentIdsInternal} and
+ * schedules a `refreshShipmentTracking` run for each one.  The per-shipment
+ * action handles its own FedEx poll, normalises the response, and writes the
+ * updated status, location, ETA, and last-event back to the `shipments` table
+ * (and denormalises onto the parent `cases` row).
+ *
+ * Why fan out via the scheduler rather than awaiting in a loop:
+ *   • Each FedEx call is ~150–500 ms.  Awaiting all of them serially in a
+ *     single action could blow past the Convex action time budget when the
+ *     active-shipment count is high.
+ *   • Scheduling each refresh independently means a single failing tracking
+ *     number cannot block the rest of the batch.
+ *   • Each scheduled run gets its own retry/backoff envelope.
+ *
+ * The action is intentionally idempotent — `refreshShipmentTracking` skips
+ * delivered rows internally, so repeated invocations are safe.
+ *
+ * Configured as the target of the cron job in `convex/crons.ts`.
+ */
+export const pollActiveShipments = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ scheduled: number }> => {
+    const activeShipments = await ctx.runQuery(
+      internal.shipping.listActiveShipmentIdsInternal,
+      {},
+    );
+
+    if (activeShipments.length === 0) {
+      // No work to do this cycle — common when the fleet is between deployments.
+      return { scheduled: 0 };
+    }
+
+    // Fan out a refresh per active shipment.  Each scheduled action will:
+    //   1. Re-load its shipment row (skips if deleted between scheduling and run).
+    //   2. Skip if the row has since transitioned to a terminal status.
+    //   3. Call FedEx and persist the updated status, location, ETA, and event.
+    await Promise.all(
+      activeShipments.map(({ shipmentId }) =>
+        ctx.scheduler.runAfter(0, internal.shipping.refreshShipmentTracking, {
+          shipmentId,
+        }),
+      ),
+    );
+
+    return { scheduled: activeShipments.length };
   },
 });
 
@@ -1082,6 +1199,25 @@ export const shipCase = mutation({
     const transitStatus = outboundShippable.includes(previousStatus)
       ? "transit_out"
       : "transit_in";
+
+    // ── Pre-dispatch QC sign-off gate ─────────────────────────────────────────
+    //
+    // Outbound dispatches (hangar / assembled / received → transit_out) require
+    // an explicit QC approval before the case can leave the facility.  Cases
+    // with no sign-off (undefined), "pending" (reset/revoked), or "rejected"
+    // QC status are blocked until an operator or admin approves via INVENTORY.
+    //
+    // Error code: [QC_APPROVAL_REQUIRED]
+    // Resolution: have an operator/admin approve this case via the INVENTORY
+    //             dashboard (T1/T5 QC Sign-Off panel) then retry the shipment.
+    if (transitStatus === "transit_out" && caseDoc.qcSignOffStatus !== "approved") {
+      const currentQcStatus = caseDoc.qcSignOffStatus ?? "not_submitted";
+      throw new Error(
+        `[QC_APPROVAL_REQUIRED] Cannot dispatch case "${caseDoc.label}" ` +
+          `— QC sign-off status is "${currentQcStatus}". ` +
+          `An operator or admin must approve this case via INVENTORY before it can be dispatched.`
+      );
+    }
 
     // ── Write denormalized tracking fields to the cases table ─────────────────
     //

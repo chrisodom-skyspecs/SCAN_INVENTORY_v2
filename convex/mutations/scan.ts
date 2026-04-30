@@ -334,9 +334,12 @@ export interface LogScanOnlyResult {
  *
  * @returns CheckInCaseResult
  *
- * @throws "[AUTH_REQUIRED]" when the caller has no valid Kinde JWT.
- * @throws "Case <id> not found." when caseId does not exist.
+ * @throws "[AUTH_REQUIRED]"          Caller has no valid Kinde JWT.
+ * @throws "Case <id> not found."     caseId does not exist.
  * @throws "Invalid status transition: <from> → <to>. Allowed transitions from ..."
+ * @throws "[QC_APPROVAL_REQUIRED]"   Dispatch to "transit_out" attempted but
+ *                                    the case's qcSignOffStatus is not "approved".
+ *                                    Submit a QC approval via INVENTORY first.
  *
  * Client usage:
  *   const checkIn = useMutation(api.mutations.scan.checkInCase);
@@ -505,6 +508,39 @@ export const checkInCase = mutation({
             `Allowed transitions from "${previousStatus}": ${[...allowed].join(", ") || "(none — terminal status)"}.`
         );
       }
+    }
+
+    // ── Step 2b: Pre-dispatch QC sign-off guard ───────────────────────────────
+    //
+    // Enforce the QC approval gate for outbound dispatches.  A case may only
+    // be transitioned to "transit_out" (dispatched) when its QC sign-off
+    // status is "approved".  Cases with no sign-off (undefined), "pending"
+    // (revoked or reset), or "rejected" QC status are blocked until an admin
+    // or operator submits an approval via the INVENTORY dashboard.
+    //
+    // This guard applies to check-in transitions that would dispatch a case
+    // outbound — complementing the same guard in convex/mutations/ship.ts
+    // (recordShipment) to ensure dispatch cannot be bypassed via either the
+    // SCAN app direct check-in flow or the FedEx ship-action flow.
+    //
+    // Same-status "no-op" check-ins (previousStatus === newStatus === "transit_out")
+    // are NOT blocked here — only forward transitions into "transit_out" from
+    // a different status require QC approval.
+    //
+    // Error code: [QC_APPROVAL_REQUIRED]
+    // Resolution: have an admin or operator submit a QC approval for this case
+    //             via the INVENTORY dashboard (T1/T5 QC Sign-Off panel) before
+    //             attempting the dispatch check-in again.
+    if (newStatus === "transit_out" && previousStatus !== "transit_out" && caseDoc.qcSignOffStatus !== "approved") {
+      const currentQcStatus = caseDoc.qcSignOffStatus ?? "not_submitted";
+      throw new Error(
+        `[QC_APPROVAL_REQUIRED] checkInCase: Case "${caseDoc.label}" ` +
+          `(${args.caseId}) cannot be dispatched — QC sign-off status is ` +
+          `"${currentQcStatus}". A QC sign-off with status "approved" is ` +
+          `required before a case can be transitioned to "transit_out" ` +
+          `(dispatched). Have an admin or operator submit a QC approval via ` +
+          `the INVENTORY dashboard before proceeding with this check-in.`
+      );
     }
 
     // ── Step 3: PATCH the case document ──────────────────────────────────────

@@ -53,6 +53,7 @@
 import { useCallback } from "react";
 import { useMapUrlState, type SetMapStateOptions } from "@/hooks/use-map-url-state";
 import type { MapView, CaseWindow, LayerId } from "@/types/map";
+import type { SemanticLayerId } from "@/types/layer-engine";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -122,6 +123,24 @@ export interface MapParams {
    * @example layers = ["cases", "heat", "satellite"]   // custom set
    */
   layers: LayerId[];
+
+  /**
+   * Currently active semantic data layers (LayerTogglePanel toggle state).
+   * Serialized as the `slayers` URL search param (comma-separated
+   * SemanticLayerIds).  Defaults to `DEFAULT_SLAYERS` when absent.
+   *
+   * Distinct from `layers` (map overlay layers).  This holds the on/off
+   * state of the 7 LayerTogglePanel toggles (deployed, transit, flagged,
+   * hangar, heat, history, turbines).
+   *
+   * Persisted to URL via shallow routing (window.history.replaceState) so
+   * toggle state survives refresh and is shareable as a deep link without
+   * triggering a full navigation.
+   *
+   * @example slayers = ["deployed", "flagged"]   // only deployed + flagged active
+   * @example slayers = SEMANTIC_LAYER_IDS         // all 7 layers active
+   */
+  slayers: SemanticLayerId[];
 }
 
 /** Options shared by all setters. */
@@ -232,6 +251,42 @@ export interface UseMapParamsReturn extends MapParams {
   toggleLayer: (layerId: LayerId, options?: SetParamOptions) => void;
 
   /**
+   * Replace the full active semantic-layer set.
+   * Updates the `slayers` URL param via shallow routing
+   * (window.history.replaceState — no full reload).
+   *
+   * Use `toggleSemanticLayer` for single-layer on/off toggling.  Use this
+   * setter when you need to replace the entire toggle set at once (e.g.,
+   * applying a "Show all" / "Hide all" preset, or syncing from an engine
+   * snapshot).
+   *
+   * @example setSlayers(["deployed", "flagged"])
+   * @example setSlayers(DEFAULT_SLAYERS)              // reset to defaults
+   * @example setSlayers([...SEMANTIC_LAYER_IDS])      // activate every layer
+   */
+  setSlayers: (
+    slayers: SemanticLayerId[],
+    options?: SetParamOptions
+  ) => void;
+
+  /**
+   * Toggle a single semantic data layer on or off.
+   * If the layer is currently active, it is removed; if absent, it is added.
+   * Updates the `slayers` URL param via shallow routing
+   * (window.history.replaceState — no full page reload).
+   *
+   * This is the primary entry point for the LayerTogglePanel — each toggle
+   * row's `onToggleLayer` callback calls `toggleSemanticLayer(id)`.
+   *
+   * @example toggleSemanticLayer("flagged")  // add if absent, remove if present
+   * @example toggleSemanticLayer("heat")     // toggle the heat overlay layer
+   */
+  toggleSemanticLayer: (
+    layerId: SemanticLayerId,
+    options?: SetParamOptions
+  ) => void;
+
+  /**
    * Atomically update multiple params at once.
    * Merges all provided fields into the current URL state in a single
    * history entry — use this instead of chaining individual setters.
@@ -277,8 +332,27 @@ export function useMapParams(): UseMapParamsReturn {
     [setMapUrlState]
   );
 
+  // ── Org / Kit selector setters (AC 110202 Sub-AC 2) ────────────────
+  //
+  // setOrg / setKit delegate to setMapUrlState which writes to the URL via
+  // window.history.replaceState (shallow routing — no full page reload, no
+  // Next.js router navigation event).
+  //
+  // This is the wiring that satisfies AC 110202 Sub-AC 2: the org and kit
+  // selector controls (rendered as <select> dropdowns inside each map mode
+  // component — M1FleetOverview, M2SiteDetail, M3TransitTracker, M4Deployment,
+  // M5MissionControl) call these setters from their onChange handlers, so
+  // selection changes update the `org` / `kit` URL params via shallow routing
+  // without triggering a full reload.
+  //
+  // Pass { replace: false } to push a new history entry instead — useful when
+  // the change should be reachable via the browser Back button.
+
   const setOrg = useCallback(
     (org: string | null, options?: SetParamOptions): void => {
+      // Writes ?org=<id> via window.history.replaceState by default — no
+      // navigation event is fired, so React state stays in sync without a
+      // full route reload.
       setMapUrlState({ org }, options);
     },
     [setMapUrlState]
@@ -286,6 +360,9 @@ export function useMapParams(): UseMapParamsReturn {
 
   const setKit = useCallback(
     (kit: string | null, options?: SetParamOptions): void => {
+      // Writes ?kit=<id> via window.history.replaceState by default — no
+      // navigation event is fired, so React state stays in sync without a
+      // full route reload.
       setMapUrlState({ kit }, options);
     },
     [setMapUrlState]
@@ -337,6 +414,36 @@ export function useMapParams(): UseMapParamsReturn {
     [mapState.layers, setMapUrlState]
   );
 
+  // ── Semantic-layer setters (slayers URL param) ──────────────────────
+  //
+  // Both setters delegate to setMapUrlState which writes to URL via
+  // window.history.replaceState (shallow routing — no full reload, no
+  // Next.js navigation event).  This is the wiring that satisfies
+  // AC 110201 Sub-AC 1: layer toggle controls drive URL state updates
+  // via shallow routing without full page reloads.
+
+  const setSlayers = useCallback(
+    (slayers: SemanticLayerId[], options?: SetParamOptions): void => {
+      setMapUrlState({ slayers }, options);
+    },
+    [setMapUrlState]
+  );
+
+  const toggleSemanticLayer = useCallback(
+    (layerId: SemanticLayerId, options?: SetParamOptions): void => {
+      // Read the current semantic-layer set from URL state.  The closure
+      // captures `mapState.slayers` at render time — always reflects the
+      // URL value the user is interacting with.
+      const current = mapState.slayers;
+      const isActive = current.includes(layerId);
+      const next = isActive
+        ? current.filter((l) => l !== layerId)
+        : [...current, layerId];
+      setMapUrlState({ slayers: next }, options);
+    },
+    [mapState.slayers, setMapUrlState]
+  );
+
   // ── Bulk setter ────────────────────────────────────────────────────
 
   const setParams = useCallback(
@@ -345,6 +452,7 @@ export function useMapParams(): UseMapParamsReturn {
       // `caseWindow` in MapParams maps to `window` in MapUrlState.
       // `panelOpen` maps directly (same name in both interfaces).
       // `layers` maps directly (same name in both interfaces).
+      // `slayers` maps directly (same name in both interfaces).
       // Extract renamed fields explicitly and rebuild a MapUrlState-compatible patch.
       const { activeCaseId, caseWindow, panelOpen, ...rest } = patch;
       const urlPatch: Parameters<typeof setMapUrlState>[0] = { ...rest };

@@ -65,6 +65,8 @@ import {
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useScanCaseByQrIdentifier } from "../../../hooks/use-scan-queries";
+import { useRecordScanEvent } from "../../../hooks/use-scan-mutations";
+import { useCurrentUser } from "../../../hooks/use-current-user";
 import styles from "./page.module.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -771,11 +773,81 @@ export function QrScannerClient() {
   // The skip pattern (`null` rawValue) ensures no Convex traffic before a scan.
   const caseDoc = useScanCaseByQrIdentifier(rawValue);
 
+  // ── Identity for scan attribution ──────────────────────────────────────────
+  // useCurrentUser returns the Kinde user identity; the id and name are
+  // written to scans.scannedBy / scans.scannedByName so the immutable history
+  // row attributes the scan to the technician who performed it.
+  const currentUser = useCurrentUser();
+
+  // ── Convex mutation: record QR scan in immutable history ───────────────────
+  // recordScanEvent inserts an append-only row into the `scans` table. The
+  // INSERT invalidates getScansByCase, getLastScanForCase, getScansByUser, and
+  // getRecentScans — pushing the live update to all subscribers within the
+  // ≤ 2-second real-time fidelity window.
+  const recordScan = useRecordScanEvent();
+
+  // ── Per-case scan-recording dedupe ─────────────────────────────────────────
+  // The Convex case lookup may re-evaluate during the brief window between
+  // detection and navigation (e.g., when reactive subscriptions push updated
+  // case fields). Without dedupe the recordScan effect would fire a second
+  // time for the same physical scan and double-write the history table.
+  // Track the case _id we have already recorded for the current rawValue.
+  const recordedForCaseRef = useRef<string | null>(null);
+
   // Derive the lookup state for the detected-card sub-component
   const lookupState: LookupState =
     caseDoc === undefined ? "resolving" :
     caseDoc === null      ? "not_found" :
                             "found";
+
+  // ── Record scan event on successful lookup ─────────────────────────────────
+  // When the QR code resolves to a case, write an immutable scan row BEFORE
+  // navigating away. The mutation is fire-and-forget: we do not block the
+  // navigation on its completion because:
+  //   (a) optimistic / reactive subscriptions pick up the row on arrival, and
+  //   (b) navigation latency must remain unaffected by network conditions.
+  // If the mutation fails (e.g., transient network blip), the navigation
+  // still succeeds and the user can re-scan; the failure is logged to the
+  // console for diagnostics but never surfaced to the technician — the scan
+  // history is not user-visible at this stage and the case data is intact.
+  useEffect(() => {
+    if (
+      phase === "detected" &&
+      caseDoc !== undefined &&
+      caseDoc !== null &&
+      rawValue !== null &&
+      // Don't record for partial identities (still loading) — the scan row
+      // requires a Kinde user ID and name. Once identity resolves, the effect
+      // re-runs and records the scan correctly attributed to the user.
+      !currentUser.isLoading &&
+      currentUser.id &&
+      // Skip if we have already recorded this scan for this case
+      recordedForCaseRef.current !== caseDoc._id
+    ) {
+      recordedForCaseRef.current = caseDoc._id;
+      // Fire-and-forget: do not await so navigation is not delayed by the
+      // round-trip. recordScanEvent is idempotent at the row level — the
+      // dedupe ref above guarantees we do not double-write within this scan.
+      recordScan({
+        caseId:        caseDoc._id,
+        qrPayload:     rawValue,
+        scannedBy:     currentUser.id,
+        scannedByName: currentUser.name,
+        scannedAt:     Date.now(),
+        // scanContext "lookup" indicates an informational scan with no status
+        // transition — downstream workflows (check-in, inspect, damage, ship,
+        // handoff) issue their own scan rows with their specific contexts when
+        // the technician selects them from the case detail page.
+        scanContext:   "lookup",
+      }).catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[QrScannerClient] Failed to record scan event:",
+          err
+        );
+      });
+    }
+  }, [phase, caseDoc, rawValue, currentUser.isLoading, currentUser.id, currentUser.name, recordScan]);
 
   // ── Auto-navigation on successful lookup ───────────────────────────────────
   // When the Convex query resolves to a case document while in the "detected"
@@ -806,6 +878,10 @@ export function QrScannerClient() {
     setRawValue(null);    // clears the Convex subscription
     setCaseId(null);
     setPhase("scanning");
+    // Reset dedupe so a fresh scan of the same case still records a new row.
+    // recordScanEvent appends to immutable history — every physical scan
+    // should yield a row, not just the first scan of a given case in a session.
+    recordedForCaseRef.current = null;
   }, []);
 
   /**

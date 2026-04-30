@@ -61,6 +61,7 @@ import { T1TimelinePanel } from "./T1TimelinePanel";
 import { InlineStatusEditor } from "./InlineStatusEditor";
 import { InlineHolderEditor } from "./InlineHolderEditor";
 import { LabelManagementPanel } from "../LabelManagementPanel";
+import { QcSignOffHistory } from "./QcSignOffHistory";
 import { useCurrentUser } from "../../hooks/use-current-user";
 import { OPERATIONS } from "../../../convex/rbac";
 import styles from "./T1Overview.module.css";
@@ -424,6 +425,24 @@ export default function T1Overview({
        */}
       <hr className={shared.divider} />
       <T1TimelinePanel caseId={caseId} />
+
+      {/*
+       * ── QC Sign-off History — compact recent decisions (Sub-AC 4) ────
+       *
+       * QcSignOffHistory subscribes to api["queries/qcSignOff"].getQcSignOffHistory
+       * via useQcSignOffHistory (Convex real-time transport).  Convex re-evaluates
+       * and pushes within ~100–300 ms of any submitQcSignOff mutation, satisfying
+       * the ≤ 2-second real-time fidelity requirement.
+       *
+       * limit={3} shows only the three most recent decisions — a compact view
+       * appropriate for the T1 summary panel.  A truncation notice directs
+       * operators to the T5 Audit panel for the full chronological trail.
+       *
+       * Rendered for all users with case read access (no additional permission
+       * gate needed — QC history is a read-only informational display).
+       */}
+      <hr className={shared.divider} />
+      <QcSignOffHistory caseId={caseId} limit={3} />
 
       {/*
        * ── QR Label Management — operator-permission-gated ──────────────

@@ -1,0 +1,105 @@
+/**
+ * OrgTypeBadge.module.css — Visual differentiation for internal vs contractor orgs
+ *
+ * Two visually distinct badge styles that distinguish SkySpecs internal staff
+ * teams from external contractor organizations throughout the UI.
+ *
+ * Internal  — sky-blue (brand) palette:  surface-brand-subtle + ink-on-brand-subtle
+ * Contractor — amber (caution) palette:  surface-caution-subtle + ink-on-caution-subtle
+ *
+ * Both styles satisfy WCAG AA contrast (≥ 4.5:1) against their respective
+ * background tokens in both light and dark themes.
+ *
+ * Design system compliance:
+ *   - All colors via CSS custom properties (no hex literals)
+ *   - Inter Tight for badge label text
+ *   - Reduced-motion safe (no animations)
+ */
+
+/* ── Base badge shell ────────────────────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 999px;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  /* Prevent text selection — badges are presentational */
+  user-select: none;
+}
+
+/* ── Badge icon ──────────────────────────────────────────────────── */
+
+.icon {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* ── Internal — SkySpecs staff (brand/blue) ──────────────────────── */
+
+.internal {
+  background-color: var(--surface-brand-subtle);
+  color: var(--ink-on-brand-subtle);
+  /* Subtle border for definition without adding visual weight */
+  border: 1px solid var(--_b-100, color-mix(in srgb, var(--surface-brand-subtle) 40%, currentColor));
+}
+
+/* ── Contractor — external organizations (caution/amber) ─────────── */
+
+.contractor {
+  background-color: var(--surface-caution-subtle);
+  color: var(--ink-on-caution-subtle);
+  /* Subtle border for definition */
+  border: 1px solid var(--_a-100, color-mix(in srgb, var(--surface-caution-subtle) 40%, currentColor));
+}
+
+/* ── Size variant: "md" (default used inline in tables/lists) ─────── */
+
+.sizeMd {
+  font-size: 0.6875rem;
+  padding: 0.1875rem 0.5rem;
+}
+
+.sizeMd .icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+/* ── Size variant: "sm" (compact usage in detail panels) ────────── */
+
+.sizeSm {
+  font-size: 0.625rem;
+  padding: 0.125rem 0.375rem;
+  gap: 0.1875rem;
+}
+
+.sizeSm .icon {
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+/* ── Size variant: "lg" (prominent display in modal headers) ──────── */
+
+.sizeLg {
+  font-size: 0.8125rem;
+  padding: 0.3125rem 0.6875rem;
+  gap: 0.3125rem;
+}
+
+.sizeLg .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* ── Icon-only variant (tooltip provides the label) ─────────────── */
+
+.iconOnly {
+  padding: 0.25rem;
+  gap: 0;
+}

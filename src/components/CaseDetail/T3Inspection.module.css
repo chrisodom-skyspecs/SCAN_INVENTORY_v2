@@ -9,6 +9,29 @@
   gap: 0;
 }
 
+/* ── Case context row — live useCaseById subscription header ─────── */
+/*
+ * Sub-AC 2: Compact case identity strip rendered at the top of the T3
+ * Inspection panel.  Driven by the useCaseById Convex subscription so
+ * status changes propagate without a page reload.
+ */
+
+.caseContext {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.caseContextLabel {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-primary);
+}
+
 .counters {
   display: flex;
   gap: 0.5rem;

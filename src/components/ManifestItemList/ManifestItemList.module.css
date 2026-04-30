@@ -1,0 +1,249 @@
+/**
+ * ManifestItemList.module.css
+ *
+ * Styles for the ManifestItemList presentational sub-component.
+ *
+ * Rules:
+ *   - No hex literals — CSS custom properties only
+ *   - Inter Tight for item names and labels
+ *   - IBM Plex Mono for quantity values
+ *   - WCAG AA contrast maintained via semantic signal tokens
+ *   - All four status states have distinct color identities
+ *   - Left-border accent per item for quick visual scanning
+ */
+
+/* ── List container ───────────────────────────────────────────────────────── */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Individual item row ──────────────────────────────────────────────────── */
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  /* Left-border accent — overridden per data-status below */
+  border-left: 3px solid transparent;
+  transition: background-color 0.1s ease, border-left-color 0.15s ease;
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.item:hover {
+  background-color: var(--surface-hover);
+}
+
+/* ── Status-specific left-border accents ──────────────────────────────────── */
+/*
+ * Each status maps to a distinct signal token so operators can scan the list
+ * and immediately identify issues via color, without reading the pill text.
+ *
+ * Priority:  missing (critical/red) → flagged (warning/amber) →
+ *            unchecked (neutral/gray) → verified (success/green)
+ */
+
+.item[data-status="verified"] {
+  border-left-color: var(--signal-success-border);
+}
+
+.item[data-status="flagged"] {
+  border-left-color: var(--signal-warning-border);
+}
+
+.item[data-status="missing"] {
+  border-left-color: var(--signal-error-border);
+}
+
+.item[data-status="unchecked"] {
+  border-left-color: var(--border-subtle);
+}
+
+/* ── Primary row layout: icon + name + quantity + status ──────────────────── */
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* ── Status icon wrapper (decorative for sighted, aria-hidden) ─────────────── */
+
+.iconWrap {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ── Item name ───────────────────────────────────────────────────────────────  */
+
+.itemName {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;   /* 13px */
+  font-weight: 500;
+  color: var(--ink-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Quantity badge ───────────────────────────────────────────────────────── */
+/*
+ * Displays "× N" when the item has a quantity value.
+ * IBM Plex Mono for the numeric value — consistent with all data/tabular
+ * content per the design system typography rules.
+ * Thinspace (U+2009) is used between "×" and the numeral for legibility.
+ */
+
+.quantityBadge {
+  font-family: "IBM Plex Mono", "Menlo", "Courier New", monospace;
+  font-size: 0.6875rem;   /* 11px */
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink-secondary);
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.3125rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ── Status indicator label ──────────────────────────────────────────────── */
+/*
+ * Inline badge showing the human-readable status.
+ * Color derived from CSS data-status attribute — same token mapping as the
+ * ItemStatusBadge subtle variant for visual consistency.
+ */
+
+.statusIndicator {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.625rem;    /* 10px */
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Status-specific colors — subtle variant palette to match ItemStatusBadge */
+
+.statusIndicator[data-status="verified"] {
+  color: var(--signal-success-text-subtle);
+  background-color: var(--signal-success-fill-subtle);
+  border-color: var(--signal-success-border);
+}
+
+.statusIndicator[data-status="flagged"] {
+  color: var(--signal-warning-text-subtle);
+  background-color: var(--signal-warning-fill-subtle);
+  border-color: var(--signal-warning-border);
+}
+
+.statusIndicator[data-status="missing"] {
+  color: var(--signal-error-text-subtle);
+  background-color: var(--signal-error-fill-subtle);
+  border-color: var(--signal-error-border);
+}
+
+.statusIndicator[data-status="unchecked"] {
+  color: var(--signal-neutral-text-subtle);
+  background-color: var(--signal-neutral-fill-subtle);
+  border-color: var(--signal-neutral-border);
+}
+
+/* ── Secondary info lines ─────────────────────────────────────────────────── */
+
+.itemNote {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;    /* 12px */
+  color: var(--ink-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.itemAttribution {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;   /* 10px */
+  color: var(--ink-tertiary);
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+
+.emptyState {
+  padding: 1rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  text-align: center;
+}
+
+/* ── Density adaptations ──────────────────────────────────────────────────── */
+/*
+ * Compact density shrinks padding to save vertical space in data tables.
+ * Applied when an ancestor has data-density="compact".
+ */
+
+[data-density="compact"] .item {
+  padding: 0.375rem 0.75rem;
+}
+
+[data-density="compact"] .itemName {
+  font-size: 0.75rem;    /* 12px */
+}
+
+[data-density="compact"] .quantityBadge {
+  font-size: 0.625rem;   /* 10px */
+  padding: 0 0.25rem;
+}
+
+[data-density="compact"] .statusIndicator {
+  font-size: 0.5625rem;  /* 9px */
+  padding: 0 0.25rem;
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .item {
+    transition: none;
+  }
+}
+
+/* ── Print styles ─────────────────────────────────────────────────────────── */
+/*
+ * Flatten to high-contrast black/white in print — no color ink dependency.
+ */
+
+@media print {
+  .statusIndicator {
+    background-color: transparent !important;
+    border-color: currentColor !important;
+    color: inherit !important;
+  }
+
+  .quantityBadge {
+    background-color: transparent !important;
+    border-color: currentColor !important;
+  }
+
+  .item {
+    border-left-color: currentColor !important;
+    break-inside: avoid;
+  }
+}

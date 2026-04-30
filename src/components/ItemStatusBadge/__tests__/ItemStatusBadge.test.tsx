@@ -302,3 +302,214 @@ describe("InspectionStatusBar — badge ordering", () => {
     expect(ariaLabels[3]).toContain("unchecked");
   });
 });
+
+// ─── InspectionStatusBar — aria-label prop ───────────────────────────────────
+
+describe("InspectionStatusBar — aria-label prop", () => {
+  it("uses default aria-label 'Inspection status summary' when prop is omitted", () => {
+    render(<InspectionStatusBar verified={1} />);
+    const group = screen.getByRole("group");
+    expect(group.getAttribute("aria-label")).toBe("Inspection status summary");
+  });
+
+  it("uses the provided aria-label when the prop is set", () => {
+    render(<InspectionStatusBar verified={2} aria-label="Packing list summary" />);
+    const group = screen.getByRole("group");
+    expect(group.getAttribute("aria-label")).toBe("Packing list summary");
+  });
+});
+
+// ─── ChecklistStatusCounts ────────────────────────────────────────────────────
+//
+// Tests that ChecklistStatusCounts correctly derives aggregate counts from the
+// provided item list and delegates to InspectionStatusBar for rendering.
+//
+// Covered scenarios:
+//  1.  Empty items list       → renders nothing (null)
+//  2.  Verified count         → derived from items with status "ok"
+//  3.  Flagged count          → derived from items with status "damaged"
+//  4.  Missing count          → derived from items with status "missing"
+//  5.  Unchecked hidden       → unchecked count hidden by default
+//  6.  showUnchecked=true     → unchecked count appears when prop is set
+//  7.  Mixed status list      → all four counts correct simultaneously
+//  8.  Only unchecked items   → no badges rendered (all counts == 0 by default)
+//  9.  Default aria-label     → container uses "Item status summary"
+// 10.  Custom aria-label      → container uses the provided override
+// 11.  Zero-count badges      → omitted (non-zero counts are rendered, zero are not)
+// 12.  data-testid passthrough → inspection-status-bar test id present
+
+import { ChecklistStatusCounts } from "../ItemStatusBadge";
+import type { StatusCountItem } from "../ItemStatusBadge";
+
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+
+/** Build a minimal StatusCountItem with the given status. */
+function item(status: StatusCountItem["status"]): StatusCountItem {
+  return { status };
+}
+
+describe("ChecklistStatusCounts — empty list", () => {
+  it("renders nothing when items list is empty", () => {
+    const { container } = render(<ChecklistStatusCounts items={[]} />);
+    expect(container.firstChild).toBeNull();
+  });
+});
+
+describe("ChecklistStatusCounts — count derivation", () => {
+  it("counts items with status 'ok' as verified", () => {
+    render(
+      <ChecklistStatusCounts
+        items={[item("ok"), item("ok"), item("ok")]}
+      />
+    );
+    // InspectionStatusBar renders a group; get the verified badge inside
+    const group = screen.getByRole("group");
+    const chip  = group.querySelector('[data-status="verified"]');
+    expect(chip).not.toBeNull();
+    expect(chip!.getAttribute("aria-label")).toBe("3 verified items");
+  });
+
+  it("counts items with status 'damaged' as flagged", () => {
+    render(
+      <ChecklistStatusCounts
+        items={[item("damaged"), item("damaged")]}
+      />
+    );
+    const group = screen.getByRole("group");
+    const chip  = group.querySelector('[data-status="flagged"]');
+    expect(chip).not.toBeNull();
+    expect(chip!.getAttribute("aria-label")).toBe("2 flagged items");
+  });
+
+  it("counts items with status 'missing' as missing", () => {
+    render(
+      <ChecklistStatusCounts
+        items={[item("missing")]}
+      />
+    );
+    const group = screen.getByRole("group");
+    const chip  = group.querySelector('[data-status="missing"]');
+    expect(chip).not.toBeNull();
+    expect(chip!.getAttribute("aria-label")).toBe("1 missing item");
+  });
+
+  it("derives all three reviewed counts simultaneously from a mixed list", () => {
+    render(
+      <ChecklistStatusCounts
+        items={[
+          item("ok"), item("ok"),         // 2 verified
+          item("damaged"),                 // 1 flagged
+          item("missing"), item("missing"),// 2 missing
+          item("unchecked"),               // hidden by default
+        ]}
+      />
+    );
+    const group = screen.getByRole("group");
+    expect(group.querySelector('[data-status="verified"]')!.getAttribute("aria-label")).toBe("2 verified items");
+    expect(group.querySelector('[data-status="flagged"]')!.getAttribute("aria-label")).toBe("1 flagged item");
+    expect(group.querySelector('[data-status="missing"]')!.getAttribute("aria-label")).toBe("2 missing items");
+    // unchecked hidden
+    expect(group.querySelector('[data-status="unchecked"]')).toBeNull();
+  });
+});
+
+describe("ChecklistStatusCounts — showUnchecked prop", () => {
+  it("hides unchecked count by default", () => {
+    render(
+      <ChecklistStatusCounts items={[item("unchecked"), item("ok")]} />
+    );
+    const group = screen.getByRole("group");
+    expect(group.querySelector('[data-status="unchecked"]')).toBeNull();
+  });
+
+  it("shows unchecked count when showUnchecked=true", () => {
+    render(
+      <ChecklistStatusCounts
+        items={[item("unchecked"), item("unchecked"), item("ok")]}
+        showUnchecked
+      />
+    );
+    const group = screen.getByRole("group");
+    const chip  = group.querySelector('[data-status="unchecked"]');
+    expect(chip).not.toBeNull();
+    expect(chip!.getAttribute("aria-label")).toBe("2 unchecked items");
+  });
+
+  it("renders nothing when all items are unchecked and showUnchecked=false", () => {
+    // All items unchecked → verified/flagged/missing all 0 → no badges
+    // showUnchecked=false (default) → unchecked also hidden
+    const { container } = render(
+      <ChecklistStatusCounts items={[item("unchecked"), item("unchecked")]} />
+    );
+    // InspectionStatusBar returns null when all counts are 0
+    expect(container.firstChild).toBeNull();
+  });
+});
+
+describe("ChecklistStatusCounts — aria-label", () => {
+  it("uses 'Item status summary' as the default aria-label", () => {
+    render(<ChecklistStatusCounts items={[item("ok")]} />);
+    const group = screen.getByRole("group");
+    expect(group.getAttribute("aria-label")).toBe("Item status summary");
+  });
+
+  it("uses a custom aria-label when the prop is provided", () => {
+    render(
+      <ChecklistStatusCounts
+        items={[item("ok")]}
+        aria-label="Packing list inspection counts"
+      />
+    );
+    const group = screen.getByRole("group");
+    expect(group.getAttribute("aria-label")).toBe("Packing list inspection counts");
+  });
+});
+
+describe("ChecklistStatusCounts — data-testid", () => {
+  it("renders the inspection-status-bar test id for test targeting", () => {
+    const { container } = render(
+      <ChecklistStatusCounts items={[item("ok"), item("missing")]} />
+    );
+    expect(
+      container.querySelector('[data-testid="inspection-status-bar"]')
+    ).not.toBeNull();
+  });
+});
+
+describe("ChecklistStatusCounts — zero-count badge omission", () => {
+  it("omits the verified badge when no items have status 'ok'", () => {
+    render(
+      <ChecklistStatusCounts items={[item("damaged"), item("missing")]} />
+    );
+    const group = screen.getByRole("group");
+    expect(group.querySelector('[data-status="verified"]')).toBeNull();
+  });
+
+  it("omits the flagged badge when no items have status 'damaged'", () => {
+    render(
+      <ChecklistStatusCounts items={[item("ok"), item("missing")]} />
+    );
+    const group = screen.getByRole("group");
+    expect(group.querySelector('[data-status="flagged"]')).toBeNull();
+  });
+
+  it("omits the missing badge when no items have status 'missing'", () => {
+    render(
+      <ChecklistStatusCounts items={[item("ok"), item("ok")]} />
+    );
+    const group = screen.getByRole("group");
+    expect(group.querySelector('[data-status="missing"]')).toBeNull();
+  });
+});
+
+describe("ChecklistStatusCounts — size prop", () => {
+  it("renders without error at 'sm' size (default)", () => {
+    render(<ChecklistStatusCounts items={[item("ok")]} size="sm" />);
+    expect(screen.getByRole("group")).toBeTruthy();
+  });
+
+  it("renders without error at 'md' size", () => {
+    render(<ChecklistStatusCounts items={[item("missing")]} size="md" />);
+    expect(screen.getByRole("group")).toBeTruthy();
+  });
+});

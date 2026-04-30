@@ -1,0 +1,107 @@
+name: Smoke Tests
+
+# ── Triggers ───────────────────────────────────────────────────────────────────
+#
+# 1. deployment_status: Runs automatically after each Vercel deployment
+#    completes (success state only — avoids running against a broken build).
+#
+# 2. workflow_dispatch: Allows manual triggering with a custom BASE_URL so
+#    engineers can smoke-test any preview deployment on demand.
+#
+# 3. schedule: Daily production health check at 08:00 UTC to catch any
+#    configuration drift or secret expiration between deploys.
+on:
+  deployment_status: {}
+
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to smoke-test (default: production)"
+        required: false
+        default: "https://inventory.skyspecsops.com"
+      convex_url:
+        description: "Convex deployment URL (default: production)"
+        required: false
+        default: "https://adjoining-kudu-515.convex.cloud"
+      convex_site_url:
+        description: "Convex site URL for HTTP actions (default: production)"
+        required: false
+        default: "https://adjoining-kudu-515.convex.site"
+
+  schedule:
+    # Daily at 08:00 UTC — canary health check on production
+    - cron: "0 8 * * *"
+
+# ── Permissions ────────────────────────────────────────────────────────────────
+permissions:
+  contents: read
+  deployments: read
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+jobs:
+  smoke:
+    name: "End-to-end smoke tests"
+
+    # For deployment_status events: only run when the deployment succeeded and
+    # is targeting the production environment.  Skip cancelled / failed builds
+    # and non-production (preview) deployments.
+    if: |
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+       (github.event.deployment.environment == 'Production' ||
+        github.event.deployment.environment == 'production'))
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # ── 1. Checkout — needed for scripts/smoke-test.mjs ─────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # ── 2. Node.js ───────────────────────────────────────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          # No cache needed — smoke-test.mjs has zero npm dependencies
+
+      # ── 3. Resolve target URL ────────────────────────────────────────────────
+      #
+      # deployment_status: use the environment_url from the Vercel deployment
+      # workflow_dispatch:  use the user-provided base_url input
+      # schedule:           fall back to the production default
+      - name: Resolve target URL
+        id: resolve_url
+        run: |
+          if [ "${{ github.event_name }}" = "deployment_status" ]; then
+            TARGET_URL="${{ github.event.deployment_status.environment_url }}"
+          elif [ -n "${{ github.event.inputs.base_url }}" ]; then
+            TARGET_URL="${{ github.event.inputs.base_url }}"
+          else
+            TARGET_URL="https://inventory.skyspecsops.com"
+          fi
+          echo "target_url=${TARGET_URL}" >> "$GITHUB_OUTPUT"
+          echo "Smoke target: ${TARGET_URL}"
+
+      # ── 4. Run smoke tests ────────────────────────────────────────────────────
+      - name: Run smoke tests
+        env:
+          BASE_URL:         ${{ steps.resolve_url.outputs.target_url }}
+          CONVEX_URL:       ${{ github.event.inputs.convex_url || 'https://adjoining-kudu-515.convex.cloud' }}
+          CONVEX_SITE_URL:  ${{ github.event.inputs.convex_site_url || 'https://adjoining-kudu-515.convex.site' }}
+          SMOKE_TIMEOUT_MS: "12000"
+          SMOKE_VERBOSE:    "1"
+        run: node scripts/smoke-test.mjs
+
+      # ── 5. Job summary ────────────────────────────────────────────────────────
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Smoke Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Target**: ${{ steps.resolve_url.outputs.target_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Trigger**: ${{ github.event_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Result**: $([ "${{ job.status }}" = "success" ] && echo "All tests passed" || echo "Tests FAILED — see logs")" >> "$GITHUB_STEP_SUMMARY"

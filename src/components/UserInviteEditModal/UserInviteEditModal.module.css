@@ -1,0 +1,357 @@
+/**
+ * UserInviteEditModal.module.css
+ *
+ * Styles for the invite / edit user modal.  All color values reference CSS
+ * custom properties from the design token system — no hex literals.
+ *
+ * Typography:
+ *   Inter Tight  — all UI text (labels, buttons, body copy)
+ *   IBM Plex Mono — Kinde ID input field (identifier/code content)
+ *
+ * WCAG AA compliant for both light (default) and dark (.theme-dark) themes.
+ * Reduced-motion safe: no CSS animations / transitions on structural elements.
+ */
+
+/* ── Dialog backdrop ─────────────────────────────────────────────────────── */
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  background-color: var(--scrim-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1.5rem;
+}
+
+/* ── Dialog container ────────────────────────────────────────────────────── */
+
+.dialog {
+  background-color: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: 0.625rem;
+  box-shadow: var(--elevation-overlay);
+  width: 100%;
+  max-width: 28rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Prevent the dialog from getting taller than the viewport */
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Dialog header ───────────────────────────────────────────────────────── */
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 0;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.dialogTitle {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+/* ── Close button ────────────────────────────────────────────────────────── */
+
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.3125rem;
+  background-color: transparent;
+  color: var(--ink-tertiary);
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.1s ease, color 0.1s ease;
+  padding: 0;
+}
+
+.closeBtn:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  color: var(--ink-primary);
+}
+
+.closeBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.closeBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.closeBtnIcon {
+  width: 1rem;
+  height: 1rem;
+  pointer-events: none;
+}
+
+/* ── Form layout ─────────────────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+/* Horizontal two-column row (used for given + family name) */
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 400px) {
+  .formRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Individual form field ───────────────────────────────────────────────── */
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+}
+
+/* ── Label row ───────────────────────────────────────────────────────────── */
+
+.formLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  line-height: 1.4;
+}
+
+.requiredMark {
+  color: var(--signal-error-text-subtle);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  line-height: 1;
+}
+
+.optionalTag {
+  margin-left: auto;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: var(--ink-disabled);
+  letter-spacing: 0.01em;
+}
+
+/* ── Text input ──────────────────────────────────────────────────────────── */
+
+.formInput {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  background-color: var(--surface-input);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-primary);
+  line-height: 1.4;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+  width: 100%;
+  min-width: 0;
+}
+
+.formInput::placeholder {
+  color: var(--ink-placeholder);
+}
+
+.formInput:focus {
+  outline: none;
+  border-color: var(--border-brand);
+  box-shadow: var(--elevation-focus);
+}
+
+.formInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Monospaced variant for identifier / code inputs */
+.formInputMono {
+  composes: formInput;
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.8125rem;
+  letter-spacing: 0.01em;
+}
+
+/* Read-only styling (email in edit mode) */
+.formInputReadonly {
+  background-color: var(--surface-sunken);
+  color: var(--ink-secondary);
+  cursor: default;
+  border-color: var(--border-subtle);
+}
+
+/* Error state */
+.formInputError {
+  border-color: var(--signal-error-border) !important;
+  box-shadow: 0 0 0 3px var(--signal-error-fill-subtle);
+}
+
+/* ── Select dropdown ─────────────────────────────────────────────────────── */
+
+.formSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0.5rem 2.25rem 0.5rem 0.625rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  background-color: var(--surface-input);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23666' stroke-width='1.5'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 1rem 1rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--ink-primary);
+  cursor: pointer;
+  line-height: 1.4;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+  width: 100%;
+  min-width: 0;
+}
+
+.formSelect:focus {
+  outline: none;
+  border-color: var(--border-brand);
+  box-shadow: var(--elevation-focus);
+}
+
+.formSelect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Field hint ──────────────────────────────────────────────────────────── */
+
+.fieldHint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3125rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.hintIcon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  color: var(--ink-tertiary);
+  margin-top: 0.0625rem;
+}
+
+.inlineCode {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.1875rem;
+  padding: 0 0.1875rem;
+  color: var(--ink-secondary);
+}
+
+/* ── Field error message ─────────────────────────────────────────────────── */
+
+.fieldError {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--signal-error-text-subtle);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Dialog action buttons ───────────────────────────────────────────────── */
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.375rem;
+  margin-top: 0.125rem;
+}
+
+/* ── Shared button base ──────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3125rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: background-color 0.1s ease, border-color 0.1s ease, color 0.1s ease, opacity 0.1s ease;
+  min-width: 5.5rem;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Cancel */
+.btnCancel {
+  background-color: transparent;
+  color: var(--ink-secondary);
+  border-color: var(--border-default);
+}
+
+.btnCancel:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  color: var(--ink-primary);
+  border-color: var(--border-strong);
+}
+
+/* Confirm / submit */
+.btnConfirm {
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+  border-color: transparent;
+}
+
+.btnConfirm:hover:not(:disabled) {
+  opacity: 0.88;
+}

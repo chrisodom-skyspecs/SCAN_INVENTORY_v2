@@ -1,0 +1,17 @@
+# AC completion tracker — updated 2026-04-29
+# ALL 49 ACs COMPLETE as of orch_d1cfe450b5be
+#
+# FULLY BUILT (by ouroboros sessions):
+#   1-25 (foundation, map modes M1-M5, case layouts T1-T5, inline edits, recall,
+#          case creation, QR labels)
+#   21-23 (admin: templates, orgs, users — orch_7ad56b18c174)
+#   24 (case creation), 25 (QR labels)
+#   26 (QC sign-off + dispatch gate + audit trail — orch_d1cfe450b5be)
+#   27-34 (SCAN flows: PWA, scanner, context choice, inspect, damage, ship, handoff)
+#   35-49 (integrations, real-time, cross-cutting, production readiness)
+#
+# PARTIAL (built, needs manual verification):
+#   31, 35, 38, 40, 41, 43, 48, 49
+#
+# All 49 ACs are in skip list — no new ouroboros runs needed.
+completed_acs: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49]

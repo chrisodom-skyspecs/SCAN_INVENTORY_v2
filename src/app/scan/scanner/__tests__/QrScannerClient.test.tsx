@@ -87,6 +87,58 @@ vi.mock("../../../../hooks/use-scan-queries", () => ({
     mockUseScanCaseByQrIdentifier(identifier),
 }));
 
+/**
+ * useRecordScanEvent mock — Sub-AC 1 of AC 350201.
+ *
+ * The QrScannerClient invokes this mutation immediately after a QR code
+ * resolves to a case (lookupState === "found"). Tests assert that:
+ *   - It is called with the caseId, raw qrPayload, scannedBy, scannedByName,
+ *     a numeric scannedAt, and scanContext "lookup".
+ *   - It is NOT called while the lookup is still resolving or when the lookup
+ *     returns null (unrecognised QR code).
+ *   - It is called once per scan — repeated re-renders within a single
+ *     resolution must not double-write the immutable scan history.
+ */
+const mockRecordScanEvent = vi.fn().mockResolvedValue({
+  scanId:    "scan_test_001",
+  caseId:    "jx7a2b3c4d5e6f7g",
+  scannedAt: 1700000000000,
+});
+
+vi.mock("../../../../hooks/use-scan-mutations", () => ({
+  useRecordScanEvent: () => mockRecordScanEvent,
+}));
+
+/**
+ * useCurrentUser mock — provides the Kinde identity that recordScanEvent
+ * requires for attribution (scannedBy + scannedByName).
+ *
+ * Default: returns a fully-loaded technician identity.  Individual tests can
+ * mock this differently (e.g., isLoading: true) via mockUseCurrentUser.mockReturnValue.
+ *
+ * Typed with the `CurrentUserState` interface (loosened return shape) so that
+ * test cases overriding the default (e.g., loading state with isTechnician: false)
+ * compile cleanly.
+ */
+import type { CurrentUserState } from "../../../../hooks/use-current-user";
+
+const mockUseCurrentUser = vi.fn<() => CurrentUserState>(() => ({
+  id:           "test-user-id",
+  name:         "Test Technician",
+  roles:        ["technician"],
+  primaryRole:  "technician",
+  isAdmin:      false,
+  isTechnician: true,
+  isPilot:      false,
+  isLoading:    false,
+  isAuthenticated: true,
+  can:          () => true,
+}));
+
+vi.mock("../../../../hooks/use-current-user", () => ({
+  useCurrentUser: () => mockUseCurrentUser(),
+}));
+
 import { QrScannerClient } from "../QrScannerClient";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -187,6 +239,27 @@ describe("QrScannerClient", () => {
     mockUseScanCaseByQrIdentifier.mockReset();
     // Default: lookup returns undefined (loading/skip) — shows resolving spinner
     mockUseScanCaseByQrIdentifier.mockReturnValue(undefined);
+    // Reset the recordScanEvent mock so per-test assertions are clean
+    mockRecordScanEvent.mockClear();
+    mockRecordScanEvent.mockResolvedValue({
+      scanId:    "scan_test_001",
+      caseId:    "jx7a2b3c4d5e6f7g",
+      scannedAt: 1700000000000,
+    });
+    // Reset the current-user mock to the default fully-loaded technician
+    mockUseCurrentUser.mockReset();
+    mockUseCurrentUser.mockReturnValue({
+      id:           "test-user-id",
+      name:         "Test Technician",
+      roles:        ["technician"],
+      primaryRole:  "technician",
+      isAdmin:      false,
+      isTechnician: true,
+      isPilot:      false,
+      isLoading:    false,
+      isAuthenticated: true,
+      can:          () => true,
+    });
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -581,5 +654,126 @@ describe("QrScannerClient", () => {
     render(<QrScannerClient />);
     // On mount, rawValue is null → hook called with null to skip subscription
     expect(mockUseScanCaseByQrIdentifier).toHaveBeenCalledWith(null);
+  });
+
+  // ── 14. recordScanEvent wiring (AC 350201 Sub-AC 1) ─────────────────────────
+  // The SCAN case scan action handler must invoke the Convex mutation
+  // `recordScanEvent` whenever a scanned QR code resolves to a case. This
+  // writes an immutable row into the `scans` table, which invalidates the
+  // by_case, by_case_scanned_at, by_user, and by_scanned_at reactive
+  // subscriptions within the ≤ 2-second real-time fidelity window.
+
+  it("33. invokes recordScanEvent with the resolved caseId and raw qrPayload", async () => {
+    removeBarcodeDetector();
+    mockUseScanCaseByQrIdentifier.mockReturnValue(MOCK_CASE_DOC);
+    render(<QrScannerClient />);
+    await submitManualQR("CASE-007");
+    await waitFor(() => {
+      expect(mockRecordScanEvent).toHaveBeenCalledTimes(1);
+    });
+    const args = mockRecordScanEvent.mock.calls[0][0];
+    expect(args.caseId).toBe(MOCK_CASE_DOC._id);
+    expect(args.qrPayload).toBe("CASE-007");
+  });
+
+  it("34. attributes the scan to the current user (scannedBy + scannedByName)", async () => {
+    removeBarcodeDetector();
+    mockUseScanCaseByQrIdentifier.mockReturnValue(MOCK_CASE_DOC);
+    render(<QrScannerClient />);
+    await submitManualQR("CASE-007");
+    await waitFor(() => {
+      expect(mockRecordScanEvent).toHaveBeenCalled();
+    });
+    const args = mockRecordScanEvent.mock.calls[0][0];
+    expect(args.scannedBy).toBe("test-user-id");
+    expect(args.scannedByName).toBe("Test Technician");
+  });
+
+  it("35. tags the scan with scanContext='lookup' for pre-workflow scans", async () => {
+    removeBarcodeDetector();
+    mockUseScanCaseByQrIdentifier.mockReturnValue(MOCK_CASE_DOC);
+    render(<QrScannerClient />);
+    await submitManualQR("CASE-007");
+    await waitFor(() => {
+      expect(mockRecordScanEvent).toHaveBeenCalled();
+    });
+    const args = mockRecordScanEvent.mock.calls[0][0];
+    expect(args.scanContext).toBe("lookup");
+  });
+
+  it("36. supplies a numeric scannedAt timestamp (epoch ms)", async () => {
+    removeBarcodeDetector();
+    mockUseScanCaseByQrIdentifier.mockReturnValue(MOCK_CASE_DOC);
+    render(<QrScannerClient />);
+    await submitManualQR("CASE-007");
+    await waitFor(() => {
+      expect(mockRecordScanEvent).toHaveBeenCalled();
+    });
+    const args = mockRecordScanEvent.mock.calls[0][0];
+    expect(typeof args.scannedAt).toBe("number");
+    expect(args.scannedAt).toBeGreaterThan(0);
+  });
+
+  it("37. does NOT invoke recordScanEvent while lookup is still resolving (undefined)", async () => {
+    removeBarcodeDetector();
+    mockUseScanCaseByQrIdentifier.mockReturnValue(undefined);
+    render(<QrScannerClient />);
+    await submitManualQR("CASE-001");
+    // Resolving spinner is shown; mutation must NOT have fired
+    await waitFor(() => {
+      expect(screen.getByTestId("qr-lookup-resolving")).toBeDefined();
+    });
+    expect(mockRecordScanEvent).not.toHaveBeenCalled();
+  });
+
+  it("38. does NOT invoke recordScanEvent when lookup returns null (not found)", async () => {
+    removeBarcodeDetector();
+    mockUseScanCaseByQrIdentifier.mockReturnValue(null);
+    render(<QrScannerClient />);
+    await submitManualQR("UNRECOGNISED-CODE");
+    await waitFor(() => {
+      expect(screen.getByTestId("qr-lookup-not-found")).toBeDefined();
+    });
+    // Unrecognised QR codes have no caseId to attach the scan row to
+    expect(mockRecordScanEvent).not.toHaveBeenCalled();
+  });
+
+  it("39. records the scan only once per resolution (no double-write on re-render)", async () => {
+    removeBarcodeDetector();
+    mockUseScanCaseByQrIdentifier.mockReturnValue(MOCK_CASE_DOC);
+    const { rerender } = render(<QrScannerClient />);
+    await submitManualQR("CASE-007");
+    await waitFor(() => {
+      expect(mockRecordScanEvent).toHaveBeenCalledTimes(1);
+    });
+    // Force a few re-renders — the dedupe ref must prevent additional writes.
+    rerender(<QrScannerClient />);
+    rerender(<QrScannerClient />);
+    expect(mockRecordScanEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("40. defers recordScanEvent until the current user identity has loaded", async () => {
+    // Identity loading: useCurrentUser returns isLoading: true on first render.
+    mockUseCurrentUser.mockReturnValue({
+      id:           "",
+      name:         "",
+      roles:        [],
+      primaryRole:  null,
+      isAdmin:      false,
+      isTechnician: false,
+      isPilot:      false,
+      isLoading:    true,
+      isAuthenticated: false,
+      can:          () => false,
+    });
+    removeBarcodeDetector();
+    mockUseScanCaseByQrIdentifier.mockReturnValue(MOCK_CASE_DOC);
+    render(<QrScannerClient />);
+    await submitManualQR("CASE-007");
+    // Detected card renders, but the mutation is deferred until identity loads.
+    await waitFor(() => {
+      expect(screen.getByTestId("qr-detected-card")).toBeDefined();
+    });
+    expect(mockRecordScanEvent).not.toHaveBeenCalled();
   });
 });

@@ -126,6 +126,14 @@ vi.mock("../../../hooks/use-shipment-status", () => ({
   getTrackingUrl: (tn: string) => `https://fedex.com/track/${tn}`,
 }));
 
+// Sub-AC 2: useCaseById — live case-detail subscription mock.
+// T2Manifest now subscribes to api.cases.getCaseById via this wrapper hook to
+// receive real-time updates for the live case context header (label + status).
+const mockUseCaseById = vi.fn();
+vi.mock("../../../hooks/use-case-status", () => ({
+  useCaseById: (...args: unknown[]) => mockUseCaseById(...args),
+}));
+
 // CustodySection — stub to avoid pulling in custody dependencies
 vi.mock("../CustodySection", () => ({
   default: ({ caseId }: { caseId: string }) => (
@@ -207,6 +215,18 @@ beforeEach(() => {
   mockUseLatestShipment.mockReturnValue(null); // no shipment by default
   mockUseDamageReportsByCase.mockReturnValue([]); // no damage reports by default
   mockUseChecklistWithInspection.mockReturnValue(undefined); // loading by default
+  // Sub-AC 2: useCaseById defaults to a live case document so the case
+  // context header renders by default in tests that expect it.
+  mockUseCaseById.mockReturnValue({
+    _id: CASE_ID,
+    label: "DRONE-CASE-001",
+    status: "deployed",
+    qrCode: "QR-001",
+    locationName: "Field Site Alpha",
+    assigneeName: "Pilot Jane",
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_000,
+  });
 });
 
 afterEach(() => {
@@ -214,6 +234,71 @@ afterEach(() => {
 });
 
 // ─── Render states ────────────────────────────────────────────────────────────
+
+// ─── Sub-AC 2 — Live case-detail subscription via useCaseById ────────────────
+
+describe("T2Manifest — useQuery subscription for live case detail", () => {
+  it("calls useCaseById with the provided caseId for real-time updates", () => {
+    mockUseChecklistWithInspection.mockReturnValue(makeChecklistData(ALL_ITEMS));
+    render(<T2Manifest caseId={CASE_ID} />);
+    expect(mockUseCaseById).toHaveBeenCalledWith(CASE_ID);
+  });
+
+  it("renders the live case-context header when caseDoc is loaded", () => {
+    mockUseChecklistWithInspection.mockReturnValue(makeChecklistData(ALL_ITEMS));
+    render(<T2Manifest caseId={CASE_ID} />);
+    const header = screen.getByTestId("t2-case-context");
+    expect(header).toBeTruthy();
+    expect(header.textContent).toContain("DRONE-CASE-001");
+  });
+
+  it("renders the live case-context header in the empty-items state too", () => {
+    mockUseChecklistWithInspection.mockReturnValue(makeChecklistData([]));
+    render(<T2Manifest caseId={CASE_ID} />);
+    expect(screen.getByTestId("t2-case-context")).toBeTruthy();
+  });
+
+  it("does not render the case-context header while caseDoc is loading", () => {
+    mockUseCaseById.mockReturnValue(undefined);
+    mockUseChecklistWithInspection.mockReturnValue(makeChecklistData(ALL_ITEMS));
+    render(<T2Manifest caseId={CASE_ID} />);
+    expect(screen.queryByTestId("t2-case-context")).toBeNull();
+  });
+
+  it("does not render the case-context header when case is not found", () => {
+    mockUseCaseById.mockReturnValue(null);
+    mockUseChecklistWithInspection.mockReturnValue(makeChecklistData(ALL_ITEMS));
+    render(<T2Manifest caseId={CASE_ID} />);
+    expect(screen.queryByTestId("t2-case-context")).toBeNull();
+  });
+
+  it("re-renders the StatusPill kind when useCaseById returns a new status", () => {
+    mockUseChecklistWithInspection.mockReturnValue(makeChecklistData(ALL_ITEMS));
+
+    // First render: deployed status (set in beforeEach)
+    const { rerender } = render(<T2Manifest caseId={CASE_ID} />);
+    const headerBefore = screen.getByTestId("t2-case-context");
+    const pillBefore = within(headerBefore).getByTestId("status-pill");
+    expect(pillBefore.getAttribute("data-kind")).toBe("deployed");
+
+    // Simulate Convex push: status transitions to transit_in
+    mockUseCaseById.mockReturnValue({
+      _id: CASE_ID,
+      label: "DRONE-CASE-001",
+      status: "transit_in",
+      qrCode: "QR-001",
+      locationName: "Field Site Alpha",
+      assigneeName: "Pilot Jane",
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    });
+    rerender(<T2Manifest caseId={CASE_ID} />);
+
+    const headerAfter = screen.getByTestId("t2-case-context");
+    const pillAfter = within(headerAfter).getByTestId("status-pill");
+    expect(pillAfter.getAttribute("data-kind")).toBe("transit_in");
+  });
+});
 
 describe("T2Manifest — render states", () => {
   it("renders loading spinner while checklist data is undefined", () => {
@@ -363,9 +448,11 @@ describe("T2Manifest — StatusPill kind mapping", () => {
         makeChecklistData([makeItem("s1", "Test Item", status)])
       );
       render(<T2Manifest caseId={CASE_ID} />);
-      const pills = screen.getAllByTestId("status-pill");
-      expect(pills).toHaveLength(1);
-      expect(pills[0].getAttribute("data-kind")).toBe(expectedKind);
+      // Sub-AC 2: scope the assertion to the manifest item row so the
+      // live case-context StatusPill (case-level status) doesn't interfere.
+      const itemRow = screen.getByTestId("manifest-item");
+      const pill = within(itemRow).getByTestId("status-pill");
+      expect(pill.getAttribute("data-kind")).toBe(expectedKind);
     }
   );
 });

@@ -69,6 +69,7 @@ import type { AuditLedgerRow } from "./AuditLedgerTable";
 import AuditLedgerFilterPanel from "./AuditLedgerFilterPanel";
 import type { AuditFilterState } from "./AuditLedgerFilterPanel";
 import CustodySection from "./CustodySection";
+import { QcSignOffHistory } from "./QcSignOffHistory";
 import { exportAuditLedgerCsv } from "../../lib/exportAuditCsv";
 import shared from "./shared.module.css";
 import styles from "./T5Audit.module.css";
@@ -1241,6 +1242,25 @@ export default function T5Audit({ caseId, ffEnabled = true }: T5AuditProps) {
       */}
       <hr className={shared.divider} />
       <CustodySection caseId={caseId} variant="chain" />
+
+      {/*
+        ── QC Sign-off History — full chronological trail (Sub-AC 4) ────
+        QcSignOffHistory subscribes to api["queries/qcSignOff"].getQcSignOffHistory
+        via the useQcSignOffHistory Convex real-time hook.  Convex re-evaluates
+        and pushes within ~100–300 ms of any submitQcSignOff mutation, satisfying
+        the ≤ 2-second real-time fidelity requirement between SCAN app actions
+        and the INVENTORY dashboard.
+
+        No `limit` is specified here — T5 (Audit) shows the full chronological
+        sign-off trail as part of the comprehensive audit record.  This is the
+        canonical full-history view that T1–T4 compact "see Audit tab" notices
+        direct operators to.
+
+        Rendered unconditionally when ffEnabled=true — the audit trail is the
+        complete record of all QC decisions for this case.
+      */}
+      <hr className={shared.divider} />
+      <QcSignOffHistory caseId={caseId} />
 
       {/* ── Hash-chain verification footer ────────────────────────── */}
       {/*

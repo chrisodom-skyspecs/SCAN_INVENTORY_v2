@@ -278,6 +278,45 @@
   max-width: 14rem;
 }
 
+/* ── QC dispatch gate error ─────────────────────────────────────── */
+
+/**
+ * .qcErrorWrapper — full-width block layout for the QC approval gate error.
+ *
+ * When the operator attempts to dispatch a case (set status to "transit_out")
+ * without an approved QC sign-off, the mutation throws [QC_APPROVAL_REQUIRED].
+ * Unlike generic errors (compact inline row), this requires a prominent,
+ * full-width treatment so the message is readable and not truncated.
+ */
+.qcErrorWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+/**
+ * .qcErrorActions — row containing the status pill and action buttons
+ * shown below the QC error banner.
+ */
+.qcErrorActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/**
+ * .qcErrorIcon — info/warning circle icon inside the QC error banner.
+ * Sized to align with the banner text line-height.
+ */
+.qcErrorIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  margin-top: 0.0625rem; /* optical alignment with first text line */
+}
+
 .retryButton {
   display: inline-flex;
   align-items: center;

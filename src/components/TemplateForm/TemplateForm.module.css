@@ -1,0 +1,474 @@
+/**
+ * TemplateForm.module.css — Kit template create/edit form
+ *
+ * All values reference CSS custom properties from the design token system.
+ * No hex literals.
+ *
+ * Typography:
+ *   - Inter Tight for all UI labels, inputs, and button text
+ *
+ * WCAG AA compliant in both light (.root default) and dark (.theme-dark) themes.
+ */
+
+/* ── Form root ─────────────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+}
+
+/* ── Field group (label + control) ──────────────────────────────────── */
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+}
+
+/* ── Labels ──────────────────────────────────────────────────────────── */
+
+.label {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.required {
+  color: var(--signal-error-text-subtle);
+  font-weight: 700;
+}
+
+.labelOptional {
+  font-weight: 400;
+  color: var(--ink-tertiary);
+}
+
+/* ── Text input ──────────────────────────────────────────────────────── */
+
+.input {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  padding: 0.4375rem 0.625rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  color: var(--ink-primary);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+  line-height: 1.5;
+}
+
+.input::placeholder {
+  color: var(--ink-disabled);
+}
+
+.input:focus {
+  border-color: var(--border-brand);
+  box-shadow: var(--elevation-focus);
+}
+
+.input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Textarea ────────────────────────────────────────────────────────── */
+
+.textarea {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  padding: 0.4375rem 0.625rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  color: var(--ink-primary);
+  outline: none;
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+  line-height: 1.5;
+  min-height: 5rem;
+}
+
+.textarea::placeholder {
+  color: var(--ink-disabled);
+}
+
+.textarea:focus {
+  border-color: var(--border-brand);
+  box-shadow: var(--elevation-focus);
+}
+
+.textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Inline field error ──────────────────────────────────────────────── */
+
+.fieldError {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--signal-error-text-subtle);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Checkbox group ──────────────────────────────────────────────────── */
+
+.checkboxGroup {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.checkbox {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 0.1rem; /* optical alignment with label text */
+  accent-color: var(--surface-brand);
+}
+
+.checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.checkboxLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkboxLabelMain {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.4;
+}
+
+.checkboxLabelSub {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  line-height: 1.4;
+}
+
+/* ── Action buttons row ──────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+/* ── Shared button base ──────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.4375rem 0.875rem;
+  border-radius: 0.375rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease,
+    border-color 0.12s ease, opacity 0.12s ease;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Cancel — secondary outline */
+
+.btnCancel {
+  background-color: transparent;
+  color: var(--ink-secondary);
+  border-color: var(--border-default);
+}
+
+.btnCancel:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  color: var(--ink-primary);
+  border-color: var(--border-strong);
+}
+
+/* Save — primary brand */
+
+.btnSave {
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+  border-color: transparent;
+}
+
+.btnSave:hover:not(:disabled):not([aria-disabled="true"]) {
+  background-color: var(--ink-brand);
+}
+
+.btnSave:active:not(:disabled) {
+  opacity: 0.9;
+}
+
+/* ── Items section ───────────────────────────────────────────────────── */
+
+.itemsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.itemsSectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.itemsCount {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.6875rem;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+
+/* ── Add-item row ────────────────────────────────────────────────────── */
+
+.itemsAddRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.itemsAddInput {
+  /* Inherits .input styles; flex override to fill remaining space */
+  flex: 1;
+  min-width: 0;
+}
+
+/* Add button — compact secondary brand */
+
+.btnAddItem {
+  background-color: var(--surface-brand);
+  color: var(--ink-on-brand);
+  border-color: transparent;
+  padding: 0.4375rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.btnAddItem:hover:not(:disabled):not([aria-disabled="true"]) {
+  background-color: var(--ink-brand);
+}
+
+.btnAddItem:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Item list ───────────────────────────────────────────────────────── */
+
+.itemList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: 0.3125rem;
+  transition: border-color 0.1s ease, opacity 0.1s ease, box-shadow 0.1s ease;
+  cursor: grab;
+}
+
+.itemRow:hover {
+  border-color: var(--border-subtle);
+}
+
+/* Drag states */
+
+.itemRowDragging {
+  opacity: 0.45;
+  cursor: grabbing;
+  box-shadow: none;
+}
+
+.itemRowDragOver {
+  border-color: var(--border-brand);
+  box-shadow: 0 0 0 2px var(--surface-brand-subtle, color-mix(in srgb, var(--surface-brand) 20%, transparent));
+}
+
+/* Drag handle — visible grip indicator */
+
+.itemDragHandle {
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  line-height: 1;
+  color: var(--ink-disabled);
+  cursor: grab;
+  user-select: none;
+  /* Braille dots look better at slightly reduced opacity than ink-disabled alone */
+  opacity: 0.7;
+  transition: color 0.1s ease, opacity 0.1s ease;
+}
+
+.itemRow:hover .itemDragHandle {
+  color: var(--ink-tertiary);
+  opacity: 1;
+}
+
+.itemRowDragging .itemDragHandle {
+  cursor: grabbing;
+}
+
+.itemOrderBadge {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.625rem;
+  color: var(--ink-disabled);
+  min-width: 1.25rem;
+  text-align: right;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Up / down move buttons */
+
+.itemMoveBtn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+  user-select: none;
+}
+
+.itemMoveBtn:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  color: var(--ink-primary);
+  border-color: var(--border-default);
+}
+
+.itemMoveBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.itemMoveBtn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.itemName {
+  flex: 1;
+  min-width: 0;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+/* Remove (×) button */
+
+.itemRemoveBtn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+}
+
+.itemRemoveBtn:hover:not(:disabled) {
+  background-color: var(--signal-error-surface-subtle);
+  color: var(--signal-error-text-subtle);
+  border-color: var(--signal-error-border-subtle);
+}
+
+.itemRemoveBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--elevation-focus);
+}
+
+.itemRemoveBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Empty / loading hints ───────────────────────────────────────────── */
+
+.itemsEmptyHint {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-disabled);
+  margin: 0;
+  padding: 0.5rem 0.25rem;
+  text-align: center;
+}
+
+.itemsLoadingHint {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  margin: 0;
+  padding: 0.5rem 0.25rem;
+  text-align: center;
+}

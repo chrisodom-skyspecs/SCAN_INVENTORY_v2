@@ -40,6 +40,8 @@
  */
 
 import type { CaseStatus } from "./case-status";
+import type { SemanticLayerId } from "./layer-engine";
+import { SEMANTIC_LAYER_IDS, DEFAULT_LAYER_ENGINE_STATE } from "./layer-engine";
 
 // ─── Map view modes ───────────────────────────────────────────────────────────
 
@@ -214,6 +216,22 @@ export interface MapUrlState {
   panelOpen: boolean;
   /** Active layer set (default: DEFAULT_LAYERS) */
   layers: LayerId[];
+  /**
+   * Active semantic data layers — toggle-controllable subset of the 7
+   * SemanticLayerIds (deployed, transit, flagged, hangar, heat, history,
+   * turbines).  Serialised as the `slayers` URL search param so toggle state
+   * survives refresh / deep-link sharing without requiring localStorage.
+   *
+   * Persists in the URL via shallow routing (window.history.replaceState)
+   * whenever the user clicks a toggle in the LayerTogglePanel — see
+   * `LayerTogglePanelConnected` and `useMapParams.toggleSemanticLayer`.
+   *
+   * Default: DEFAULT_SLAYERS — the same active set as DEFAULT_LAYER_ENGINE_STATE.
+   *
+   * @example slayers = ["deployed", "flagged"]   // only show deployed + flagged pins
+   * @example slayers = SEMANTIC_LAYER_IDS         // show every semantic layer
+   */
+  slayers: SemanticLayerId[];
   /** Organisation filter (Convex ID, default: null) */
   org: string | null;
   /** Kit / case template filter (Convex ID, default: null) */
@@ -227,12 +245,26 @@ export interface MapUrlState {
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
+/**
+ * Default `slayers` URL param value — the SemanticLayerIds whose default
+ * visibility is `true` in DEFAULT_LAYER_ENGINE_STATE.
+ *
+ * This list is the canonical "all-active" toggle set for a fresh load.
+ * When the URL `slayers` param is absent or empty, callers should fall
+ * back to this list so the LayerTogglePanel renders with all default
+ * layers visible.
+ */
+export const DEFAULT_SLAYERS: SemanticLayerId[] = SEMANTIC_LAYER_IDS.filter(
+  (id) => DEFAULT_LAYER_ENGINE_STATE[id]
+);
+
 export const MAP_URL_STATE_DEFAULTS: MapUrlState = {
   view: "M1",
   case: null,
   window: "T1",
   panelOpen: false,
   layers: [...DEFAULT_LAYERS],
+  slayers: [...DEFAULT_SLAYERS],
   org: null,
   kit: null,
   at: null,

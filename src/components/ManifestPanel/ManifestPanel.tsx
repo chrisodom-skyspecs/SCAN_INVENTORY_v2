@@ -42,7 +42,7 @@
 import { useState, useCallback } from "react";
 import { useChecklistByCase } from "@/hooks/use-checklist";
 import { StatusPill } from "@/components/StatusPill";
-import { InspectionStatusBar, ItemStatusIcon } from "@/components/ItemStatusBadge";
+import { InspectionStatusBar, ItemStatusIcon, ChecklistStatusCounts } from "@/components/ItemStatusBadge";
 import { useMapManifestHover } from "@/providers/map-manifest-hover-provider";
 import styles from "./ManifestPanel.module.css";
 import type { ChecklistItem, ManifestItemStatus } from "@/hooks/use-checklist";
@@ -467,17 +467,20 @@ export function ManifestPanel({
           )}
         </div>
 
-        {/* Status summary — ItemStatusBadge primitives with icon + count */}
-        {items.length > 0 && (
-          <InspectionStatusBar
-            verified={summary.verified}
-            flagged={summary.flagged}
-            missing={summary.missing}
-            unchecked={summary.unchecked}
-            size="sm"
-            data-testid="manifest-summary-chips"
-          />
-        )}
+        {/*
+          Status summary — derives verified/flagged/missing/unchecked counts
+          from the live item list via ChecklistStatusCounts (Sub-AC 2).
+          Replaces the computeSummary + InspectionStatusBar pattern so count
+          derivation is owned by the reusable sub-component rather than
+          repeated locally.
+        */}
+        <ChecklistStatusCounts
+          items={items}
+          showUnchecked
+          size="sm"
+          aria-label="Packing list status summary"
+          data-testid="manifest-summary-chips"
+        />
       </header>
 
       {/* ── Progress bar ─────────────────────────────────────────────────── */}

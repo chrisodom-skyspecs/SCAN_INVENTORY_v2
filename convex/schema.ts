@@ -11,6 +11,68 @@ import { v } from "convex/values";
 // ─── Shared value types ──────────────────────────────────────────────────────
 
 /**
+ * Organization type distinguishes internal SkySpecs staff groups from
+ * external contractor / partner organizations.
+ *
+ * Single-tenant constraint: organizations represent logical groupings of
+ * people within or outside SkySpecs — they are NOT separate database tenants.
+ * All organizations share the same Convex database and case inventory.
+ */
+const orgType = v.union(
+  v.literal("internal"),    // SkySpecs internal staff groups (ops, logistics, etc.)
+  v.literal("contractor"),  // external contractors, pilots, or partner organizations
+);
+
+/**
+ * Organization-scoped membership role.
+ *
+ * org_admin  — can manage the organization's membership list (add/remove members,
+ *              change roles) and update organization details; inherits all member
+ *              permissions within the org scope.
+ *
+ * member     — standard active member of the organization; can be assigned as
+ *              a case custodian, mission team member, or inspection participant
+ *              on behalf of the organization.
+ */
+const orgRole = v.union(
+  v.literal("org_admin"),
+  v.literal("member"),
+);
+
+/**
+ * System-wide user role.
+ *
+ * Mirrors the ROLES constant in convex/rbac.ts and the UserRole type in
+ * src/types/user.ts — all three must be kept in sync.
+ *
+ *   admin       — full system access
+ *   operator    — operations team / back-office
+ *   technician  — primary field operator
+ *   pilot       — on-site pilot / secondary field role
+ */
+const userRole = v.union(
+  v.literal("admin"),
+  v.literal("operator"),
+  v.literal("technician"),
+  v.literal("pilot"),
+);
+
+/**
+ * User account lifecycle status.
+ *
+ * Mirrors UserStatus in src/types/user.ts — both must be kept in sync.
+ *
+ *   active   — fully onboarded; can authenticate and perform role-permitted actions
+ *   inactive — suspended or deactivated; login is blocked by auth middleware
+ *   pending  — invited but has not yet completed first login / Kinde onboarding
+ */
+const userStatus = v.union(
+  v.literal("active"),
+  v.literal("inactive"),
+  v.literal("pending"),
+);
+
+/**
  * Valid case lifecycle statuses.
  *
  * Full lifecycle:
@@ -78,6 +140,7 @@ const eventType = v.union(
   v.literal("photo_added"),
   v.literal("mission_assigned"),
   v.literal("template_applied"),
+  v.literal("qc_sign_off"),   // QC quality-control sign-off (approve / reject / revoke)
 );
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
@@ -211,11 +274,76 @@ export default defineSchema({
       }),
     })),
 
+    /**
+     * Denormalized QC sign-off summary fields.
+     *
+     * Written by the `submitQcSignOff` mutation (convex/mutations/qcSignOff.ts)
+     * when an operator or admin performs a quality-control sign-off on the case.
+     * These fields are intentionally denormalized onto the cases table so that:
+     *
+     *   1. The T1 Summary layout can display QC status without a secondary join
+     *      to the `qcSignOffs` history table.
+     *   2. The M1 fleet overview map can filter/highlight cases by QC status
+     *      in a single O(log n) index scan.
+     *   3. All queries subscribed to the `cases` table automatically re-evaluate
+     *      within ~100–300 ms of a sign-off mutation, satisfying the ≤ 2-second
+     *      real-time fidelity requirement between SCAN app action and dashboard.
+     *
+     * The canonical full QC sign-off history (all sign-off actions over time)
+     * continues to live in the `qcSignOffs` table.  These fields are a
+     * lightweight summary of the LATEST sign-off state only.
+     *
+     * Cleared (set to undefined) if a sign-off is revoked (status → "pending").
+     */
+
+    /**
+     * Current QC sign-off status for this case.
+     *
+     *   "pending"  — no sign-off has been submitted yet (or it was revoked).
+     *   "approved" — QC reviewer approved the case; safe to deploy/ship.
+     *   "rejected" — QC reviewer rejected the case; requires rework before deploy.
+     *
+     * When undefined, the case has not entered a QC workflow yet.
+     * Once a sign-off is submitted the field is always one of the three literals.
+     */
+    qcSignOffStatus: v.optional(v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+    )),
+
+    /**
+     * Kinde user ID of the person who submitted the most recent QC sign-off.
+     * Undefined when qcSignOffStatus is undefined or "pending".
+     */
+    qcSignedOffBy: v.optional(v.string()),
+
+    /**
+     * Display name of the person who submitted the most recent QC sign-off.
+     * Denormalised for O(1) tooltip rendering without a users table join.
+     * Undefined when qcSignOffStatus is undefined or "pending".
+     */
+    qcSignedOffByName: v.optional(v.string()),
+
+    /**
+     * Epoch ms when the most recent QC sign-off was submitted.
+     * Undefined when qcSignOffStatus is undefined or "pending".
+     */
+    qcSignedOffAt: v.optional(v.number()),
+
+    /**
+     * Optional notes entered by the QC reviewer alongside the sign-off decision.
+     * E.g., "All items inspected; minor cosmetic scratch on lid — approved."
+     * or "Battery compartment seal cracked — rejected until repaired."
+     */
+    qcSignOffNotes: v.optional(v.string()),
+
     notes: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_status", ["status"])
+    .index("by_qc_sign_off_status", ["qcSignOffStatus"])
     .index("by_mission", ["missionId"])
     .index("by_qr_code", ["qrCode"])
     /**
@@ -277,12 +405,21 @@ export default defineSchema({
         required: v.boolean(),
         category: v.optional(v.string()),
         sortOrder: v.optional(v.number()),
+
+        // Kit template item spec fields
+        /** Expected quantity of this item in the case (e.g., 2 batteries). */
+        quantity: v.optional(v.number()),
+        /** Unit of measure for the quantity (e.g., "each", "pair", "set"). */
+        unit: v.optional(v.string()),
+        /** Packing / handling notes shown to field technicians during inspection. */
+        notes: v.optional(v.string()),
       })
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_updated", ["updatedAt"]),
 
   /**
    * manifestItems — per-case state for each template item.
@@ -423,6 +560,78 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   /**
+   * shipping_updates — append-only log of FedEx tracking events.
+   *
+   * Each row represents a single scan/status update received from FedEx for
+   * a tracked shipment.  Whereas `shipments` stores only the most recent
+   * `lastEvent`, this table stores the full ordered history so that
+   *
+   *   - T4 Shipping panel can render the full event timeline,
+   *   - T5 Audit timeline can reference exact tracking-level events,
+   *   - M4 Logistics map can replay shipment movement over time.
+   *
+   * Rows are written exclusively by the FedEx tracking poller (see
+   * `convex/actions/trackShipment.ts`) and are never mutated after insert.
+   * One shipment maps to many shipping_updates.
+   *
+   * Required fields (per AC 350004 / Sub-AC 4):
+   *   caseId, fedexTrackingId, status, timestamp, location
+   *
+   * Required indexes (per AC 350004 / Sub-AC 4):
+   *   - by_case             on caseId           — list updates for a case
+   *   - by_fedex_tracking   on fedexTrackingId  — list updates for a tracking #
+   */
+  shipping_updates: defineTable({
+    /** The case this shipment update pertains to. */
+    caseId: v.id("cases"),
+
+    /**
+     * FedEx tracking number for the shipment this update belongs to.
+     *
+     * Stored as a string (rather than a v.id reference to `shipments`) so that
+     * polled tracking updates can be ingested even before the shipment row is
+     * fully resolved, and so that downstream consumers can correlate by the
+     * carrier-issued identifier directly.
+     */
+    fedexTrackingId: v.string(),
+
+    /**
+     * Tracking status reported by FedEx for this update.
+     *
+     * Reuses the same union as `shipments.status` so dashboard and SCAN
+     * consumers can render both with the shared `<StatusPill />` component.
+     */
+    status: shipmentStatus,
+
+    /** Epoch milliseconds when the FedEx scan/event occurred. */
+    timestamp: v.number(),
+
+    /**
+     * Location where the FedEx scan/event was recorded.
+     *
+     * Fields mirror the structure used in `shipments.lastEvent.location` so
+     * tracking events can be displayed identically across both surfaces.
+     * All sub-fields are optional because FedEx may report partial location
+     * data (e.g., country only) for international handoffs.
+     */
+    location: v.object({
+      city:    v.optional(v.string()),
+      state:   v.optional(v.string()),
+      country: v.optional(v.string()),
+      lat:     v.optional(v.number()),
+      lng:     v.optional(v.number()),
+    }),
+
+    /** Short FedEx event type code (e.g., "PU", "OD") — optional context. */
+    eventType:   v.optional(v.string()),
+    /** Human-readable description of the FedEx scan event — optional context. */
+    description: v.optional(v.string()),
+  })
+    .index("by_case", ["caseId"])
+    .index("by_fedex_tracking", ["fedexTrackingId"])
+    .index("by_case_timestamp", ["caseId", "timestamp"]),
+
+  /**
    * events — immutable append-only audit timeline.
    * Each action on a case is recorded here in order.
    * Supports optional hash chain for FF_AUDIT_HASH_CHAIN.
@@ -526,6 +735,151 @@ export default defineSchema({
     .index("by_case_transferred_at", ["caseId", "transferredAt"]),
 
   /**
+   * custody_handoffs — canonical custody handoff event log per AC 350003 sub-AC 3.
+   *
+   * Each row represents a single custody handoff between two Kinde users for a
+   * specific case.  The table is intentionally append-only: rows are inserted on
+   * every confirmed handoff and never updated or deleted, so the table forms a
+   * tamper-evident chain of custody for compliance reporting and the T5 audit
+   * panel.
+   *
+   * Field shape is dictated by the acceptance criterion:
+   *   • caseId      — Convex ID of the case that changed hands (mandatory)
+   *   • fromUserId  — Kinde `sub` claim of the outgoing custody holder
+   *   • toUserId    — Kinde `sub` claim of the incoming custody holder
+   *   • timestamp   — epoch ms when the handoff occurred (client-side clock)
+   *   • signature   — optional Convex storage ID for a captured signature image
+   *   • location    — optional GPS / venue location at handoff time
+   *
+   * Relationship to the legacy `custodyRecords` table
+   * ─────────────────────────────────────────────────
+   * The richer `custodyRecords` table (defined above) was introduced earlier to
+   * capture additional fields used by the SCAN-app handoff workflows
+   * (fromUserName, toUserName, transferredAt, notes, signatureStorageId).  The
+   * `custody_handoffs` table defined here is the canonical AC-defined event log
+   * with the exact field names from the spec.  New custody ingestion paths
+   * should write to BOTH tables until a migration consolidates them; queries
+   * that only need the AC fields can read from `custody_handoffs` directly.
+   *
+   * The denormalised display-name fields (fromUserName, toUserName) are kept on
+   * `custodyRecords` only — the AC-defined `custody_handoffs` row stores Kinde
+   * IDs and resolves names client-side via the `users` table when needed.
+   *
+   * Indexes
+   * ───────
+   *   by_case_timestamp — AC-required compound index (caseId + timestamp).
+   *                       Enables O(log n + |range|) lookups such as:
+   *                         • "all handoffs for CASE-007 in the last 30 days"
+   *                         • "most recent handoff for CASE-007" (desc + first)
+   *                         • "first handoff after T0 for CASE-007"
+   *                       Backs the T5 audit timeline and the case detail T2
+   *                       "Currently held by" lookup.
+   *
+   *   by_to_user        — AC-required index on the incoming custodian's Kinde ID.
+   *                       Enables O(log n + |results|) lookups for queries like:
+   *                         • "all cases currently held by Alice" (latest row per
+   *                           case where toUserId = Alice and not superseded)
+   *                         • "everything Alice ever received custody of" (audit)
+   *                       Backs the SCAN app "My Cases" tab and per-technician
+   *                       contribution reports without a full table scan.
+   *
+   *   by_case           — convenience index for unbounded per-case lookups.
+   *   by_from_user      — convenience index for unbounded outgoing-user lookups
+   *                       (audit reports of all handoffs initiated by a user).
+   *   by_timestamp      — fleet-wide chronological handoff feed for telemetry
+   *                       and "no handoffs in the last N hours" alerting.
+   */
+  custody_handoffs: defineTable({
+    /** Convex ID of the case that changed hands. */
+    caseId:     v.id("cases"),
+
+    /**
+     * Kinde `sub` claim of the outgoing custody holder.
+     * Always required — anonymous handoffs are not permitted.
+     */
+    fromUserId: v.string(),
+
+    /**
+     * Kinde `sub` claim of the incoming custody holder.
+     * Always required — handoffs must have a named recipient.
+     */
+    toUserId:   v.string(),
+
+    /**
+     * Epoch milliseconds when the handoff occurred (client clock).
+     * Used as the secondary key in the time-ordered indexes below.
+     */
+    timestamp:  v.number(),
+
+    /**
+     * Optional Convex file storage ID for a signature image captured at handoff.
+     *
+     * The SCAN app signing-pad workflow uploads the rendered signature PNG to
+     * Convex storage and writes the resulting storage ID here.  Resolve to a
+     * download URL client-side via the Convex `useStorageURL` hook or
+     * server-side via `ctx.storage.getUrl(signature)`.
+     *
+     * Undefined when no signature was captured (e.g., remote handoffs or when
+     * the technician opted out of the signature pad).
+     */
+    signature:  v.optional(v.string()),
+
+    /**
+     * Optional location captured at handoff time.
+     *
+     *   • lat / lng    — WGS-84 GPS fix (omitted when the device cannot
+     *                    obtain a fix or the user denied geolocation).
+     *   • name         — human-readable venue label (e.g.
+     *                    "Site Alpha — Turbine Row 3" or "SkySpecs HQ — Bay 4").
+     *   • accuracy     — optional GPS horizontal accuracy in meters as
+     *                    reported by the browser Geolocation API.
+     */
+    location:   v.optional(
+      v.object({
+        lat:      v.optional(v.number()),
+        lng:      v.optional(v.number()),
+        name:     v.optional(v.string()),
+        accuracy: v.optional(v.number()),
+      })
+    ),
+  })
+    /**
+     * by_case_timestamp — AC-required compound index (caseId + timestamp).
+     *
+     * Enables O(log n + |range|) range queries on a case's custody chain,
+     * including:
+     *   • "all handoffs for CASE-007 in the last 30 days"
+     *   • "most recent handoff for CASE-007"  (.order("desc").first())
+     *   • "first handoff after T0 for CASE-007"
+     *
+     * Without this index, time-windowed per-case queries would require a
+     * full by_case scan + in-memory sort.
+     */
+    .index("by_case_timestamp", ["caseId", "timestamp"])
+    /**
+     * by_to_user — AC-required index on the incoming custodian's Kinde ID.
+     *
+     * Enables O(log n + |results|) lookups for the SCAN app "My Cases" view
+     * and audit reports listing every case a technician has received custody
+     * of.  Without this index, the same lookup would require a full table
+     * scan + in-memory filter.
+     */
+    .index("by_to_user",        ["toUserId"])
+    /** Convenience: unbounded per-case handoff history (no time constraint). */
+    .index("by_case",           ["caseId"])
+    /**
+     * by_from_user — convenience index on the outgoing custodian's Kinde ID.
+     * Used for audit trails listing every handoff a user initiated.
+     */
+    .index("by_from_user",      ["fromUserId"])
+    /**
+     * by_timestamp — fleet-wide time-ordered handoff feed.
+     * Used by the dashboard "Recent Activity" rails, telemetry aggregations,
+     * and operations monitoring ("no handoffs in the last N hours" alerts).
+     */
+    .index("by_timestamp",      ["timestamp"]),
+
+  /**
    * notifications — in-app notification inbox.
    * No push / email — in-app only per constraints.
    */
@@ -558,17 +912,46 @@ export default defineSchema({
    * submitDamagePhoto inserts a new row — satisfying the ≤ 2-second real-time
    * fidelity requirement between SCAN app submission and dashboard visibility.
    *
+   * AC 350002 sub-AC 2 mapping
+   * ──────────────────────────
+   * The acceptance criterion specifies fields { caseId, itemId, photos,
+   * annotations, severity, reporterId } and indexes on caseId and itemId.
+   * This table satisfies that contract with the following name mappings —
+   * the implementation names are retained because they are referenced
+   * throughout the SCAN app, T3/T4/T5 panels, and audit pipelines:
+   *
+   *   AC field name      → schema field name                semantics
+   *   ──────────────────   ───────────────────────────────   ───────────────
+   *   caseId             → caseId                           identical
+   *   itemId             → manifestItemId                   FK to manifestItems
+   *   photos             → photoStorageId  (one per row)    row-per-photo design
+   *   annotations        → annotations                      identical
+   *   severity           → severity                         identical
+   *   reporterId         → reportedById                     Kinde sub claim
+   *
+   *   AC index name      → schema index name                indexed columns
+   *   ──────────────────   ───────────────────────────────   ───────────────
+   *   index on caseId    → by_case                          [caseId]
+   *   index on itemId    → by_item                          [manifestItemId]
+   *
+   * The "row-per-photo" design for `photos` is intentional: every photo is its
+   * own document so each photo can carry its own annotations, severity, and
+   * audit attribution without an awkward parallel-array shape.  Querying "all
+   * photos for an item" is cheap because of the by_item index.
+   *
    * Fields
    * ──────
-   *   caseId          — parent case (mandatory)
+   *   caseId          — parent case (mandatory; AC `caseId`)
    *   photoStorageId  — Convex file storage ID for the uploaded photo
+   *                     (AC `photos` — one storage ID per row)
    *   annotations     — optional array of pin-style annotations placed on the
    *                     photo by the technician in the SCAN app markup tool
    *   severity        — damage severity assessed by the technician
    *   reportedAt      — epoch ms when the photo was submitted
    *   manifestItemId  — optional link to the manifest item being reported
+   *                     (AC `itemId`; FK to manifestItems table)
    *   templateItemId  — stable template item ID (for event correlation)
-   *   reportedById    — Kinde user ID of the reporting technician
+   *   reportedById    — Kinde user ID of the reporting technician (AC `reporterId`)
    *   reportedByName  — display name for attribution
    *   notes           — optional free-text notes entered alongside the photo
    */
@@ -610,6 +993,33 @@ export default defineSchema({
   })
     .index("by_case",             ["caseId"])
     .index("by_case_reported_at", ["caseId", "reportedAt"])
+    /**
+     * by_item — AC 350002 sub-AC 2 required index on the linked manifest item.
+     *
+     * The acceptance criterion calls for an index on `itemId`.  In this schema
+     * the AC `itemId` corresponds to the `manifestItemId` foreign key (see the
+     * field-mapping table in the table-level docstring above).  This index
+     * enables O(log n + |results|) lookups of all damage photos attached to a
+     * specific manifest item — for example:
+     *
+     *   • T2 Manifest panel: render the per-item damage thumbnail strip
+     *     ("show me every damage photo filed for the battery pack").
+     *   • SCAN app item detail screen: show prior damage history when a
+     *     technician opens an item with previously reported damage.
+     *   • T5 audit panel: surface a per-item evidence trail without joining
+     *     through events.data parsing.
+     *
+     * Without this index, "all damage photos for item X" would require a full
+     * by_case scan + in-memory filter on manifestItemId.  Cases with large
+     * packing lists (50–100 items) and repeat damage reports benefit
+     * significantly from the indexed path.
+     *
+     * Note: rows where manifestItemId is undefined (case-level photos not tied
+     * to a manifest item) are excluded from this index — Convex automatically
+     * skips rows with undefined indexed columns, which matches the desired
+     * "photos for THIS item" query semantics.
+     */
+    .index("by_item",             ["manifestItemId"])
     /**
      * by_reported_by — index on the reporting technician's Kinde user ID.
      *
@@ -765,6 +1175,141 @@ export default defineSchema({
      * operations monitoring ("no scans in the last N hours" alerts).
      */
     .index("by_scanned_at",      ["scannedAt"]),
+
+  /**
+   * scan_events — canonical scan-event audit log per AC 350001 sub-AC 1.
+   *
+   * Each row represents a single QR-code scan performed by the SCAN mobile app.
+   * The table is intentionally append-only: rows are inserted on every scan and
+   * never updated or deleted, so the table accumulates a complete audit trail
+   * of physical case encounters across the SkySpecs fleet.
+   *
+   * Field shape is dictated by the acceptance criterion:
+   *   • caseId    — Convex ID of the case that was scanned (mandatory)
+   *   • userId    — Kinde `sub` claim of the technician who performed the scan
+   *   • timestamp — epoch ms when the scan occurred (client-side clock)
+   *   • location  — optional GPS / venue location at the time of scan
+   *   • scanType  — categorical reason the scan was initiated
+   *
+   * Relationship to the legacy `scans` table
+   * ────────────────────────────────────────
+   * The richer `scans` table (defined above) was introduced earlier to capture
+   * additional fields used by SCAN-app workflows (qrPayload, scannedByName,
+   * deviceInfo, scanContext, inspectionId, locationName, etc.).  The
+   * `scan_events` table defined here is the canonical AC-defined event log
+   * with the exact field names from the spec.  New scan ingestion paths should
+   * write to BOTH tables until a migration consolidates them; queries that
+   * only need the AC fields can read from `scan_events` directly.
+   *
+   * Indexes
+   * ───────
+   *   by_case_timestamp — primary per-case time-ordered scan history.
+   *                       Required by AC sub-AC 1.  Enables O(log n + |range|)
+   *                       lookups such as "all scans for CASE-007 in the last 7
+   *                       days" without a full table scan.  Backs the T5 audit
+   *                       timeline and the dashboard "Recent Scans" feed.
+   *
+   *   by_user_timestamp — per-technician time-ordered scan history.
+   *                       Required by AC sub-AC 1.  Enables O(log n + |range|)
+   *                       lookups such as "all scans by Alice today" for the
+   *                       SCAN app "My Activity" tab and per-technician
+   *                       contribution reports.
+   *
+   *   by_case           — convenience index for unbounded per-case lookups.
+   *   by_user           — convenience index for unbounded per-user lookups.
+   *   by_timestamp      — fleet-wide chronological scan feed for telemetry and
+   *                       "no scans in the last N hours" alerting.
+   */
+  scan_events: defineTable({
+    /** Convex ID of the case that was scanned. */
+    caseId:    v.id("cases"),
+
+    /**
+     * Kinde `sub` claim of the technician who performed the scan.
+     * Always required — anonymous scans are not permitted.
+     */
+    userId:    v.string(),
+
+    /**
+     * Epoch milliseconds when the scan occurred (client clock).
+     * Used as the secondary key in the time-ordered indexes below.
+     */
+    timestamp: v.number(),
+
+    /**
+     * Optional location captured at scan time.
+     *
+     *   • lat / lng    — WGS-84 GPS fix (omitted when the device cannot
+     *                    obtain a fix or the user denied geolocation).
+     *   • name         — human-readable venue label (e.g.
+     *                    "Site Alpha — Turbine Row 3" or "SkySpecs HQ — Bay 4").
+     *   • accuracy     — optional GPS horizontal accuracy in meters as
+     *                    reported by the browser Geolocation API.
+     */
+    location:  v.optional(
+      v.object({
+        lat:      v.optional(v.number()),
+        lng:      v.optional(v.number()),
+        name:     v.optional(v.string()),
+        accuracy: v.optional(v.number()),
+      })
+    ),
+
+    /**
+     * Categorical reason the scan was initiated.
+     *
+     *   "check_in"   — status transition / location update flow.
+     *   "inspection" — entering the manifest inspection checklist workflow.
+     *   "handoff"    — beginning a custody handoff workflow.
+     *   "lookup"     — informational scan with no workflow action.
+     *   "shipping"   — preparing a case for FedEx shipment.
+     *   "receiving"  — receiving a case back at base.
+     */
+    scanType:  v.union(
+      v.literal("check_in"),
+      v.literal("inspection"),
+      v.literal("handoff"),
+      v.literal("lookup"),
+      v.literal("shipping"),
+      v.literal("receiving"),
+    ),
+  })
+    /**
+     * by_case_timestamp — AC-required compound index (caseId + timestamp).
+     *
+     * Enables O(log n + |range|) range queries on a case's scan history,
+     * including:
+     *   • "all scans for CASE-007 in the last 7 days"
+     *   • "most recent scan for CASE-007"  (.order("desc").first())
+     *   • "first scan after T0 for CASE-007"
+     *
+     * Without this index, time-windowed per-case queries would require a
+     * full by_case scan + in-memory sort.
+     */
+    .index("by_case_timestamp", ["caseId", "timestamp"])
+    /**
+     * by_user_timestamp — AC-required compound index (userId + timestamp).
+     *
+     * Enables O(log n + |range|) range queries on a technician's scan
+     * history, including:
+     *   • "all scans by Alice in the last 24 hours"
+     *   • "most recent scan by Alice"  (.order("desc").first())
+     *   • "scans by Alice between T0 and T1" for shift / contribution reports
+     *
+     * Without this index, per-user time-windowed queries would require a
+     * full by_user scan + in-memory sort.
+     */
+    .index("by_user_timestamp", ["userId", "timestamp"])
+    /** Convenience: unbounded per-case lookups (no time constraint). */
+    .index("by_case",           ["caseId"])
+    /** Convenience: unbounded per-user lookups (no time constraint). */
+    .index("by_user",           ["userId"])
+    /**
+     * by_timestamp — fleet-wide time-ordered scan feed.
+     * Used by dashboard "Recent Activity" rails, telemetry aggregations,
+     * and operations monitoring ("no scans in the last N hours" alerts).
+     */
+    .index("by_timestamp",      ["timestamp"]),
 
   /**
    * checklist_updates — immutable log of each manifest item state change.
@@ -976,6 +1521,32 @@ export default defineSchema({
     picture:     v.optional(v.string()), // avatar URL
     orgCode:     v.optional(v.string()), // Kinde org code
     roles:       v.optional(v.array(v.string())),
+
+    /**
+     * role — resolved system-wide role for this user.
+     *
+     * Derived from the Kinde JWT `roles` claim by `upsertUser` on each login
+     * sync (highest-privilege role wins: admin > operator > technician > pilot).
+     * Optional so that legacy / pre-role-assignment records remain valid until
+     * their next login sync.
+     *
+     * The raw `roles` array from Kinde is kept for audit purposes and multi-role
+     * edge-cases; this field is the single "effective role" used by RBAC guards
+     * and UI role-gate components.
+     */
+    role: v.optional(userRole),
+
+    /**
+     * status — user account lifecycle state.
+     *
+     * Defaults to "active" for all users created by `upsertUser` (i.e., users
+     * who have completed at least one successful Kinde login).  Can be set to
+     * "inactive" by an admin to suspend access without deleting the record.
+     * "pending" is reserved for invited users who have not yet completed their
+     * first Kinde login.
+     */
+    status: v.optional(userStatus),
+
     lastLoginAt: v.number(),              // epoch ms
     createdAt:   v.number(),
     updatedAt:   v.number(),
@@ -1180,6 +1751,276 @@ export default defineSchema({
     .index("by_user_id", ["userId"]),
 
   /**
+   * organizations — internal staff groups and contractor / partner organizations.
+   *
+   * SkySpecs operates with a single-tenant architecture where all organizations
+   * share the same database.  An organization is a logical grouping of people
+   * (not a data-isolation boundary).
+   *
+   * The two canonical types are:
+   *   "internal"    — SkySpecs teams: operations, logistics, engineering, etc.
+   *                   Examples: "Ops Team", "Field Logistics", "Engineering"
+   *
+   *   "contractor"  — External companies or independent contractors that perform
+   *                   on-site inspections, case transport, or other field work
+   *                   on behalf of SkySpecs.
+   *                   Examples: "Apex Aerial Services", "Midwest Wind Contractors"
+   *
+   * Users belong to one or more organizations via the `orgMemberships` table.
+   * The `orgType` field drives display classification in the M1 org filter
+   * and the Organization Management admin UI (AC 22).
+   *
+   * Fields
+   * ──────
+   *   name          — display name of the organization (unique per orgType)
+   *   orgType       — "internal" | "contractor"
+   *   description   — optional longer description / notes
+   *   isActive      — soft-delete flag; inactive orgs are hidden from selectors
+   *                   but retained for historical membership / audit purposes
+   *   contactName   — optional primary contact for contractor organizations
+   *   contactEmail  — optional contact email for contractor organizations
+   *   kindeOrgCode  — optional Kinde organization code for SSO-linked orgs
+   *   createdAt     — epoch ms when the record was created
+   *   updatedAt     — epoch ms when the record was last updated
+   *
+   * Indexes
+   * ───────
+   *   by_type       — list all organizations of a given type (admin org list)
+   *   by_active     — filter to active organizations (field selectors, dropdowns)
+   *   by_type_active — compound: active orgs by type (most common query pattern)
+   *   by_name       — alphabetical sort / name-based lookup
+   *   by_updated    — ordered iteration for admin UI and export
+   */
+  organizations: defineTable({
+    /** Display name of the organization, e.g. "Apex Aerial Services". */
+    name:          v.string(),
+
+    /**
+     * Logical type of organization.
+     *   "internal"   — SkySpecs internal staff / teams
+     *   "contractor" — external company or independent contractor
+     */
+    orgType:       orgType,
+
+    /** Optional longer description or notes about the organization. */
+    description:   v.optional(v.string()),
+
+    /**
+     * Whether this organization is active.
+     * Inactive organizations are hidden from membership selectors and org
+     * filter dropdowns but retained for historical audit trails.
+     * Soft-delete: always use isActive = false instead of deleting.
+     */
+    isActive:      v.boolean(),
+
+    /**
+     * Primary point of contact for contractor organizations.
+     * Used by the admin UI "Org Details" panel for operational outreach.
+     * Not applicable for internal organizations (undefined).
+     */
+    contactName:   v.optional(v.string()),
+
+    /**
+     * Contact email for contractor organizations.
+     * Used for notifications and escalation routing (in-app only).
+     */
+    contactEmail:  v.optional(v.string()),
+
+    /**
+     * Kinde organization code if this organization is linked to a Kinde SSO org.
+     *
+     * When set, users whose Kinde JWT carries this orgCode are automatically
+     * considered members of this organization on first login sync (see
+     * convex/auth.ts `upsertUser` flow).
+     *
+     * Can be left undefined for organizations managed manually through the
+     * admin UI without Kinde SSO organization linkage.
+     */
+    kindeOrgCode:  v.optional(v.string()),
+
+    /** Epoch ms when this record was created. */
+    createdAt:     v.number(),
+    /** Epoch ms when this record was last updated. */
+    updatedAt:     v.number(),
+  })
+    /**
+     * by_type — list all organizations of a given type.
+     * Used by: admin org list (filter by internal / contractor), M1 org filter
+     * dropdown to scope case pins by organization type.
+     */
+    .index("by_type",        ["orgType"])
+    /**
+     * by_active — filter to active organizations only.
+     * Used by: field selectors (case assignee org picker), handoff recipient
+     * org picker, user management org assignment dropdown.
+     */
+    .index("by_active",      ["isActive"])
+    /**
+     * by_type_active — most common query pattern: active orgs of a specific type.
+     * Enables O(log n + |results|) lookups for "list all active contractor orgs"
+     * without loading inactive orgs or filtering in memory.
+     */
+    .index("by_type_active", ["orgType", "isActive"])
+    /**
+     * by_name — alphabetical lookup / name-based search.
+     * Used by: admin org search, de-duplicate-on-create guard.
+     */
+    .index("by_name",        ["name"])
+    /**
+     * by_updated — ordered iteration for admin UI and bulk export.
+     * Returns most-recently-updated orgs first when no type filter is applied.
+     */
+    .index("by_updated",     ["updatedAt"]),
+
+  /**
+   * orgMemberships — user-to-organization membership records.
+   *
+   * Each row represents a single user's membership in a single organization.
+   * A user can belong to multiple organizations (e.g., a field technician who
+   * works for both "Ops Team" and a contractor org on a specific mission).
+   *
+   * The `role` field is the ORGANIZATION-SCOPED role (distinct from the
+   * system-wide Kinde role stored in `users.roles`):
+   *   org_admin — manages organization membership and details for this org only
+   *   member    — standard member; can be assigned as case custodian / team member
+   *
+   * Membership lifecycle
+   * ─────────────────────
+   *   • Created by an admin when assigning a user to an organization.
+   *   • `isActive = false` (soft removal) when a user leaves; the row is retained
+   *     for historical audit (custody records, mission participation history).
+   *   • `endedAt` is stamped when isActive transitions to false, enabling
+   *     duration-based reports ("how long was Alice a member of Org X?").
+   *
+   * Relationship to system roles
+   * ─────────────────────────────
+   *   System roles (admin, technician, pilot) live on `users.roles` and are
+   *   managed in the Kinde dashboard.  Organization roles (org_admin, member)
+   *   are Convex-side and control who can manage each org's membership list.
+   *   The two role systems are independent.
+   *
+   * Fields
+   * ──────
+   *   kindeId    — Kinde `sub` claim; FK to users.kindeId
+   *   orgId      — FK to organizations._id
+   *   role       — organization-scoped role (org_admin | member)
+   *   isActive   — whether the membership is currently active
+   *   startedAt  — epoch ms when membership became active
+   *   endedAt    — epoch ms when membership ended (undefined = still active)
+   *   notes      — optional context (e.g., "contractor for Mission Alpha 2026")
+   *   addedById  — Kinde user ID of the admin who added this member
+   *   createdAt  — epoch ms when the row was created
+   *   updatedAt  — epoch ms when the row was last updated
+   *
+   * Indexes
+   * ───────
+   *   by_org           — all members (active + inactive) for an organization.
+   *   by_user          — all organizations a user has ever belonged to.
+   *   by_org_user      — unique membership lookup: O(1) check "is user X in org Y?".
+   *   by_org_active    — active members of an organization (most common field query).
+   *   by_user_active   — active organizations for a user (user profile / selector).
+   *   by_org_role      — all org_admins or all members in an org (admin UI).
+   *   by_updated       — ordered iteration for admin UI and bulk export.
+   */
+  orgMemberships: defineTable({
+    /**
+     * Kinde `sub` claim of the member user.
+     * Foreign key to users.kindeId — must exist in the `users` table before
+     * a membership row is created.
+     */
+    kindeId:   v.string(),
+
+    /**
+     * Convex document ID of the organization.
+     * Foreign key to organizations._id.
+     */
+    orgId:     v.id("organizations"),
+
+    /**
+     * Organization-scoped role for this membership.
+     *   org_admin — can manage this org's membership list
+     *   member    — standard member
+     */
+    role:      orgRole,
+
+    /**
+     * Whether this membership is currently active.
+     * Set to false (soft-remove) when a user leaves the organization.
+     * Rows are never hard-deleted so membership history is preserved.
+     */
+    isActive:  v.boolean(),
+
+    /**
+     * Epoch ms when this membership became active.
+     * Typically the createdAt of the row, but can be back-dated for imports.
+     */
+    startedAt: v.number(),
+
+    /**
+     * Epoch ms when this membership ended.
+     * Undefined when the membership is still active.
+     * Stamped when isActive transitions from true to false.
+     */
+    endedAt:   v.optional(v.number()),
+
+    /**
+     * Optional contextual notes for this membership.
+     * Examples: "On-site for Mission Alpha 2026", "Primary FedEx contact for west region"
+     */
+    notes:     v.optional(v.string()),
+
+    /**
+     * Kinde user ID of the admin who created this membership row.
+     * Used for audit trail: "who added Alice to Apex Aerial Services?"
+     */
+    addedById: v.optional(v.string()),
+
+    /** Epoch ms when this row was created. */
+    createdAt: v.number(),
+    /** Epoch ms when this row was last updated. */
+    updatedAt: v.number(),
+  })
+    /**
+     * by_org — all members of an organization (active + historical).
+     * Used by: admin org member list, membership export, audit reports.
+     */
+    .index("by_org",        ["orgId"])
+    /**
+     * by_user — all organizations a user has ever belonged to.
+     * Used by: user profile "Organizations" section, custody assignment context.
+     */
+    .index("by_user",       ["kindeId"])
+    /**
+     * by_org_user — unique membership point lookup.
+     * Enables O(log n) check "is user X currently a member of org Y?" and
+     * prevents duplicate membership rows on add.
+     * Used by: addOrgMember guard, membership status display.
+     */
+    .index("by_org_user",   ["orgId", "kindeId"])
+    /**
+     * by_org_active — active members of an organization.
+     * The most common membership query: "who is currently in Org X?".
+     * Filters in-index so inactive historical rows are excluded without
+     * a full by_org scan + in-memory filter.
+     */
+    .index("by_org_active", ["orgId", "isActive"])
+    /**
+     * by_user_active — active organizations for a user.
+     * Used by: user profile, field assignment dropdowns ("which orgs does Alice
+     * belong to right now?"), org filter on the INVENTORY dashboard.
+     */
+    .index("by_user_active", ["kindeId", "isActive"])
+    /**
+     * by_org_role — list all org_admins or all members in an organization.
+     * Used by: admin UI "Admins" sub-tab, notification routing to org admins.
+     */
+    .index("by_org_role",   ["orgId", "role"])
+    /**
+     * by_updated — ordered iteration for admin UI and bulk export.
+     */
+    .index("by_updated",    ["updatedAt"]),
+
+  /**
    * turbines — wind turbine site markers for the INVENTORY map turbines overlay.
    *
    * Each row represents a single wind turbine (or turbine pad) that is a
@@ -1241,6 +2082,141 @@ export default defineSchema({
     .index("by_mission", ["missionId"])
     .index("by_status",  ["status"])
     .index("by_updated", ["updatedAt"]),
+
+  /**
+   * qcSignOffs — quality-control sign-off history for cases.
+   *
+   * Each row represents a single QC sign-off action performed on a case.
+   * The table is append-only: every sign-off submission (approve / reject /
+   * revoke) creates a new row so that the full audit trail of QC decisions
+   * is preserved for compliance and the T5 audit chain.
+   *
+   * The LATEST sign-off state is also denormalized onto the `cases` table
+   * (qcSignOffStatus, qcSignedOffBy, qcSignedOffByName, qcSignedOffAt,
+   * qcSignOffNotes) for zero-join dashboard rendering.  The `qcSignOffs`
+   * table provides the historical record.
+   *
+   * Status lifecycle
+   * ────────────────
+   *   pending  — initial state; no action taken yet, or the previous decision
+   *              was revoked.  A "pending" row is written when a sign-off is
+   *              explicitly reset/revoked by an admin.
+   *   approved — QC reviewer verified the case is ready for deployment/shipping.
+   *   rejected — QC reviewer identified issues requiring rework before deploy.
+   *
+   * Fields
+   * ──────
+   *   caseId        — parent case (mandatory)
+   *   status        — QC decision: "pending" | "approved" | "rejected"
+   *   signedOffBy   — Kinde user ID of the reviewer
+   *   signedOffByName — display name (denormalized for rendering)
+   *   signedOffAt   — epoch ms when the action was taken
+   *   notes         — optional reviewer notes / rejection reason
+   *   previousStatus — status before this sign-off (for audit diff views)
+   *   inspectionId  — optional link to the inspection that triggered the QC review
+   *
+   * Indexes
+   * ───────
+   *   by_case            — all sign-off records for a case (T5 audit trail)
+   *   by_case_signed_at  — time-ordered per-case sign-off history
+   *   by_signer          — all sign-off actions by a specific reviewer
+   *   by_status          — fleet-wide filter by QC decision status
+   *   by_signed_at       — fleet-wide chronological QC activity feed
+   */
+  qcSignOffs: defineTable({
+    /** Convex ID of the case this sign-off is for. */
+    caseId: v.id("cases"),
+
+    /**
+     * QC decision recorded by this sign-off action.
+     *   "pending"  — explicit reset / revocation of a prior decision
+     *   "approved" — case is cleared for deployment / shipping
+     *   "rejected" — case requires rework; block deployment / shipping
+     */
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+    ),
+
+    /**
+     * Kinde `sub` claim of the QC reviewer who performed this action.
+     * Always required — anonymous sign-offs are not permitted.
+     */
+    signedOffBy: v.string(),
+
+    /**
+     * Display name of the reviewer (denormalised so the history row is
+     * self-contained and readable without a users table join).
+     */
+    signedOffByName: v.string(),
+
+    /**
+     * Epoch ms when this sign-off action was performed (server clock).
+     * Used as the secondary key in the time-ordered indexes below.
+     */
+    signedOffAt: v.number(),
+
+    /**
+     * Optional notes entered by the reviewer alongside the decision.
+     * Required when status = "rejected" (validation enforced by mutation).
+     * Optional for "approved" and "pending" (revocation) actions.
+     *
+     * Examples:
+     *   "All 42 items verified OK; case is ready for transit."
+     *   "Battery charger missing (item #12) — rejected until replaced."
+     *   "Previous approval revoked; re-inspection required."
+     */
+    notes: v.optional(v.string()),
+
+    /**
+     * QC status of the case BEFORE this sign-off action.
+     * Enables diff views in the T5 audit panel ("was approved, now rejected").
+     * Undefined for the first sign-off on a case (no prior QC state).
+     */
+    previousStatus: v.optional(v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+    )),
+
+    /**
+     * Optional link to the inspection pass that triggered this QC review.
+     * Populated when the sign-off is performed immediately after completing
+     * a checklist inspection.  Enables the T5 audit panel to correlate QC
+     * decisions with specific inspection events.
+     */
+    inspectionId: v.optional(v.id("inspections")),
+  })
+    /**
+     * by_case — all sign-off records for a case.
+     * Primary lookup for the T5 audit panel QC history section.
+     * Used by: getQcSignOffHistory.
+     */
+    .index("by_case",           ["caseId"])
+    /**
+     * by_case_signed_at — time-ordered per-case sign-off history.
+     * Enables O(log n + |results|) range queries on a case's QC timeline.
+     * Used by: getQcSignOffHistory (ordered), T5 audit panel chronological view.
+     */
+    .index("by_case_signed_at", ["caseId", "signedOffAt"])
+    /**
+     * by_signer — all QC actions performed by a specific reviewer.
+     * Used by: admin audit reports ("show all decisions by Alice").
+     */
+    .index("by_signer",         ["signedOffBy"])
+    /**
+     * by_status — fleet-wide filter by QC decision.
+     * Used by: dashboard QC queue ("all cases pending approval"),
+     * operations reports ("how many cases were rejected this week").
+     */
+    .index("by_status",         ["status"])
+    /**
+     * by_signed_at — fleet-wide chronological QC activity feed.
+     * Used by: dashboard recent-activity rails, telemetry aggregations,
+     * operations monitoring ("no QC sign-offs in the last 48 hours" alerts).
+     */
+    .index("by_signed_at",      ["signedOffAt"]),
 
   /**
    * featureFlags — runtime feature flag storage.
@@ -1347,4 +2323,229 @@ export default defineSchema({
     .index("by_event_name", ["eventName"])
     .index("by_timestamp",  ["timestamp"])
     .index("by_recorded_at", ["recordedAt"]),
+
+  /**
+   * qr_association_events — dedicated, append-only audit trail for every
+   * QR-code association action recorded by AC 240303 sub-AC 3.
+   *
+   * The generic `events` table already captures every QR action under
+   * `eventType: "note_added"` with a `data.action` discriminator, but that
+   * shape requires application-level parsing of the polymorphic `data: any`
+   * blob to filter / report on QR activity.  This dedicated table provides:
+   *
+   *   1. A typed, queryable view of every QR association action (create /
+   *      reassign / invalidate) without parsing event blobs.
+   *   2. Direct indexes on caseId, qrCode, actorId, correlationId, and
+   *      action so the dashboard QR audit panel and compliance exports run
+   *      in O(log n) per lookup.
+   *   3. A single source of truth that operations leads can subscribe to
+   *      for live "QR activity" feeds (e.g., recent reassignments, recent
+   *      invalidations) without scanning the entire events table.
+   *   4. A canonical shape for the AC-required fields:
+   *        action / actorId / actorName / timestamp / reasonCode
+   *      so audit consumers can rely on field names without per-event
+   *      payload conventions.
+   *
+   * Append-only contract
+   * ────────────────────
+   * Rows are inserted by every QR write path (generateQRCodeForCase,
+   * associateQRCodeToCase, generateQrCode, setQrCode, updateQrCode,
+   * reassignQrCodeToCase, invalidateQrCode) and are never updated or
+   * deleted.  This makes the table a tamper-evident chain of QR custody
+   * usable for compliance reporting.
+   *
+   * Pairing reassign events
+   * ───────────────────────
+   * A QR reassignment writes TWO rows linked by a shared `correlationId`:
+   *
+   *   • role: "source"  — appended to the case that LOST the QR.
+   *                       previousQrCode/Source describe the QR being moved
+   *                       away; counterpartCaseId/Label point to the target.
+   *
+   *   • role: "target"  — appended to the case that GAINED the QR.
+   *                       qrCode/Source describe the QR now associated with
+   *                       this case; counterpartCaseId/Label point to the
+   *                       source; previousQrCode/Source describe what the
+   *                       target case had before (if any) so audit consumers
+   *                       can render a full before/after diff.
+   *
+   * Indexes
+   * ───────
+   *   by_case               — primary per-case lookup; unbounded.  Backs the
+   *                           T5 audit "QR History" rail.
+   *   by_case_timestamp     — chronological per-case scan; backs time-range
+   *                           queries ("QR events for CASE-007 last 30 days").
+   *   by_qr_code            — full lifecycle of a single QR payload across
+   *                           every case it has ever been associated with.
+   *                           Supports compliance queries like "show every
+   *                           movement of QR X".
+   *   by_actor              — every QR action initiated by a user.  Supports
+   *                           per-technician audit reporting and rate-limit
+   *                           checks ("Alice issued 50 reassignments today").
+   *   by_correlation        — fetch both halves of a paired reassign in a
+   *                           single index lookup.
+   *   by_action             — fleet-wide filter by action type ("show all
+   *                           invalidations in the last week").
+   *   by_action_timestamp   — fleet-wide chronological feed per action type.
+   *   by_timestamp          — fleet-wide chronological QR audit feed.
+   */
+  qr_association_events: defineTable({
+    /**
+     * The case affected by this QR action.
+     *
+     * For "create" and "invalidate" events this is the only case involved.
+     * For "reassign" events this is the case the row is appended to —
+     * which is either the source case (role: "source") or the target case
+     * (role: "target") of the move.
+     */
+    caseId: v.id("cases"),
+
+    /**
+     * What QR action this row records.
+     *
+     *   "create"     — A QR payload was associated with a case (initial
+     *                  association via generateQRCodeForCase, associateQRCodeToCase,
+     *                  generateQrCode, setQrCode, or updateQrCode).
+     *
+     *   "reassign"   — A QR payload was moved from one case to another
+     *                  (reassignQrCodeToCase).  Two rows share a correlationId.
+     *
+     *   "invalidate" — A QR payload was removed from a case without a
+     *                  replacement target (invalidateQrCode).
+     */
+    action: v.union(
+      v.literal("create"),
+      v.literal("reassign"),
+      v.literal("invalidate"),
+    ),
+
+    /**
+     * Role this row plays in the action — meaningful only for "reassign".
+     *
+     *   "source" — appended to the case that LOST the QR (the prior holder).
+     *   "target" — appended to the case that GAINED the QR.
+     *
+     * Undefined for "create" and "invalidate" actions (only one case is
+     * involved so the role concept does not apply).
+     */
+    role: v.optional(
+      v.union(v.literal("source"), v.literal("target")),
+    ),
+
+    /** Kinde user ID of the operator who performed the QR action. */
+    actorId:   v.string(),
+    /** Display name of the operator (denormalised for audit panel). */
+    actorName: v.string(),
+
+    /**
+     * Epoch ms when the action was performed.  Identical on both rows of
+     * a reassign pair so audit consumers can confirm the move happened
+     * atomically.
+     */
+    timestamp: v.number(),
+
+    /**
+     * Reason code describing why the action was performed.
+     *
+     *   • For "reassign" events this is one of REASSIGNMENT_REASON_CODES
+     *     (label_replacement, data_entry_error, case_swap, case_retired,
+     *     label_misprint, other) and is REQUIRED.
+     *   • For "invalidate" events this is one of INVALIDATION_REASON_CODES
+     *     (label_destroyed, case_decommissioned, security_breach, other)
+     *     and is REQUIRED.
+     *   • For "create" events this is one of CREATE_REASON_CODES
+     *     (initial_association, label_replacement, label_correction, other)
+     *     defaulting to "initial_association" when the caller does not
+     *     specify a reason.
+     */
+    reasonCode: v.string(),
+
+    /**
+     * Human-readable label for the reason code (denormalised so audit
+     * panels do not need to join against a labels table).
+     */
+    reasonLabel: v.string(),
+
+    /**
+     * Free-text justification.
+     *
+     * Required when reasonCode === "other" (validated by the audit-helper
+     * before insert).  Optional otherwise.  Stored as a trimmed non-empty
+     * string or `null` (not undefined) so audit queries can filter on the
+     * presence of notes without nullish-coalescing gymnastics.
+     */
+    reasonNotes: v.optional(v.string()),
+
+    /**
+     * The QR payload now associated with the affected case after the
+     * action.
+     *
+     *   • "create"     — the newly-associated QR payload.
+     *   • "reassign"   — same value on both source and target rows; this
+     *                    is the QR that moved.
+     *   • "invalidate" — empty string (the QR is no longer associated).
+     */
+    qrCode: v.string(),
+
+    /**
+     * Source classification of `qrCode` — how the QR was produced.
+     *
+     *   "generated" — UUID-based, system-generated.
+     *   "external"  — verbatim from a pre-printed physical label.
+     *
+     * Undefined when `qrCode` is the empty string (invalidate events).
+     */
+    qrCodeSource: v.optional(
+      v.union(v.literal("generated"), v.literal("external")),
+    ),
+
+    /**
+     * The QR payload previously stored on the affected case before this
+     * action — populated for any action that displaced an existing QR.
+     *
+     *   • "create" via updateQrCode that overwrites an existing QR.
+     *   • "reassign" target row that displaced the target's prior QR.
+     *   • "invalidate" — the QR being removed.
+     *
+     * Undefined when there was no previous QR on this case.
+     */
+    previousQrCode: v.optional(v.string()),
+
+    /** Source classification of the previous QR.  Undefined when no prior QR. */
+    previousQrCodeSource: v.optional(
+      v.union(v.literal("generated"), v.literal("external")),
+    ),
+
+    /**
+     * Correlation ID linking the two halves of a "reassign" pair.
+     *
+     * Both rows of a paired reassign carry the same correlationId; audit
+     * consumers can rejoin the pair with `by_correlation` index.
+     *
+     * Undefined for "create" and "invalidate" events (no pairing).
+     */
+    correlationId: v.optional(v.string()),
+
+    /**
+     * The OTHER case involved in a "reassign" action.
+     *
+     *   • On the source-side row, this is the TARGET case (where the QR
+     *     went to).
+     *   • On the target-side row, this is the SOURCE case (where the QR
+     *     came from).
+     *
+     * Undefined for "create" and "invalidate" actions.
+     */
+    counterpartCaseId:    v.optional(v.id("cases")),
+    /** Display label of the counterpart case (denormalised). */
+    counterpartCaseLabel: v.optional(v.string()),
+  })
+    .index("by_case",             ["caseId"])
+    .index("by_case_timestamp",   ["caseId", "timestamp"])
+    .index("by_qr_code",          ["qrCode"])
+    .index("by_actor",            ["actorId"])
+    .index("by_correlation",      ["correlationId"])
+    .index("by_action",           ["action"])
+    .index("by_action_timestamp", ["action", "timestamp"])
+    .index("by_timestamp",        ["timestamp"]),
 });

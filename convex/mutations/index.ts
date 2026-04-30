@@ -88,3 +88,8 @@ export type { HandoffCustodyResult } from "./custody";
 
 // ── Ship action mutation result types ─────────────────────────────────────────
 export type { RecordShipmentResult } from "./ship";
+
+// ── QC sign-off mutation result types ─────────────────────────────────────────
+// api.mutations.qcSignOff.addQcSignOff     ← AC 250301 canonical mutation
+// api.mutations.qcSignOff.submitQcSignOff  ← full-featured mutation
+export type { QcSignOffResult } from "./qcSignOff";

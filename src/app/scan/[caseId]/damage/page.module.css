@@ -582,6 +582,29 @@
   cursor: not-allowed;
 }
 
+/* ── Invalid field state ────────────────────────────────────────────── */
+
+.fieldInputInvalid,
+.fieldSelectInvalid,
+.fieldTextareaInvalid {
+  border-color: var(--ink-critical) !important;
+  background-color: var(--surface-critical-subtle);
+}
+
+.fieldInputInvalid:focus,
+.fieldSelectInvalid:focus,
+.fieldTextareaInvalid:focus {
+  border-color: var(--ink-critical);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink-critical) 20%, transparent);
+}
+
+:global(.theme-dark) .fieldInputInvalid,
+:global(.theme-dark) .fieldSelectInvalid,
+:global(.theme-dark) .fieldTextareaInvalid {
+  border-color: var(--ink-critical) !important;
+  background-color: var(--surface-critical-subtle);
+}
+
 /* ── Retake photo button ─────────────────────────────────────────────── */
 
 .retakePhotoBtn {

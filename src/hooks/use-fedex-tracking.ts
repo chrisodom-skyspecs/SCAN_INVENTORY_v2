@@ -74,6 +74,25 @@ export interface ShipmentRecord {
   currentLat?: number;
   currentLng?: number;
   estimatedDelivery?: string;
+  /**
+   * Most recent FedEx scan / tracking event for this shipment.
+   * Populated by `updateShipmentStatus` on each FedEx tracking poll.
+   * Undefined when no tracking events have occurred yet (label_created, no scan).
+   *
+   * Surfaced in the case detail UI as the "Last Scan" row so operators can see
+   * the most recent carrier event (description, timestamp, location) without
+   * having to click a refresh button.
+   */
+  lastEvent?: {
+    timestamp: string;
+    eventType: string;
+    description: string;
+    location: {
+      city?: string;
+      state?: string;
+      country?: string;
+    };
+  };
   shippedAt?: number;
   deliveredAt?: number;
   createdAt: number;

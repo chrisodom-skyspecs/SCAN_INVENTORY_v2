@@ -73,9 +73,17 @@ import type { DatabaseReader } from "./_generated/server";
  * Role responsibilities
  * ─────────────────────
  *   admin       — full system access; creates/deletes cases and templates,
- *                 manages missions and feature flags, reads telemetry
+ *                 manages missions and feature flags, reads telemetry, manages
+ *                 users; the only role that can delete resources or toggle
+ *                 feature flags
+ *   operator    — operations team / back-office staff; creates and manages
+ *                 cases, missions (create/update), and templates (create/update);
+ *                 reads feature flags and telemetry for monitoring; cannot delete
+ *                 resources, manage users, or toggle feature flags
  *   technician  — primary field operator; inspects cases, reports damage,
- *                 ships via FedEx, performs custody handoffs, generates QR codes
+ *                 ships via FedEx, performs custody handoffs, generates QR codes;
+ *                 cannot create/delete cases, manage admin resources, or read
+ *                 telemetry analytics
  *   pilot       — on-site pilot / secondary field role; check-ins, shipments,
  *                 custody handoffs, damage reports; cannot run deep inspections
  *                 (checklist item updates), manage admin resources, or generate
@@ -83,6 +91,7 @@ import type { DatabaseReader } from "./_generated/server";
  */
 export const ROLES = {
   ADMIN:      "admin",
+  OPERATOR:   "operator",
   TECHNICIAN: "technician",
   PILOT:      "pilot",
 } as const;
@@ -97,6 +106,7 @@ export type Role = typeof ROLES[keyof typeof ROLES];
  */
 export const ALL_ROLES: readonly Role[] = [
   ROLES.ADMIN,
+  ROLES.OPERATOR,
   ROLES.TECHNICIAN,
   ROLES.PILOT,
 ] as const;
@@ -162,6 +172,7 @@ export const ALL_ROLES: readonly Role[] = [
  * │                                 │ getM5MissionControl                         │
  * │ QR_CODE_GENERATE                │ qrCodes.generateQrCode                      │
  * │ QR_CODE_READ                    │ qrCodes.getQrCodeByCaseId                   │
+ * │ QR_CODE_REASSIGN                │ qrCodes.reassignQrCodeToCase                │
  * └─────────────────────────────────┴─────────────────────────────────────────────┘
  */
 export const OPERATIONS = {
@@ -224,6 +235,28 @@ export const OPERATIONS = {
   // ── QR code operations ─────────────────────────────────────────────────────
   QR_CODE_GENERATE:       "qrCode:generate",
   QR_CODE_READ:           "qrCode:read",
+  /**
+   * Move a QR payload from one case to another (Sub-AC 2 of AC 240302).
+   *
+   * Distinct from QR_CODE_GENERATE because reassignment implicitly invalidates
+   * the prior association — case A's printed label is rendered incorrect once
+   * the QR is moved to case B.  Granted to the same role set as
+   * QR_CODE_GENERATE today (admin + technician) but tracked as its own
+   * operation so the matrix can diverge later (e.g., admin-only) without
+   * editing every call site.
+   */
+  QR_CODE_REASSIGN:       "qrCode:reassign",
+  /**
+   * Invalidate a QR payload — clear it from a case without a replacement
+   * target (Sub-AC 3 of AC 240303).
+   *
+   * Distinct from QR_CODE_REASSIGN because invalidation does not move the
+   * QR to another case; the case is left identity-less until a new label
+   * is generated for it.  Granted to admin + technician with the same
+   * rationale as QR_CODE_REASSIGN — pilots may scan and read QR labels
+   * but cannot remove them from a case in the SCAN app.
+   */
+  QR_CODE_INVALIDATE:     "qrCode:invalidate",
 } as const;
 
 /** Union type of all valid operation strings. */
@@ -244,6 +277,14 @@ export type Operation = typeof OPERATIONS[keyof typeof OPERATIONS];
  *   Full system access.  Can perform every operation including admin-only
  *   actions (template/mission/case CRUD, user management, feature flag
  *   management, telemetry reads).
+ *
+ * OPERATOR
+ *   Operations team / back-office scope.  Can create and manage cases,
+ *   missions (create/update), and templates (create/update) for day-to-day
+ *   fleet operations.  Can read feature flags and telemetry for monitoring.
+ *   Cannot delete cases/missions/templates, manage users, or toggle feature
+ *   flags.  Does not perform field inspections or custody handoffs (those
+ *   are field roles), but can view all data including shipping status.
  *
  * TECHNICIAN
  *   Primary field operator scope.  Full inspection lifecycle (start, update
@@ -294,6 +335,52 @@ const ROLE_PERMISSIONS: Readonly<Record<Role, ReadonlySet<Operation>>> = {
     OPERATIONS.MAP_READ,
     OPERATIONS.QR_CODE_GENERATE,
     OPERATIONS.QR_CODE_READ,
+    OPERATIONS.QR_CODE_REASSIGN,
+    OPERATIONS.QR_CODE_INVALIDATE,
+  ]),
+
+  // ── operator: ops/back-office — create cases & manage missions/templates ────
+  //   Full read access to all data; can create (not delete) cases, missions,
+  //   and templates; reads feature flags and telemetry; no user management,
+  //   no feature flag toggle, no field-inspection item updates.
+  [ROLES.OPERATOR]: new Set<Operation>([
+    OPERATIONS.CASE_READ,
+    OPERATIONS.CASE_LIST,
+    OPERATIONS.CASE_CREATE,         // operators create new cases for incoming equipment
+    // no CASE_DELETE — admin only; deletion requires explicit admin oversight
+    OPERATIONS.CASE_STATUS_CHANGE,
+    OPERATIONS.INSPECTION_START,
+    // no INSPECTION_UPDATE_ITEM — field-only (technician+); operators coordinate
+    //   remotely and do not directly update checklist items
+    OPERATIONS.INSPECTION_COMPLETE,
+    OPERATIONS.DAMAGE_REPORT,
+    OPERATIONS.CASE_SHIP,
+    OPERATIONS.SHIPPING_READ,
+    OPERATIONS.CUSTODY_TRANSFER,
+    OPERATIONS.CUSTODY_READ,
+    OPERATIONS.TEMPLATE_READ,
+    OPERATIONS.TEMPLATE_CREATE,     // operators manage packing list templates
+    OPERATIONS.TEMPLATE_UPDATE,     // operators update packing list templates
+    // no TEMPLATE_DELETE — admin only; prevents accidental mass data loss
+    OPERATIONS.TEMPLATE_APPLY,
+    OPERATIONS.MISSION_READ,
+    OPERATIONS.MISSION_CREATE,      // operators plan and create missions
+    OPERATIONS.MISSION_UPDATE,      // operators update mission details / dates
+    // no MISSION_DELETE — admin only; prevents accidental cascade deletes
+    OPERATIONS.USER_READ,
+    OPERATIONS.USER_LIST,
+    // no USER_MANAGE — admin only; prevents privilege escalation
+    OPERATIONS.NOTIFICATION_READ,
+    OPERATIONS.NOTIFICATION_WRITE,
+    OPERATIONS.FEATURE_FLAG_READ,   // operators monitor which features are active
+    // no FEATURE_FLAG_MANAGE — admin only; feature flag toggles affect the whole system
+    OPERATIONS.TELEMETRY_WRITE,
+    OPERATIONS.TELEMETRY_READ,      // operators monitor dashboard analytics
+    OPERATIONS.MAP_READ,
+    OPERATIONS.QR_CODE_GENERATE,
+    OPERATIONS.QR_CODE_READ,
+    OPERATIONS.QR_CODE_REASSIGN,
+    OPERATIONS.QR_CODE_INVALIDATE,
   ]),
 
   // ── technician: full field operations, no admin resource management ─────────
@@ -327,6 +414,8 @@ const ROLE_PERMISSIONS: Readonly<Record<Role, ReadonlySet<Operation>>> = {
     OPERATIONS.MAP_READ,
     OPERATIONS.QR_CODE_GENERATE,
     OPERATIONS.QR_CODE_READ,
+    OPERATIONS.QR_CODE_REASSIGN,
+    OPERATIONS.QR_CODE_INVALIDATE,
   ]),
 
   // ── pilot: field check-ins, shipments, custody, damage — no deep inspection ─
@@ -355,6 +444,12 @@ const ROLE_PERMISSIONS: Readonly<Record<Role, ReadonlySet<Operation>>> = {
     // no TELEMETRY_READ
     OPERATIONS.MAP_READ,
     // no QR_CODE_GENERATE — pilots scan QR codes but don't generate them
+    // no QR_CODE_REASSIGN — pilots cannot move labels between cases either;
+    //   reassignment is a higher-trust operation reserved for technicians
+    //   and admins because it invalidates the prior printed label.
+    // no QR_CODE_INVALIDATE — pilots cannot remove labels from cases either;
+    //   invalidation is reserved for technicians and admins with the same
+    //   rationale as QR_CODE_REASSIGN.
     OPERATIONS.QR_CODE_READ,
   ]),
 };

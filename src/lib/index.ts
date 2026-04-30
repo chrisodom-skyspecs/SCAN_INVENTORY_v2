@@ -62,3 +62,38 @@ export type {
 // Centralized feature flag configuration (FF_AUDIT_HASH_CHAIN, FF_MAP_MISSION, FF_INV_REDESIGN)
 export { featureFlags, FEATURE_FLAG_KEYS } from "./feature-flags";
 export type { FeatureFlags, FeatureFlagKey } from "./feature-flags";
+
+// Geographic grid-cell binning for INVENTORY map clustering (M1/M5)
+// Pure functions — no framework dependencies, usable in browser, server, and tests.
+export { binCaseLocations, binByGrid, gridCellSize } from "./geo-bin";
+export type { CaseCoordinate, GridBin } from "./geo-bin";
+
+// Shared RBAC utilities — role constants, operation constants, permission map,
+// and pure helper functions for both INVENTORY dashboard and SCAN mobile app.
+// Server-side DB helpers (assertPermission, requireRole, etc.) are NOT re-exported
+// here — import those directly from "../../convex/rbac" in Convex handler files.
+export {
+  // Constants
+  ROLES,
+  ALL_ROLES,
+  OPERATIONS,
+  ROLE_LABELS,
+  ROLE_DESCRIPTIONS,
+  // Validation
+  isValidRole,
+  filterValidRoles,
+  // Pure permission helpers
+  hasPermission,
+  roleCanPerform,
+  rolesHavePermission,
+  roleHasPermission,
+  getAllowedRolesForOperation,
+  describeAllowedRoles,
+  // Role resolution
+  resolvePrimaryRole,
+  // Kinde ID guard (pure, no DB)
+  assertKindeIdProvided,
+  // Permission matrix snapshot
+  getPermissionMatrix,
+} from "./rbac";
+export type { Role, Operation } from "./rbac";

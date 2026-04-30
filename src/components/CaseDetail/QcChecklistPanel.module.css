@@ -1,0 +1,179 @@
+/**
+ * QcChecklistPanel.module.css
+ *
+ * Styles for the read-only QC checklist panel.
+ * All values use design-system CSS custom properties — no hex literals.
+ *
+ * Typography:
+ *   - IBM Plex Mono for item names (data/tabular content)
+ *   - Inter Tight for labels and section headers (UI typography)
+ *
+ * Dark mode: .theme-dark overrides at the bottom of this file.
+ */
+
+/* ── Outer section ───────────────────────────────────────────────── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Summary counts row ──────────────────────────────────────────── */
+/*
+ * Compact inline row showing pass / fail / needs-review totals below
+ * the section header.  Rendered only for non-empty item lists.
+ */
+
+.summaryRow {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.summaryPass {
+  color: var(--signal-success-text-subtle);
+}
+
+.summaryFail {
+  color: var(--signal-error-text-subtle);
+}
+
+.summaryReview {
+  color: var(--signal-neutral-text-subtle);
+}
+
+/* ── Item list ────────────────────────────────────────────────────── */
+
+.itemList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Individual item row ─────────────────────────────────────────── */
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.item:first-child {
+  padding-top: 0;
+}
+
+.item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* ── Primary row: pill + name ────────────────────────────────────── */
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Item name — IBM Plex Mono per design spec for data/tabular content */
+
+.itemName {
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-primary);
+  letter-spacing: 0.01em;
+  /* Overflow handling for long item names */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Item status tint — subtle left-border accent per status ──────── */
+/*
+ * Non-intrusive visual differentiation beyond the StatusPill color.
+ * Uses a 2px left border accent for scannability — color-blind safe
+ * because the status label text also changes per status.
+ */
+
+.item-ok {
+  border-left: 2px solid var(--signal-success-border);
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+
+.item-damaged {
+  border-left: 2px solid var(--signal-error-border);
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+
+.item-missing {
+  border-left: 2px solid var(--signal-error-border);
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+
+.item-unchecked {
+  border-left: 2px solid var(--border-subtle);
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+
+/* ── Notes line ──────────────────────────────────────────────────── */
+/*
+ * Technician free-text notes entered in the SCAN app during inspection.
+ * Displayed in a muted secondary color below the item name.
+ */
+
+.itemNote {
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+  margin: 0;
+  padding-left: 0;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Applied automatically when html.theme-dark is active.
+   Token cascade handles most color swaps; these overrides
+   handle elements that need extra visual polish in dark mode.
+   ============================================================ */
+
+/* Summary row text — signal tokens auto-adjust for dark mode via the
+   CSS custom property ramp; no explicit override needed here.       */
+
+/* Item left-border accents: subtle boost for ok (success) accent    */
+:global(.theme-dark) .item-ok {
+  border-left-color: var(--signal-success-border);
+}
+
+/* Error borders stay at the same token; they render correctly in dark */
+:global(.theme-dark) .item-damaged,
+:global(.theme-dark) .item-missing {
+  border-left-color: var(--signal-error-border);
+}
+
+/* Unchecked border: use border-default for better visibility         */
+:global(.theme-dark) .item-unchecked {
+  border-left-color: var(--border-default);
+}

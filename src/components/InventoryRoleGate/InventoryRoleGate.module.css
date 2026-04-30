@@ -1,0 +1,47 @@
+/**
+ * InventoryRoleGate — styles
+ *
+ * Rules
+ * ─────
+ * • Design tokens only — no hex literals.
+ * • Inter Tight for all text (--font-ui).
+ * • WCAG AA contrast in both light and dark themes.
+ * • prefers-reduced-motion guards on shimmer animation.
+ *
+ * The gate renders a full-area loading skeleton while the Kinde session
+ * resolves.  The skeleton is inset within the AppShell main content area
+ * (not full-viewport) so the top bar and side nav remain visible during
+ * loading.
+ */
+
+/* ── Loading shell ───────────────────────────────────────────────── */
+
+.loadingShell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 2.5rem 2rem;
+  max-width: 48rem;
+  width: 100%;
+}
+
+.skeletonLine {
+  height: 1rem;
+  background: var(--surface-raised);
+  border-radius: 0.375rem;
+  width: 80%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonLine {
+    animation: none;
+    opacity: 0.6;
+  }
+}

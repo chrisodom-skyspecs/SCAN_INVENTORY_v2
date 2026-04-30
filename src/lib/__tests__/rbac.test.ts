@@ -40,6 +40,10 @@ describe("isValidRole", () => {
     expect(isValidRole("admin")).toBe(true);
   });
 
+  it("returns true for 'operator'", () => {
+    expect(isValidRole("operator")).toBe(true);
+  });
+
   it("returns true for 'technician'", () => {
     expect(isValidRole("technician")).toBe(true);
   });
@@ -68,6 +72,10 @@ describe("isValidRole", () => {
 
   it("returns false for 'TECHNICIAN' (uppercase)", () => {
     expect(isValidRole("TECHNICIAN")).toBe(false);
+  });
+
+  it("returns false for 'Operator' (case-sensitive)", () => {
+    expect(isValidRole("Operator")).toBe(false);
   });
 
   it("returns false for whitespace-only string", () => {
@@ -266,6 +274,85 @@ describe("roleHasPermission", () => {
   it("pilot cannot telemetry:read", () => {
     expect(roleHasPermission(ROLES.PILOT, OPERATIONS.TELEMETRY_READ)).toBe(false);
   });
+
+  // Operator: back-office ops — create/manage cases, missions, templates
+  it("operator can case:read", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.CASE_READ)).toBe(true);
+  });
+
+  it("operator can case:create", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.CASE_CREATE)).toBe(true);
+  });
+
+  it("operator can case:status:change", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.CASE_STATUS_CHANGE)).toBe(true);
+  });
+
+  it("operator can mission:create", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.MISSION_CREATE)).toBe(true);
+  });
+
+  it("operator can mission:update", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.MISSION_UPDATE)).toBe(true);
+  });
+
+  it("operator can template:create", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.TEMPLATE_CREATE)).toBe(true);
+  });
+
+  it("operator can template:update", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.TEMPLATE_UPDATE)).toBe(true);
+  });
+
+  it("operator can featureFlag:read", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.FEATURE_FLAG_READ)).toBe(true);
+  });
+
+  it("operator can telemetry:read", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.TELEMETRY_READ)).toBe(true);
+  });
+
+  it("operator can map:read", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.MAP_READ)).toBe(true);
+  });
+
+  it("operator can case:ship", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.CASE_SHIP)).toBe(true);
+  });
+
+  it("operator can case:custody:transfer", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.CUSTODY_TRANSFER)).toBe(true);
+  });
+
+  it("operator can qrCode:generate", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.QR_CODE_GENERATE)).toBe(true);
+  });
+
+  // Operator: denied admin-only destructive operations
+  it("operator cannot case:delete", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.CASE_DELETE)).toBe(false);
+  });
+
+  it("operator cannot template:delete", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.TEMPLATE_DELETE)).toBe(false);
+  });
+
+  it("operator cannot mission:delete", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.MISSION_DELETE)).toBe(false);
+  });
+
+  it("operator cannot featureFlag:manage", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.FEATURE_FLAG_MANAGE)).toBe(false);
+  });
+
+  it("operator cannot user:manage", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.USER_MANAGE)).toBe(false);
+  });
+
+  // Operator: cannot do checklist-level field updates (field role only)
+  it("operator cannot case:inspection:update (checklist item updates)", () => {
+    expect(roleHasPermission(ROLES.OPERATOR, OPERATIONS.INSPECTION_UPDATE_ITEM)).toBe(false);
+  });
 });
 
 // ─── rolesHavePermission ──────────────────────────────────────────────────────
@@ -287,8 +374,14 @@ describe("rolesHavePermission", () => {
 
   it("returns false when no roles have the permission", () => {
     expect(
-      rolesHavePermission(["pilot", "technician"], OPERATIONS.CASE_CREATE)
+      rolesHavePermission(["pilot", "technician"], OPERATIONS.CASE_DELETE)
     ).toBe(false);
+  });
+
+  it("operator + pilot grants permission when operator qualifies", () => {
+    expect(
+      rolesHavePermission(["operator", "pilot"], OPERATIONS.CASE_CREATE)
+    ).toBe(true);
   });
 
   it("returns false for an empty roles array", () => {
@@ -324,17 +417,22 @@ describe("rolesHavePermission", () => {
 // ─── getAllowedRolesForOperation ──────────────────────────────────────────────
 
 describe("getAllowedRolesForOperation", () => {
-  it("returns all three roles for case:read (open to all)", () => {
+  it("returns all four roles for case:read (open to all)", () => {
     const allowed = getAllowedRolesForOperation(OPERATIONS.CASE_READ);
     expect(allowed).toContain(ROLES.ADMIN);
+    expect(allowed).toContain(ROLES.OPERATOR);
     expect(allowed).toContain(ROLES.TECHNICIAN);
     expect(allowed).toContain(ROLES.PILOT);
-    expect(allowed).toHaveLength(3);
+    expect(allowed).toHaveLength(4);
   });
 
-  it("returns only admin for case:create (admin-only)", () => {
+  it("returns admin and operator for case:create (not technician or pilot)", () => {
     const allowed = getAllowedRolesForOperation(OPERATIONS.CASE_CREATE);
-    expect(allowed).toEqual([ROLES.ADMIN]);
+    expect(allowed).toContain(ROLES.ADMIN);
+    expect(allowed).toContain(ROLES.OPERATOR);
+    expect(allowed).not.toContain(ROLES.TECHNICIAN);
+    expect(allowed).not.toContain(ROLES.PILOT);
+    expect(allowed).toHaveLength(2);
   });
 
   it("returns only admin for case:delete (admin-only)", () => {
@@ -347,9 +445,12 @@ describe("getAllowedRolesForOperation", () => {
     expect(allowed).toEqual([ROLES.ADMIN]);
   });
 
-  it("returns only admin for featureFlag:read (admin-only)", () => {
+  it("returns admin and operator for featureFlag:read (not technician or pilot)", () => {
     const allowed = getAllowedRolesForOperation(OPERATIONS.FEATURE_FLAG_READ);
-    expect(allowed).toEqual([ROLES.ADMIN]);
+    expect(allowed).toContain(ROLES.ADMIN);
+    expect(allowed).toContain(ROLES.OPERATOR);
+    expect(allowed).not.toContain(ROLES.TECHNICIAN);
+    expect(allowed).not.toContain(ROLES.PILOT);
   });
 
   it("returns only admin for user:manage (admin-only)", () => {
@@ -357,46 +458,54 @@ describe("getAllowedRolesForOperation", () => {
     expect(allowed).toEqual([ROLES.ADMIN]);
   });
 
-  it("returns only admin for telemetry:read (admin-only)", () => {
+  it("returns admin and operator for telemetry:read (not technician or pilot)", () => {
     const allowed = getAllowedRolesForOperation(OPERATIONS.TELEMETRY_READ);
-    expect(allowed).toEqual([ROLES.ADMIN]);
+    expect(allowed).toContain(ROLES.ADMIN);
+    expect(allowed).toContain(ROLES.OPERATOR);
+    expect(allowed).not.toContain(ROLES.TECHNICIAN);
+    expect(allowed).not.toContain(ROLES.PILOT);
   });
 
-  it("returns admin and technician for case:inspection:start", () => {
+  it("returns admin, operator, and technician for case:inspection:start (not pilot)", () => {
     const allowed = getAllowedRolesForOperation(OPERATIONS.INSPECTION_START);
     expect(allowed).toContain(ROLES.ADMIN);
+    expect(allowed).toContain(ROLES.OPERATOR);
     expect(allowed).toContain(ROLES.TECHNICIAN);
     expect(allowed).not.toContain(ROLES.PILOT);
   });
 
-  it("returns admin and technician for template:apply", () => {
+  it("returns admin, operator, and technician for template:apply (not pilot)", () => {
     const allowed = getAllowedRolesForOperation(OPERATIONS.TEMPLATE_APPLY);
     expect(allowed).toContain(ROLES.ADMIN);
+    expect(allowed).toContain(ROLES.OPERATOR);
     expect(allowed).toContain(ROLES.TECHNICIAN);
     expect(allowed).not.toContain(ROLES.PILOT);
   });
 
-  it("returns admin and technician for qrCode:generate", () => {
+  it("returns admin, operator, and technician for qrCode:generate (not pilot)", () => {
     const allowed = getAllowedRolesForOperation(OPERATIONS.QR_CODE_GENERATE);
     expect(allowed).toContain(ROLES.ADMIN);
+    expect(allowed).toContain(ROLES.OPERATOR);
     expect(allowed).toContain(ROLES.TECHNICIAN);
     expect(allowed).not.toContain(ROLES.PILOT);
   });
 
-  it("returns all roles for case:ship (admin, technician, pilot)", () => {
+  it("returns all four roles for case:ship (admin, operator, technician, pilot)", () => {
     const allowed = getAllowedRolesForOperation(OPERATIONS.CASE_SHIP);
     expect(allowed).toContain(ROLES.ADMIN);
+    expect(allowed).toContain(ROLES.OPERATOR);
     expect(allowed).toContain(ROLES.TECHNICIAN);
     expect(allowed).toContain(ROLES.PILOT);
-    expect(allowed).toHaveLength(3);
+    expect(allowed).toHaveLength(4);
   });
 
-  it("returns all roles for case:custody:transfer (admin, technician, pilot)", () => {
+  it("returns all four roles for case:custody:transfer (admin, operator, technician, pilot)", () => {
     const allowed = getAllowedRolesForOperation(OPERATIONS.CUSTODY_TRANSFER);
     expect(allowed).toContain(ROLES.ADMIN);
+    expect(allowed).toContain(ROLES.OPERATOR);
     expect(allowed).toContain(ROLES.TECHNICIAN);
     expect(allowed).toContain(ROLES.PILOT);
-    expect(allowed).toHaveLength(3);
+    expect(allowed).toHaveLength(4);
   });
 
   it("results are ordered with admin first (ALL_ROLES order)", () => {
@@ -455,9 +564,10 @@ describe("getPermissionMatrix", () => {
     expect(typeof getPermissionMatrix()).toBe("object");
   });
 
-  it("contains entries for all three roles", () => {
+  it("contains entries for all four roles", () => {
     const matrix = getPermissionMatrix();
     expect(Object.keys(matrix)).toContain(ROLES.ADMIN);
+    expect(Object.keys(matrix)).toContain(ROLES.OPERATOR);
     expect(Object.keys(matrix)).toContain(ROLES.TECHNICIAN);
     expect(Object.keys(matrix)).toContain(ROLES.PILOT);
   });
@@ -472,10 +582,17 @@ describe("getPermissionMatrix", () => {
   it("admin has the most operations of any role", () => {
     const matrix = getPermissionMatrix();
     const adminCount      = matrix[ROLES.ADMIN].length;
+    const operatorCount   = matrix[ROLES.OPERATOR].length;
     const technicianCount = matrix[ROLES.TECHNICIAN].length;
     const pilotCount      = matrix[ROLES.PILOT].length;
+    expect(adminCount).toBeGreaterThan(operatorCount);
     expect(adminCount).toBeGreaterThan(technicianCount);
     expect(adminCount).toBeGreaterThan(pilotCount);
+  });
+
+  it("operator has more operations than technician", () => {
+    const matrix = getPermissionMatrix();
+    expect(matrix[ROLES.OPERATOR].length).toBeGreaterThan(matrix[ROLES.TECHNICIAN].length);
   });
 
   it("technician has more operations than pilot", () => {
@@ -508,31 +625,45 @@ describe("getPermissionMatrix", () => {
 // ─── Permission matrix invariants ────────────────────────────────────────────
 
 describe("permission matrix invariants", () => {
-  // Admin-only operations — not in technician OR pilot
+  // Admin-only operations — not in operator, technician, OR pilot
   const ADMIN_ONLY_OPS: Operation[] = [
-    OPERATIONS.CASE_CREATE,
     OPERATIONS.CASE_DELETE,
-    OPERATIONS.TEMPLATE_CREATE,
-    OPERATIONS.TEMPLATE_UPDATE,
     OPERATIONS.TEMPLATE_DELETE,
-    OPERATIONS.MISSION_CREATE,
-    OPERATIONS.MISSION_UPDATE,
     OPERATIONS.MISSION_DELETE,
     OPERATIONS.USER_MANAGE,
-    OPERATIONS.FEATURE_FLAG_READ,
     OPERATIONS.FEATURE_FLAG_MANAGE,
-    OPERATIONS.TELEMETRY_READ,
   ];
 
   for (const op of ADMIN_ONLY_OPS) {
-    it(`"${op}" is admin-only (not permitted for technician or pilot)`, () => {
+    it(`"${op}" is admin-only (not permitted for operator, technician, or pilot)`, () => {
       expect(roleHasPermission(ROLES.ADMIN, op)).toBe(true);
+      expect(roleHasPermission(ROLES.OPERATOR, op)).toBe(false);
       expect(roleHasPermission(ROLES.TECHNICIAN, op)).toBe(false);
       expect(roleHasPermission(ROLES.PILOT, op)).toBe(false);
     });
   }
 
-  // Operations that ALL three roles can perform
+  // Admin + operator operations — not in technician or pilot
+  const ADMIN_OPERATOR_OPS: Operation[] = [
+    OPERATIONS.CASE_CREATE,
+    OPERATIONS.TEMPLATE_CREATE,
+    OPERATIONS.TEMPLATE_UPDATE,
+    OPERATIONS.MISSION_CREATE,
+    OPERATIONS.MISSION_UPDATE,
+    OPERATIONS.FEATURE_FLAG_READ,
+    OPERATIONS.TELEMETRY_READ,
+  ];
+
+  for (const op of ADMIN_OPERATOR_OPS) {
+    it(`"${op}" is permitted for admin and operator but NOT technician or pilot`, () => {
+      expect(roleHasPermission(ROLES.ADMIN, op)).toBe(true);
+      expect(roleHasPermission(ROLES.OPERATOR, op)).toBe(true);
+      expect(roleHasPermission(ROLES.TECHNICIAN, op)).toBe(false);
+      expect(roleHasPermission(ROLES.PILOT, op)).toBe(false);
+    });
+  }
+
+  // Operations that ALL four roles can perform
   const UNIVERSAL_OPS: Operation[] = [
     OPERATIONS.CASE_READ,
     OPERATIONS.CASE_LIST,
@@ -554,25 +685,42 @@ describe("permission matrix invariants", () => {
   ];
 
   for (const op of UNIVERSAL_OPS) {
-    it(`"${op}" is permitted for all three roles`, () => {
+    it(`"${op}" is permitted for all four roles`, () => {
       for (const role of ALL_ROLES) {
         expect(roleHasPermission(role, op)).toBe(true);
       }
     });
   }
 
-  // Technician+ operations (admin + technician, NOT pilot)
-  const TECHNICIAN_PLUS_OPS: Operation[] = [
+  // Admin + operator + technician operations (NOT pilot)
+  const OPERATOR_TECHNICIAN_PLUS_OPS: Operation[] = [
     OPERATIONS.INSPECTION_START,
-    OPERATIONS.INSPECTION_UPDATE_ITEM,
     OPERATIONS.INSPECTION_COMPLETE,
     OPERATIONS.TEMPLATE_APPLY,
     OPERATIONS.QR_CODE_GENERATE,
+    OPERATIONS.QR_CODE_REASSIGN,
+    OPERATIONS.QR_CODE_INVALIDATE,
   ];
 
-  for (const op of TECHNICIAN_PLUS_OPS) {
-    it(`"${op}" is permitted for admin and technician but NOT pilot`, () => {
+  for (const op of OPERATOR_TECHNICIAN_PLUS_OPS) {
+    it(`"${op}" is permitted for admin, operator, and technician but NOT pilot`, () => {
       expect(roleHasPermission(ROLES.ADMIN, op)).toBe(true);
+      expect(roleHasPermission(ROLES.OPERATOR, op)).toBe(true);
+      expect(roleHasPermission(ROLES.TECHNICIAN, op)).toBe(true);
+      expect(roleHasPermission(ROLES.PILOT, op)).toBe(false);
+    });
+  }
+
+  // Technician+ operations: admin + technician only (NOT operator or pilot)
+  // INSPECTION_UPDATE_ITEM is the sole field-only operation requiring physical presence
+  const TECHNICIAN_ONLY_PLUS_OPS: Operation[] = [
+    OPERATIONS.INSPECTION_UPDATE_ITEM,
+  ];
+
+  for (const op of TECHNICIAN_ONLY_PLUS_OPS) {
+    it(`"${op}" is permitted for admin and technician but NOT operator or pilot`, () => {
+      expect(roleHasPermission(ROLES.ADMIN, op)).toBe(true);
+      expect(roleHasPermission(ROLES.OPERATOR, op)).toBe(false);
       expect(roleHasPermission(ROLES.TECHNICIAN, op)).toBe(true);
       expect(roleHasPermission(ROLES.PILOT, op)).toBe(false);
     });
@@ -582,6 +730,14 @@ describe("permission matrix invariants", () => {
     for (const op of Object.values(OPERATIONS)) {
       const allowed = getAllowedRolesForOperation(op as Operation);
       expect(allowed.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("admin permission set is a superset of operator permission set", () => {
+    const matrix = getPermissionMatrix();
+    const adminOps = new Set(matrix[ROLES.ADMIN]);
+    for (const op of matrix[ROLES.OPERATOR]) {
+      expect(adminOps.has(op)).toBe(true);
     }
   });
 
@@ -605,12 +761,13 @@ describe("permission matrix invariants", () => {
 // ─── ROLES constant ───────────────────────────────────────────────────────────
 
 describe("ROLES constant", () => {
-  it("has exactly 3 entries", () => {
-    expect(Object.keys(ROLES)).toHaveLength(3);
+  it("has exactly 4 entries", () => {
+    expect(Object.keys(ROLES)).toHaveLength(4);
   });
 
-  it("contains ADMIN, TECHNICIAN, PILOT keys", () => {
+  it("contains ADMIN, OPERATOR, TECHNICIAN, PILOT keys", () => {
     expect(ROLES.ADMIN).toBe("admin");
+    expect(ROLES.OPERATOR).toBe("operator");
     expect(ROLES.TECHNICIAN).toBe("technician");
     expect(ROLES.PILOT).toBe("pilot");
   });
@@ -629,8 +786,13 @@ describe("ALL_ROLES", () => {
     expect(ALL_ROLES[0]).toBe(ROLES.ADMIN);
   });
 
-  it("has the same length as ROLES key count", () => {
+  it("operator is listed second (between admin and technician)", () => {
+    expect(ALL_ROLES[1]).toBe(ROLES.OPERATOR);
+  });
+
+  it("has the same length as ROLES key count (4)", () => {
     expect(ALL_ROLES).toHaveLength(Object.keys(ROLES).length);
+    expect(ALL_ROLES).toHaveLength(4);
   });
 
   it("has no duplicates", () => {

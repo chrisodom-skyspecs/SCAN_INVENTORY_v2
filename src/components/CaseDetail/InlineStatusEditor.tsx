@@ -38,6 +38,7 @@ import type { StatusKind } from "../StatusPill";
 import { useKindeUser } from "../../hooks/use-kinde-user";
 import type { CaseStatus } from "../../../convex/cases";
 import styles from "./InlineStatusEditor.module.css";
+import shared from "./shared.module.css";
 
 // ─── Status option list ────────────────────────────────────────────────────────
 //
@@ -80,6 +81,19 @@ export interface InlineStatusEditorProps {
  * The Convex mutation applies an optimistic update immediately so the pill
  * reflects the selected status without waiting for the server round-trip.
  */
+// ─── QC error detection ───────────────────────────────────────────────────────
+//
+// The [QC_APPROVAL_REQUIRED] error code is thrown by the `updateCaseStatus`
+// mutation (and the SCAN app's recordShipment / scanCheckIn mutations) when an
+// outbound dispatch to "transit_out" is attempted without an approved QC
+// sign-off.  Detecting this code allows the UI to surface a specific,
+// actionable message rather than a generic error.
+
+function isQcApprovalError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return err.message.includes("[QC_APPROVAL_REQUIRED]");
+}
+
 export function InlineStatusEditor({
   caseId,
   currentStatus,
@@ -88,6 +102,9 @@ export function InlineStatusEditor({
   const [editState, setEditState] = useState<EditState>("idle");
   const [selectedStatus, setSelectedStatus] = useState<CaseStatus>(currentStatus);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Tracks whether the current error is a QC approval gate failure so the UI
+  // can render a specific, actionable message instead of the generic error text.
+  const [isQcError, setIsQcError] = useState(false);
 
   // Ref for the select element — focused automatically when edit mode opens.
   const selectRef = useRef<HTMLSelectElement>(null);
@@ -154,12 +171,14 @@ export function InlineStatusEditor({
   const handleEditClick = useCallback(() => {
     setSelectedStatus(currentStatus);
     setErrorMessage(null);
+    setIsQcError(false);
     setEditState("editing");
   }, [currentStatus]);
 
   const handleCancel = useCallback(() => {
     setSelectedStatus(currentStatus);
     setErrorMessage(null);
+    setIsQcError(false);
     setEditState("idle");
   }, [currentStatus]);
 
@@ -181,17 +200,30 @@ export function InlineStatusEditor({
       setEditState("idle");
     } catch (err) {
       // Convex rolled back the optimistic update — surface the error.
-      const msg =
-        err instanceof Error
-          ? err.message.replace(/^\[.*?\]\s*/, "") // strip [AUTH_REQUIRED] prefix
-          : "Failed to update status. Please try again.";
-      setErrorMessage(msg);
+      // Detect QC approval gate failures (thrown when attempting dispatch to
+      // "transit_out" without an approved QC sign-off) and surface a specific,
+      // actionable message instead of the generic error text.
+      if (isQcApprovalError(err)) {
+        setIsQcError(true);
+        setErrorMessage(
+          "QC sign-off approval is required before this case can be dispatched. " +
+            "An admin or operator must approve QC via the T1/T3 QC Sign-Off panel."
+        );
+      } else {
+        setIsQcError(false);
+        const msg =
+          err instanceof Error
+            ? err.message.replace(/^\[.*?\]\s*/, "") // strip [AUTH_REQUIRED] prefix
+            : "Failed to update status. Please try again.";
+        setErrorMessage(msg);
+      }
       setEditState("error");
     }
   }, [selectedStatus, currentStatus, caseId, userId, userName, updateCaseStatus]);
 
   const handleRetry = useCallback(() => {
     setErrorMessage(null);
+    setIsQcError(false);
     setEditState("editing");
   }, []);
 
@@ -207,8 +239,63 @@ export function InlineStatusEditor({
   );
 
   // ── Render: error state ────────────────────────────────────────────────────
+  //
+  // QC approval errors get a prominent full-width banner (shared.errorBanner)
+  // so the message is not truncated and clearly explains the required action.
+  // Generic errors use the compact inline error row.
 
   if (editState === "error") {
+    if (isQcError) {
+      return (
+        <div
+          className={[styles.qcErrorWrapper, className].filter(Boolean).join(" ")}
+          role="alert"
+          aria-live="assertive"
+          data-testid="inline-status-error"
+          data-qc-error="true"
+        >
+          {/* QC error banner — full-width, wraps message for readability */}
+          <div className={shared.errorBanner} data-testid="qc-dispatch-error-banner">
+            <svg
+              aria-hidden="true"
+              className={styles.qcErrorIcon}
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="8" cy="8" r="7" />
+              <line x1="8" y1="5" x2="8" y2="8" />
+              <circle cx="8" cy="11" r="0.5" fill="currentColor" stroke="none" />
+            </svg>
+            <span>{errorMessage ?? "QC sign-off approval is required before dispatch."}</span>
+          </div>
+          {/* Action row: current status pill + Retry + Cancel */}
+          <div className={styles.qcErrorActions}>
+            <StatusPill kind={currentStatus as StatusKind} filled />
+            <button
+              className={styles.retryButton}
+              onClick={handleRetry}
+              type="button"
+              aria-label="Retry status update"
+            >
+              Retry
+            </button>
+            <button
+              className={[styles.cancelButtonSmall, styles.actionButton].filter(Boolean).join(" ")}
+              onClick={handleCancel}
+              type="button"
+              aria-label="Cancel status edit"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div
         className={[styles.errorRow, className].filter(Boolean).join(" ")}

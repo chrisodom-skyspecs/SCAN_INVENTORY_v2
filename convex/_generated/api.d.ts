@@ -8,14 +8,17 @@
  * @module
  */
 
+import type * as actions_trackShipment from "../actions/trackShipment.js";
 import type * as auth from "../auth.js";
 import type * as caseTemplates from "../caseTemplates.js";
 import type * as cases from "../cases.js";
 import type * as checklistHelpers from "../checklistHelpers.js";
 import type * as checklists from "../checklists.js";
+import type * as crons from "../crons.js";
 import type * as custody from "../custody.js";
 import type * as custodyHandoffs from "../custodyHandoffs.js";
 import type * as custodyHelpers from "../custodyHelpers.js";
+import type * as damage from "../damage.js";
 import type * as damageAndShipping from "../damageAndShipping.js";
 import type * as damageReports from "../damageReports.js";
 import type * as fedex_trackShipment from "../fedex/trackShipment.js";
@@ -26,6 +29,7 @@ import type * as http from "../http.js";
 import type * as journeyStopHelpers from "../journeyStopHelpers.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_fedexAuth from "../lib/fedexAuth.js";
+import type * as lib_fedexTrack from "../lib/fedexTrack.js";
 import type * as mapData from "../mapData.js";
 import type * as maps from "../maps.js";
 import type * as missions from "../missions.js";
@@ -33,13 +37,21 @@ import type * as mutations_checklist from "../mutations/checklist.js";
 import type * as mutations_custody from "../mutations/custody.js";
 import type * as mutations_damage from "../mutations/damage.js";
 import type * as mutations_index from "../mutations/index.js";
+import type * as mutations_qcSignOff from "../mutations/qcSignOff.js";
 import type * as mutations_scan from "../mutations/scan.js";
 import type * as mutations_ship from "../mutations/ship.js";
 import type * as notifications from "../notifications.js";
+import type * as qrAssociationAuditHelpers from "../qrAssociationAuditHelpers.js";
+import type * as qrAssociationEventInsert from "../qrAssociationEventInsert.js";
+import type * as qrAssociationEvents from "../qrAssociationEvents.js";
+import type * as qrCodeHelpers from "../qrCodeHelpers.js";
 import type * as qrCodes from "../qrCodes.js";
+import type * as qrReassignmentHelpers from "../qrReassignmentHelpers.js";
 import type * as queries_damage from "../queries/damage.js";
 import type * as queries_events from "../queries/events.js";
 import type * as queries_journeyStops from "../queries/journeyStops.js";
+import type * as queries_organizations from "../queries/organizations.js";
+import type * as queries_qcSignOff from "../queries/qcSignOff.js";
 import type * as queries_shipment from "../queries/shipment.js";
 import type * as queries_swimLanes from "../queries/swimLanes.js";
 import type * as rbac from "../rbac.js";
@@ -62,14 +74,17 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "actions/trackShipment": typeof actions_trackShipment;
   auth: typeof auth;
   caseTemplates: typeof caseTemplates;
   cases: typeof cases;
   checklistHelpers: typeof checklistHelpers;
   checklists: typeof checklists;
+  crons: typeof crons;
   custody: typeof custody;
   custodyHandoffs: typeof custodyHandoffs;
   custodyHelpers: typeof custodyHelpers;
+  damage: typeof damage;
   damageAndShipping: typeof damageAndShipping;
   damageReports: typeof damageReports;
   "fedex/trackShipment": typeof fedex_trackShipment;
@@ -80,6 +95,7 @@ declare const fullApi: ApiFromModules<{
   journeyStopHelpers: typeof journeyStopHelpers;
   "lib/auth": typeof lib_auth;
   "lib/fedexAuth": typeof lib_fedexAuth;
+  "lib/fedexTrack": typeof lib_fedexTrack;
   mapData: typeof mapData;
   maps: typeof maps;
   missions: typeof missions;
@@ -87,13 +103,21 @@ declare const fullApi: ApiFromModules<{
   "mutations/custody": typeof mutations_custody;
   "mutations/damage": typeof mutations_damage;
   "mutations/index": typeof mutations_index;
+  "mutations/qcSignOff": typeof mutations_qcSignOff;
   "mutations/scan": typeof mutations_scan;
   "mutations/ship": typeof mutations_ship;
   notifications: typeof notifications;
+  qrAssociationAuditHelpers: typeof qrAssociationAuditHelpers;
+  qrAssociationEventInsert: typeof qrAssociationEventInsert;
+  qrAssociationEvents: typeof qrAssociationEvents;
+  qrCodeHelpers: typeof qrCodeHelpers;
   qrCodes: typeof qrCodes;
+  qrReassignmentHelpers: typeof qrReassignmentHelpers;
   "queries/damage": typeof queries_damage;
   "queries/events": typeof queries_events;
   "queries/journeyStops": typeof queries_journeyStops;
+  "queries/organizations": typeof queries_organizations;
+  "queries/qcSignOff": typeof queries_qcSignOff;
   "queries/shipment": typeof queries_shipment;
   "queries/swimLanes": typeof queries_swimLanes;
   rbac: typeof rbac;

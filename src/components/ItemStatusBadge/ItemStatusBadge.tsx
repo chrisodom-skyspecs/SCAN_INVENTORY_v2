@@ -304,6 +304,138 @@ export function ItemStatusBadge({
   );
 }
 
+// ─── ChecklistStatusCounts ────────────────────────────────────────────────────
+
+/**
+ * Minimal item shape required by ChecklistStatusCounts for count derivation.
+ *
+ * Duck-typed so any object with a `status` field matching the manifest item
+ * status vocabulary is compatible — including `ChecklistItem` from the Convex
+ * schema and any local mock/fixture types used in tests.
+ */
+export interface StatusCountItem {
+  /** Inspection state of the item. */
+  status: "unchecked" | "ok" | "damaged" | "missing";
+}
+
+export interface ChecklistStatusCountsProps {
+  /**
+   * Array of manifest items from which status counts are derived.
+   *
+   * The component iterates this list to compute the verified (ok), flagged
+   * (damaged), missing, and unchecked counts — no pre-computation required
+   * by the caller.  Any object with a `status` field is accepted.
+   */
+  items: StatusCountItem[];
+
+  /**
+   * Whether to include the unchecked count in the rendered summary.
+   *
+   * Default: `false` — the summary focuses on the three *reviewed* states
+   * (verified / flagged / missing) which operators care about most.
+   * Set to `true` in inspection-progress contexts where remaining work
+   * needs to be visible alongside completed counts.
+   */
+  showUnchecked?: boolean;
+
+  /**
+   * Badge size passed to the underlying `InspectionStatusBar`.
+   * @default "sm"
+   */
+  size?: "sm" | "md";
+
+  /** Additional CSS class applied to the container. */
+  className?: string;
+
+  /**
+   * ARIA label override for the summary container.
+   * Defaults to `"Item status summary"` which is more specific than the
+   * generic `InspectionStatusBar` label of `"Inspection status summary"`.
+   */
+  "aria-label"?: string;
+}
+
+/**
+ * Status counts summary sub-component.
+ *
+ * Derives aggregate counts for **verified**, **flagged**, and **missing** items
+ * directly from the provided item list, then renders them using the
+ * `InspectionStatusBar` primitive so callers never need to pre-compute counts.
+ *
+ * This is the canonical pattern for displaying inspection status counts in
+ * both the INVENTORY dashboard (ManifestPanel, T3/T4 panels) and the SCAN
+ * mobile app (inspection progress section).
+ *
+ * Status vocabulary mapping:
+ *   - `"Verified"` → items with `status === "ok"`   (confirmed present, undamaged)
+ *   - `"Flagged"`  → items with `status === "damaged"` (documented damage)
+ *   - `"Missing"`  → items with `status === "missing"` (absent from case)
+ *
+ * Rendering rules:
+ *   - Badges for counts > 0 are always shown.
+ *   - Zero-count badges are omitted unless `alwaysShow` is set on the
+ *     underlying bar (not exposed here — use `InspectionStatusBar` directly
+ *     for scorecard contexts).
+ *   - The unchecked count is hidden by default; pass `showUnchecked` to include it.
+ *   - Returns `null` when `items` is empty (nothing to display).
+ *
+ * @example
+ * // Basic usage — derive counts from a live item subscription
+ * <ChecklistStatusCounts items={items} />
+ *
+ * @example
+ * // Inspection progress — also show how many items are still unchecked
+ * <ChecklistStatusCounts items={items} showUnchecked />
+ *
+ * @example
+ * // Compact embed with custom aria context
+ * <ChecklistStatusCounts
+ *   items={items}
+ *   size="sm"
+ *   aria-label="Packing list inspection summary"
+ * />
+ */
+export function ChecklistStatusCounts({
+  items,
+  showUnchecked = false,
+  size = "sm",
+  className,
+  "aria-label": ariaLabel = "Item status summary",
+}: ChecklistStatusCountsProps) {
+  // Nothing to summarise — return null so callers can conditionally render.
+  if (items.length === 0) return null;
+
+  // ── Derive aggregate counts from item list ────────────────────────────────
+  // Single-pass O(n) loop — avoids multiple filter() calls over the same list.
+  let verified  = 0;
+  let flagged   = 0;
+  let missing   = 0;
+  let unchecked = 0;
+
+  for (const item of items) {
+    if      (item.status === "ok")      verified++;
+    else if (item.status === "damaged") flagged++;
+    else if (item.status === "missing") missing++;
+    else                                unchecked++;
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  // Delegate to InspectionStatusBar with the derived counts.
+  // Pass unchecked only when showUnchecked is true — passing 0 causes the
+  // badge to be omitted by InspectionStatusBar's default hide-zero logic.
+  return (
+    <InspectionStatusBar
+      verified={verified}
+      flagged={flagged}
+      missing={missing}
+      unchecked={showUnchecked ? unchecked : 0}
+      size={size}
+      className={className}
+      aria-label={ariaLabel}
+    />
+  );
+}
+
 // ─── InspectionStatusBar ──────────────────────────────────────────────────────
 
 export interface InspectionStatusBarProps {
@@ -347,6 +479,12 @@ export interface InspectionStatusBarProps {
 
   /** Additional CSS class applied to the bar container. */
   className?: string;
+
+  /**
+   * ARIA label override for the summary group element.
+   * Defaults to `"Inspection status summary"`.
+   */
+  "aria-label"?: string;
 }
 
 /**
@@ -379,6 +517,7 @@ export function InspectionStatusBar({
   alwaysShow = false,
   size = "sm",
   className,
+  "aria-label": ariaLabel = "Inspection status summary",
 }: InspectionStatusBarProps) {
   const barClass = [styles.bar, className].filter(Boolean).join(" ");
 
@@ -396,7 +535,7 @@ export function InspectionStatusBar({
     <div
       className={barClass}
       role="group"
-      aria-label="Inspection status summary"
+      aria-label={ariaLabel}
       data-testid="inspection-status-bar"
     >
       {showVerified && (

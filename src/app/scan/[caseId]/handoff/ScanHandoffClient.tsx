@@ -80,8 +80,15 @@ import { useKindeUser } from "../../../../hooks/use-kinde-user";
 import { useServerStateReconciliation } from "../../../../hooks/use-server-state-reconciliation";
 import { StatusPill } from "../../../../components/StatusPill";
 import { ReconciliationBanner } from "../../../../components/ReconciliationBanner";
+import { FieldError } from "../../../../components/FieldError";
 import { UserSelector } from "../../../../components/UserSelector";
 import type { UserSelectorValue } from "../../../../components/UserSelector";
+import {
+  requiredSelection,
+  maxLength,
+  parseConvexFieldError,
+  shouldShowError,
+} from "../../../../lib/form-validation";
 import { trackEvent } from "../../../../lib/telemetry.lib";
 import { TelemetryEventName } from "../../../../types/telemetry.types";
 import type { HandoffType } from "../../../../types/telemetry.types";
@@ -445,6 +452,19 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
   // ── User identity ─────────────────────────────────────────────────────────
   const user = useKindeUser();
 
+  // ── Validators ────────────────────────────────────────────────────────────
+  const validateRecipient = requiredSelection<UserSelectorValue>(
+    "Select a recipient to transfer custody to."
+  );
+  const validateLocationName = maxLength(
+    120,
+    "Location name must be 120 characters or fewer."
+  );
+  const validateNotes = maxLength(
+    500,
+    "Notes must be 500 characters or fewer."
+  );
+
   // ── Form state ────────────────────────────────────────────────────────────
   /**
    * recipientUser — the user selected from the UserSelector combobox.
@@ -470,6 +490,28 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
     caseLabel: string;
     handoffAt: number;
   } | null>(null);
+
+  // ── Sub-AC 2: Inline validation state ────────────────────────────────────
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // ── Derived: client-side validation errors ────────────────────────────────
+  const recipientError =
+    validateRecipient(recipientUser) ?? fieldErrors.toUserId ?? null;
+  const locationNameError =
+    validateLocationName(locationName) ?? fieldErrors.locationName ?? null;
+  const notesError =
+    validateNotes(notes) ?? fieldErrors.notes ?? null;
+
+  // ── Blur handler ──────────────────────────────────────────────────────────
+  const handleFieldBlur = useCallback((fieldName: string) => {
+    setTouchedFields((prev) => {
+      const next = new Set(prev);
+      next.add(fieldName);
+      return next;
+    });
+  }, []);
 
   // ── Telemetry: flow open timestamp ─────────────────────────────────────────
   // Capture the epoch ms when the handoff flow opens.  Used to compute
@@ -505,10 +547,10 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
   }, [caseDoc, caseId]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
+  // canSubmit controls the disabled state of the CTA button.
+  // The actual validation runs inside handleSubmit on every submit attempt.
   const canSubmit =
     phase === "form" &&
-    recipientId.trim().length > 0 &&
-    recipientName.trim().length > 0 &&
     caseDoc !== null &&
     caseDoc !== undefined;
 
@@ -523,7 +565,29 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
   );
 
   const handleSubmit = useCallback(async () => {
-    if (!canSubmit || !caseDoc) return;
+    if (phase === "submitting" || !caseDoc) return;
+
+    // ── Client-side validation (Sub-AC 2) ──────────────────────────────────
+    setSubmitAttempted(true);
+    setFieldErrors({});
+
+    const recipientErr    = validateRecipient(recipientUser);
+    const locationNameErr = validateLocationName(locationName);
+    const notesErr        = validateNotes(notes);
+
+    if (recipientErr || locationNameErr || notesErr) {
+      // Mark all fields as touched so errors are visible
+      setTouchedFields(new Set(["recipientUser", "locationName", "handoffNotes"]));
+      // Focus the first invalid field
+      if (recipientErr) {
+        document.getElementById("recipientUser")?.focus();
+      } else if (locationNameErr) {
+        document.getElementById("locationName")?.focus();
+      } else if (notesErr) {
+        document.getElementById("handoffNotes")?.focus();
+      }
+      return;
+    }
 
     setPhase("submitting");
     setSubmitError(null);
@@ -645,15 +709,27 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
       // ── Sub-AC 2c: Cancel pending record — Convex rolled back ──────────
       reconciliation.cancelMutation(mutationId);
 
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Handoff failed. Please try again.";
-      setSubmitError(message);
-      setPhase("error");
+      // ── Sub-AC 2: Parse Convex field errors ────────────────────────────
+      // Convex mutations may encode a field name in the error message using the
+      // convention "[FIELD:fieldName] Human-readable message".  Extract and route
+      // them to the correct field; fall back to the banner for untagged errors.
+      const { fieldName, message } = parseConvexFieldError(err);
+      if (fieldName) {
+        setFieldErrors({ [fieldName]: message });
+        setTouchedFields((prev) => {
+          const next = new Set(prev);
+          next.add(fieldName);
+          return next;
+        });
+        setSubmitAttempted(true);
+        setPhase("form");
+      } else {
+        setSubmitError(message);
+        setPhase("error");
+      }
     }
   }, [
-    canSubmit,
+    phase,
     caseDoc,
     caseId,
     handoff,
@@ -666,7 +742,11 @@ export function ScanHandoffClient({ caseId }: ScanHandoffClientProps) {
     geo,
     locationName,
     notes,
+    notes,
     reconciliation,
+    validateRecipient,
+    validateLocationName,
+    validateNotes,
   ]);
 
   const handleRetry = useCallback(() => {

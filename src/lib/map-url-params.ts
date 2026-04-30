@@ -34,6 +34,11 @@ import {
   isLayerId,
   isMapView,
 } from "@/types/map";
+import {
+  type SemanticLayerId,
+  SEMANTIC_LAYER_IDS,
+  isSemanticLayerId,
+} from "@/types/layer-engine";
 
 // ─── ID sanitization constants ────────────────────────────────────────────────
 
@@ -64,6 +69,13 @@ export const PARAM = {
   WINDOW: "window",
   PANEL: "panel",
   LAYERS: "layers",
+  /**
+   * Semantic data layers — comma-separated SemanticLayerIds.
+   * Distinct from the `layers` param (which holds map *overlay* LayerIds
+   * such as cases / clusters / satellite); `slayers` holds the toggle state
+   * of the LayerTogglePanel's 7 semantic data layers.
+   */
+  SLAYERS: "slayers",
   ORG: "org",
   KIT: "kit",
   AT: "at",
@@ -226,6 +238,69 @@ export function serializeLayers(layers: LayerId[]): string | undefined {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Parse a comma-separated `slayers` (semantic-layers) URL param.
+ *
+ * The `slayers` param holds the 7-layer toggle visibility set used by the
+ * LayerTogglePanel — distinct from `layers`, which holds the 8-layer map
+ * overlay set.
+ *
+ * Rules:
+ *   • Unknown SemanticLayerIds are silently dropped.
+ *   • Duplicates are de-duplicated (first occurrence wins).
+ *   • Empty / null / all-invalid → MAP_URL_STATE_DEFAULTS.slayers.
+ *
+ * @example parseSlayers("deployed,flagged") → ["deployed","flagged"]
+ * @example parseSlayers("bogus")            → MAP_URL_STATE_DEFAULTS.slayers
+ */
+export function parseSlayers(
+  raw: string | null | undefined
+): SemanticLayerId[] {
+  if (!raw || raw.trim().length === 0) {
+    return [...MAP_URL_STATE_DEFAULTS.slayers];
+  }
+
+  const seen = new Set<SemanticLayerId>();
+  const result: SemanticLayerId[] = [];
+
+  for (const token of raw.split(LAYERS_SEPARATOR)) {
+    const id = token.trim().toLowerCase();
+    if (isSemanticLayerId(id) && !seen.has(id)) {
+      seen.add(id);
+      result.push(id);
+    }
+  }
+
+  return result.length > 0 ? result : [...MAP_URL_STATE_DEFAULTS.slayers];
+}
+
+/**
+ * Serialize a semantic-layer list to a URL param string.
+ * Returns undefined when the list equals the default (order-insensitive),
+ * keeping the URL minimal.
+ *
+ * @example serializeSlayers(DEFAULT_SLAYERS)               → undefined
+ * @example serializeSlayers(["deployed","flagged"])         → "deployed,flagged"
+ */
+export function serializeSlayers(
+  slayers: SemanticLayerId[]
+): string | undefined {
+  const defaults = MAP_URL_STATE_DEFAULTS.slayers;
+  const sorted = [...slayers].sort();
+  const defaultSorted = [...defaults].sort();
+
+  if (
+    sorted.length === defaultSorted.length &&
+    sorted.every((l, i) => l === defaultSorted[i])
+  ) {
+    return undefined; // no need to encode
+  }
+
+  return slayers.join(LAYERS_SEPARATOR);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /** ISO-8601 regexp (basic check – full validation deferred to Date constructor). */
 const ISO_RE =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -272,6 +347,7 @@ export function decodeMapUrlState(
     window: parseWindow(params.get(PARAM.WINDOW)),
     panelOpen: parsePanelOpen(params.get(PARAM.PANEL)),
     layers: parseLayers(params.get(PARAM.LAYERS)),
+    slayers: parseSlayers(params.get(PARAM.SLAYERS)),
     org: parseId(params.get(PARAM.ORG)),
     kit: parseId(params.get(PARAM.KIT)),
     at: parseAt(params.get(PARAM.AT)),
@@ -312,6 +388,11 @@ export function encodeMapUrlState(
   const layers = state.layers ?? MAP_URL_STATE_DEFAULTS.layers;
   const serializedLayers = serializeLayers(layers);
   if (serializedLayers !== undefined) params.set(PARAM.LAYERS, serializedLayers);
+
+  const slayers = state.slayers ?? MAP_URL_STATE_DEFAULTS.slayers;
+  const serializedSlayers = serializeSlayers(slayers);
+  if (serializedSlayers !== undefined)
+    params.set(PARAM.SLAYERS, serializedSlayers);
 
   const org = state.org ?? MAP_URL_STATE_DEFAULTS.org;
   const serializedOrg = serializeId(org);
@@ -367,6 +448,11 @@ export function diffMapUrlState(
   const nextLayers = [...next.layers].sort().join(",");
   if (prevLayers !== nextLayers) diff.layers = next.layers;
 
+  // Semantic layers (slayers): compare as sorted strings
+  const prevSlayers = [...prev.slayers].sort().join(",");
+  const nextSlayers = [...next.slayers].sort().join(",");
+  if (prevSlayers !== nextSlayers) diff.slayers = next.slayers;
+
   // at: compare timestamps numerically
   const prevAt = prev.at?.getTime() ?? null;
   const nextAt = next.at?.getTime() ?? null;
@@ -402,6 +488,13 @@ export function validateMapUrlState(state: MapUrlState): string[] {
   if (invalidLayers.length > 0) {
     errors.push(
       `Invalid layer IDs: ${invalidLayers.join(", ")}. Valid: ${LAYER_IDS.join(", ")}.`
+    );
+  }
+
+  const invalidSlayers = state.slayers.filter((l) => !isSemanticLayerId(l));
+  if (invalidSlayers.length > 0) {
+    errors.push(
+      `Invalid semantic layer IDs: ${invalidSlayers.join(", ")}. Valid: ${SEMANTIC_LAYER_IDS.join(", ")}.`
     );
   }
 
@@ -583,6 +676,46 @@ export function sanitizeMapDeepLink(
     }
   }
 
+  // ── slayers (semantic layers) ───────────────────────────────────────
+  const rawSlayers = params.get(PARAM.SLAYERS);
+  const slayers = parseSlayers(rawSlayers);
+  if (rawSlayers !== null && rawSlayers.trim().length > 0) {
+    const tokens = rawSlayers
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+
+    const unknown = tokens.filter((t) => !isSemanticLayerId(t));
+    if (unknown.length > 0) {
+      warnings.push(
+        `Deep-link param "slayers": unknown semantic layer ID(s) ignored — ${unknown.join(", ")}.`
+      );
+    }
+
+    // Detect duplicates
+    const seen = new Set<string>();
+    const dupes: string[] = [];
+    for (const t of tokens) {
+      if (isSemanticLayerId(t)) {
+        if (seen.has(t)) dupes.push(t);
+        else seen.add(t);
+      }
+    }
+    if (dupes.length > 0) {
+      warnings.push(
+        `Deep-link param "slayers": duplicate semantic layer ID(s) removed — ${dupes.join(", ")}.`
+      );
+    }
+
+    // Warn if all tokens were unknown → fell back to defaults
+    const knownTokens = tokens.filter((t) => isSemanticLayerId(t));
+    if (knownTokens.length === 0 && tokens.length > 0) {
+      warnings.push(
+        `Deep-link param "slayers": all provided IDs were invalid — defaulted to ${MAP_URL_STATE_DEFAULTS.slayers.join(",")}.`
+      );
+    }
+  }
+
   // ── org ─────────────────────────────────────────────────────────────
   const rawOrg = params.get(PARAM.ORG);
   const org = parseId(rawOrg);
@@ -636,6 +769,7 @@ export function sanitizeMapDeepLink(
     window: win,
     panelOpen,
     layers,
+    slayers,
     org,
     kit,
     at,

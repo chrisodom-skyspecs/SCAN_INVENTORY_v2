@@ -113,6 +113,9 @@
  *   [CASE_NOT_FOUND]           args.caseId does not exist.
  *   [TRACKING_NUMBER_REQUIRED] args.trackingNumber empty or whitespace-only.
  *   [INVALID_SHIP_STATUS]      Case status is not in the shippable set.
+ *   [QC_APPROVAL_REQUIRED]     Case is being dispatched (transit_out) but
+ *                              cases.qcSignOffStatus is not "approved".
+ *                              Requires an admin/operator QC sign-off first.
  *
  * Client usage
  * ────────────
@@ -384,6 +387,10 @@ export interface RecordShipmentResult {
  * @throws "[CASE_NOT_FOUND]"           args.caseId does not exist.
  * @throws "[TRACKING_NUMBER_REQUIRED]" trackingNumber empty after trim.
  * @throws "[INVALID_SHIP_STATUS]"      Case status not in SHIPPABLE_STATUSES.
+ * @throws "[QC_APPROVAL_REQUIRED]"     Outbound dispatch attempted but the
+ *                                      case's qcSignOffStatus is not "approved".
+ *                                      Submit a QC approval via INVENTORY before
+ *                                      retrying.
  *
  * Client usage:
  *   const recordShipment = useMutation(api.mutations.ship.recordShipment);
@@ -617,6 +624,34 @@ export const recordShipment = mutation({
       (OUTBOUND_SHIPPABLE_STATUSES as readonly string[]).includes(previousStatus)
         ? "transit_out"
         : "transit_in";
+
+    // ── Step 3b: Pre-dispatch QC sign-off guard ───────────────────────────────
+    //
+    // Enforce the QC approval gate for outbound dispatches.  A case may only be
+    // dispatched (transition to "transit_out") when its QC sign-off status is
+    // "approved".  Cases with no sign-off (undefined / not yet submitted),
+    // "pending" (revoked or reset), or "rejected" QC status are blocked from
+    // dispatch until an operator or admin submits an approval.
+    //
+    // This guard prevents unreviewed or rejected cases from leaving the facility
+    // without explicit QC clearance — satisfying the data_integrity principle
+    // that case status transitions follow valid paths.
+    //
+    // Error code: [QC_APPROVAL_REQUIRED]
+    // Resolution: have an admin or operator submit a QC approval for this case
+    //             via the INVENTORY dashboard (T1/T5 QC Sign-Off panel) before
+    //             attempting the shipment again.
+    if (newStatus === "transit_out" && caseDoc.qcSignOffStatus !== "approved") {
+      const currentQcStatus = caseDoc.qcSignOffStatus ?? "not_submitted";
+      throw new Error(
+        `[QC_APPROVAL_REQUIRED] recordShipment: Case "${caseDoc.label}" ` +
+          `(${args.caseId}) cannot be dispatched — QC sign-off status is ` +
+          `"${currentQcStatus}". A QC sign-off with status "approved" is ` +
+          `required before a case can be dispatched (transitioned to ` +
+          `"transit_out"). Have an admin or operator submit a QC approval via ` +
+          `the INVENTORY dashboard before proceeding with this shipment.`
+      );
+    }
 
     // ── Step 4: PATCH the case document ───────────────────────────────────────
     //

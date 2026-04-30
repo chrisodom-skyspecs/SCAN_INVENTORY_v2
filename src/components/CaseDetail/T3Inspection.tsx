@@ -13,6 +13,7 @@
 "use client";
 
 import { useChecklistWithInspection } from "../../hooks/use-checklist";
+import { useQcSignOffByCaseId } from "../../hooks/use-qc-sign-off";
 import {
   useDamageReportsByCase,
   useDamagePhotoReportsWithUrls,
@@ -23,15 +24,20 @@ import {
   getTrackingUrl,
 } from "../../hooks/use-shipment-status";
 import type { CaseShippingLayout } from "../../hooks/use-shipment-status";
+import { useCaseById } from "../../hooks/use-case-status";
 import { StatusPill } from "../StatusPill";
 import CustodySection from "./CustodySection";
 import { LabelManagementPanel } from "../LabelManagementPanel";
+import { QcChecklistPanel } from "./QcChecklistPanel";
+import { QcSignOffForm } from "../QcSignOffForm/QcSignOffForm";
+import { QcSignOffHistory } from "./QcSignOffHistory";
 import { useCurrentUser } from "../../hooks/use-current-user";
 import { OPERATIONS } from "../../../convex/rbac";
 import shared from "./shared.module.css";
 import styles from "./T3Inspection.module.css";
 import type { ChecklistWithInspection, ManifestItemStatus } from "../../../convex/checklists";
 import type { StatusKind } from "../StatusPill/StatusPill";
+import type { CaseStatus } from "../../../convex/cases";
 
 // Map manifest item status → nearest StatusKind for StatusPill rendering.
 // "unchecked" is not a StatusKind, so we map it to "pending".
@@ -175,6 +181,41 @@ export default function T3Inspection({ caseId, onNavigateToShipping }: T3Inspect
   const { can } = useCurrentUser();
   const canManageLabels = can(OPERATIONS.QR_CODE_GENERATE);
 
+  // QC sign-off permission — admin and operator only.
+  // CASE_STATUS_CHANGE is granted to admin + operator but NOT to technician or pilot.
+  // This mirrors the mutation-level requirement: only back-office roles may submit
+  // QC decisions; field technicians and pilots inspect/report but do not approve.
+  const canQcSignOff = can(OPERATIONS.CASE_STATUS_CHANGE);
+
+  // QC sign-off — real-time subscription via Convex.
+  //   undefined → loading (initial fetch or reconnect in progress)
+  //   null      → no QC sign-off has been submitted for this case
+  //   document  → the latest qcSignOffs document (most recent decision)
+  //
+  // useQcSignOffByCaseId wraps `useQuery` for api["queries/qcSignOff"].
+  // getQcSignOffByCaseId.  Convex re-evaluates and pushes within
+  // ~100–300 ms of any submitQcSignOff / addQcSignOff call, satisfying
+  // the ≤ 2-second real-time fidelity requirement without a page reload.
+  // All connected clients (other dashboard tabs, the SCAN mobile app)
+  // automatically reflect the new QC state — no manual refresh required.
+  const qcSignOff = useQcSignOffByCaseId(caseId);
+
+  // ── Live case-detail subscription (Sub-AC 2: useQuery for live updates) ──
+  //
+  // useCaseById wraps `useQuery(api.cases.getCaseById, { caseId })` so the
+  // T3 Inspection panel receives push updates whenever the case row changes
+  // — status transitions, label edits, location updates, custody handoffs.
+  // Convex re-evaluates and pushes within ~100–300 ms of any SCAN app or
+  // admin mutation that touches the cases table, satisfying the ≤ 2-second
+  // real-time fidelity SLA between the field action and the dashboard.
+  // The case context strip below renders these live values so inspectors
+  // always see the current case identity / lifecycle status without a
+  // page reload.
+  //   undefined → loading (no header rendered)
+  //   null      → case not found (no header rendered)
+  //   Doc<"cases"> → live case document
+  const caseDoc = useCaseById(caseId);
+
   // useChecklistWithInspection is a real-time subscription via Convex.
   // The server-side query loads manifestItems + inspections in a single
   // Promise.all and returns a consistent snapshot. Convex re-runs it whenever
@@ -239,6 +280,25 @@ export default function T3Inspection({ caseId, onNavigateToShipping }: T3Inspect
 
   return (
     <div className={styles.inspection} data-testid="t3-inspection">
+      {/*
+        ── Live case-detail header — Sub-AC 2 useQuery integration ───────
+        Subscribes via useCaseById (api.cases.getCaseById) so the case
+        label and status pill always reflect the current Convex state.
+        Updates within ~100–300 ms of any SCAN app or admin status edit
+        — for example, a pilot updating status from "deployed" to
+        "transit_in" propagates to this header without a page reload.
+      */}
+      {caseDoc && (
+        <div
+          className={styles.caseContext}
+          data-testid="t3-case-context"
+          aria-label="Case context"
+        >
+          <span className={styles.caseContextLabel}>{caseDoc.label}</span>
+          <StatusPill kind={caseDoc.status as CaseStatus} />
+        </div>
+      )}
+
       {/*
         ── Shipment context banner — real-time via useCaseShippingLayout ──
         Sub-AC 36d-4: useCaseShippingLayout subscribes to
@@ -519,6 +579,100 @@ export default function T3Inspection({ caseId, onNavigateToShipping }: T3Inspect
           <LabelManagementPanel caseId={caseId} />
         </>
       )}
+
+      {/*
+        ── QC Checklist — read-only manifest item status display ─────────
+        Sub-AC 3: QcChecklistPanel subscribes to api.checklists.getChecklistByCase
+        via the useChecklistByCase hook.  Convex re-evaluates and pushes within
+        ~100–300 ms of any SCAN app inspection action (markItemOk, markItemDamaged,
+        markItemMissing), satisfying the ≤ 2-second real-time fidelity requirement.
+
+        QcChecklistPanel is intentionally read-only — no interactive controls.
+        It provides operators an at-a-glance overview of all case manifest items
+        with their condition status (pass / fail / needs-review) sourced from the
+        most recent inspection cycle.
+
+        Shown to all users who can view the T3 panel (no additional gating beyond
+        case read access, which is already enforced at the route level).
+      */}
+      <hr className={shared.divider} />
+      <QcChecklistPanel caseId={caseId} />
+
+      {/*
+        ── QC Sign-off Form — admin/operator only ────────────────────────
+        Sub-AC 3: QcSignOffForm wires the submitQcSignOff Convex mutation
+        (api.mutations.qcSignOff.submitQcSignOff) for persisting QC decisions.
+
+        Shown only to users with the CASE_STATUS_CHANGE permission (admin +
+        operator roles).  Field technicians and pilots inspect and report;
+        they do not approve or reject cases — that decision is back-office.
+
+        Props derivation:
+          hasUnresolvedIssues — true when the checklist summary has any damaged
+            or missing items.  Gates the "Approve" button until issues are cleared.
+            Falls back to false while the checklist is loading (summary not yet
+            available), keeping the form interactive during initial load.
+
+          unresolvedCount — total damaged + missing items (shown in the disabled-
+            approve tooltip). Falls back to 0 while loading.
+
+          currentStatus — the latest QC sign-off status from the Convex
+            subscription.  undefined while the query loads (no status pill shown);
+            null when no decision has ever been recorded; "approved" | "rejected" |
+            "pending" when a prior decision exists (pill shown in header).
+
+        Loading handling:
+          qcSignOff === undefined  → query still loading; currentStatus prop
+            receives undefined so QcSignOffForm hides the status pill.
+          qcSignOff === null       → no prior decision; currentStatus = null.
+          qcSignOff.status         → prior decision status; shown as status pill.
+
+        Error/success feedback:
+          QcSignOffForm manages its own error and success states internally.
+          On mutation success, the qcSignOff subscription automatically updates
+          within ~100–300 ms (Convex reactive transport), reflecting the new
+          status in the header pill without a page reload.
+      */}
+      {canQcSignOff && (
+        <>
+          <hr className={shared.divider} />
+          <QcSignOffForm
+            caseId={caseId}
+            hasUnresolvedIssues={
+              // Use the checklist summary from the inspection data when available.
+              // Falls back to false while loading so the form stays interactive.
+              (summary.damaged + summary.missing) > 0
+            }
+            unresolvedCount={summary.damaged + summary.missing}
+            currentStatus={
+              // qcSignOff:
+              //   undefined → loading (hide status pill)
+              //   null      → no prior decision
+              //   document  → show prior decision status
+              qcSignOff === undefined
+                ? undefined
+                : qcSignOff?.status ?? null
+            }
+          />
+        </>
+      )}
+
+      {/*
+        ── QC Sign-off History — compact recent decisions (Sub-AC 4) ────
+        QcSignOffHistory subscribes to api["queries/qcSignOff"].getQcSignOffHistory
+        via the useQcSignOffHistory Convex real-time hook.  Updates from any
+        submitQcSignOff mutation (e.g., a QC decision just submitted via
+        QcSignOffForm above) arrive within ~100–300 ms, satisfying the
+        ≤ 2-second real-time fidelity requirement.
+
+        limit={3} shows the three most recent QC decisions in this inspection
+        context.  A truncation notice directs operators to T5 for full history.
+
+        Rendered for all users who can see T3 — the history is a read-only
+        informational display, not gated by the canQcSignOff write permission.
+      */}
+      <hr className={shared.divider} />
+      <QcSignOffHistory caseId={caseId} limit={3} />
     </div>
   );
 }

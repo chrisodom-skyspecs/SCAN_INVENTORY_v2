@@ -1,3 +1,5 @@
+"use node";
+
 /**
  * convex/actions/trackShipment.ts
  *

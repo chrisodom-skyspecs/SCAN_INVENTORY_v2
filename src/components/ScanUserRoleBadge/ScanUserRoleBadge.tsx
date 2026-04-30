@@ -37,6 +37,7 @@ export interface ScanUserRoleBadgeProps {
 
 const ROLE_CONFIG: Record<Role, { label: string; modifier: string }> = {
   admin:      { label: "Admin",      modifier: styles.badgeAdmin },
+  operator:   { label: "Operator",   modifier: styles.badgeOperator },
   technician: { label: "Technician", modifier: styles.badgeTechnician },
   pilot:      { label: "Pilot",      modifier: styles.badgePilot },
 };

@@ -42,6 +42,12 @@
   border: 1px solid var(--status-info-border, color-mix(in srgb, var(--ink-brand) 25%, transparent));
 }
 
+.badgeOperator {
+  background: var(--status-neutral-bg, color-mix(in srgb, var(--ink-secondary) 12%, transparent));
+  color: var(--status-neutral-fg, var(--ink-secondary));
+  border: 1px solid var(--status-neutral-border, color-mix(in srgb, var(--ink-secondary) 25%, transparent));
+}
+
 .badgeTechnician {
   background: var(--status-ok-bg, color-mix(in srgb, var(--ink-success) 12%, transparent));
   color: var(--status-ok-fg, var(--ink-success));

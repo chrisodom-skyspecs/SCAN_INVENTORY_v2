@@ -55,6 +55,7 @@ import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { ScanLandingManualEntry } from "./ScanLandingManualEntry";
 import { ScanLogoutButton } from "@/components/ScanLogoutButton";
 import { ScanUserRoleBadge } from "@/components/ScanUserRoleBadge";
+import { ScanAssociateQRLink } from "@/components/ScanAssociateQRLink";
 import styles from "./scan-landing.module.css";
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
@@ -170,6 +171,27 @@ export default async function ScanLandingPage() {
 
       {/* ── Manual entry fallback (client component) ─────────────────── */}
       <ScanLandingManualEntry />
+
+      {/*
+       * ── QR-first association entry point (Sub-AC 3) ─────────────────
+       *
+       * ScanAssociateQRLink is a role-gated client component.  It surfaces
+       * a discoverable card that navigates to /scan/associate — the QR-first
+       * (case-selection) variant of the association flow used when a
+       * technician has a pre-printed physical QR label and needs to bind
+       * it to a case record without first navigating to that case.
+       *
+       * Visibility:
+       *   • admin / technician → rendered
+       *   • pilot              → hidden (pilots have qrCode:read but not
+       *                          qrCode:generate)
+       *   • loading            → hidden (avoids flash for pilots)
+       *
+       * Server-side enforcement:
+       *   • /scan/associate    → wraps client in ScanRoleGate
+       *   • Convex mutation    → re-checks RBAC server-side
+       */}
+      <ScanAssociateQRLink />
 
       {/* ── Sign out ──────────────────────────────────────────────────── */}
       {/*

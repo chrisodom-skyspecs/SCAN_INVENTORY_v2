@@ -40,6 +40,7 @@ import { TrackingStatus } from "../TrackingStatus";
 import CustodySection from "./CustodySection";
 import { InlineStatusEditor } from "./InlineStatusEditor";
 import { InlineHolderEditor } from "./InlineHolderEditor";
+import { QcSignOffHistory } from "./QcSignOffHistory";
 import shared from "./shared.module.css";
 import styles from "./DossierOverviewPanel.module.css";
 import type { CaseStatus } from "../../../convex/cases";
@@ -362,6 +363,25 @@ export function DossierOverviewPanel({
           </section>
         </>
       )}
+
+      {/*
+       * ── QC Sign-off History — compact recent decisions (Sub-AC 4) ───
+       *
+       * QcSignOffHistory subscribes to api["queries/qcSignOff"].getQcSignOffHistory
+       * via the useQcSignOffHistory Convex real-time hook.  Convex re-evaluates
+       * and pushes within ~100–300 ms of any submitQcSignOff mutation, satisfying
+       * the ≤ 2-second real-time fidelity requirement between SCAN app actions
+       * and the INVENTORY dashboard.
+       *
+       * limit={3} shows the three most recent QC decisions in this overview
+       * context.  A truncation notice directs operators to the T5 Audit panel
+       * for the full chronological sign-off trail.
+       *
+       * Rendered for all users — the QC history is a read-only informational
+       * display, not gated by the write-level canQcSignOff permission.
+       */}
+      <hr className={shared.divider} />
+      <QcSignOffHistory caseId={caseId} limit={3} />
     </article>
   );
 }

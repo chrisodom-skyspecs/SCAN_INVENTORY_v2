@@ -106,6 +106,18 @@ export interface UserSelectorProps {
    */
   "aria-label"?: string;
 
+  /**
+   * `aria-invalid` forwarded to the `<input>` element.
+   * Set to `true` when the field has a validation error.
+   */
+  "aria-invalid"?: boolean;
+
+  /**
+   * Fired when focus leaves the component (after the internal close-dropdown
+   * delay).  Use for touched-field tracking in form validation.
+   */
+  onBlur?: () => void;
+
   /** Additional CSS class applied to the container `<div>`. */
   className?: string;
 }
@@ -260,6 +272,8 @@ export function UserSelector({
   id,
   "aria-describedby": ariaDescribedBy,
   "aria-label": ariaLabel,
+  "aria-invalid": ariaInvalid,
+  onBlur: onBlurExternal,
   className,
 }: UserSelectorProps) {
   // ── Unique IDs for ARIA wiring ────────────────────────────────────────────
@@ -270,7 +284,7 @@ export function UserSelector({
   // ── Convex data ───────────────────────────────────────────────────────────
   // listUsers is a real-time subscription — newly registered users appear
   // automatically within ~100–300 ms of the upsertUser mutation.
-  const users = useQuery(api.users.listUsers) as ConvexUser[] | undefined;
+  const users = useQuery(api.users.listUsers, {}) as ConvexUser[] | undefined;
 
   // ── Component state ───────────────────────────────────────────────────────
 
@@ -498,8 +512,11 @@ export function UserSelector({
       }
       setIsOpen(false);
       setHighlightedIndex(-1);
+      // Notify the parent that focus has left the component so the form can
+      // mark the field as touched and show validation errors.
+      onBlurExternal?.();
     }, 150);
-  }, []);
+  }, [onBlurExternal]);
 
   // ── Derived ARIA active-descendant ────────────────────────────────────────
   const activeDescendant =
@@ -535,6 +552,7 @@ export function UserSelector({
           aria-autocomplete="list"
           aria-label={ariaLabel}
           aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
           className={[
             styles.input,
             isSelectionActive ? styles.inputSelected : "",

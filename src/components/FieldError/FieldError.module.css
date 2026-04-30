@@ -1,0 +1,59 @@
+/**
+ * FieldError.module.css
+ *
+ * Inline form field validation error message styles.
+ *
+ * Design tokens only — no hex literals.
+ * Inter Tight typography, matching fieldHint sizing.
+ * Uses --ink-critical for error color (WCAG AA ≥ 4.5:1 on both themes).
+ * prefers-reduced-motion: icon is static when motion preference is reduce.
+ */
+
+/* ── Container ─────────────────────────────────────────────────────────── */
+
+.fieldError {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.3125rem;           /* 5px — tight gap between icon and text */
+  color: var(--ink-critical);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;       /* 12px — matches fieldHint */
+  font-weight: 500;
+  line-height: 1.4;
+  /* Animate entry so the error message slides in smoothly */
+  animation: fieldErrorFadeIn 0.15s ease forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fieldError {
+    animation: none;
+  }
+}
+
+@keyframes fieldErrorFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-0.125rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Icon ──────────────────────────────────────────────────────────────── */
+
+.icon {
+  /* 12px — matches text font-size for consistent optical alignment */
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+  /* Nudge icon down slightly to align center with first line of text */
+  margin-top: 0.0625rem;
+  color: currentColor;
+}
+
+/* ── Dark theme ────────────────────────────────────────────────────────── */
+/* --ink-critical is already overridden in the .theme-dark block in
+   base.css (--_r-300, which is WCAG AA on dark surfaces).
+   No additional override is needed here. */

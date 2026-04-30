@@ -65,7 +65,9 @@ import type {
   KindeUser,
   KindeOrganization,
   KindePermission,
+  KindeRoles,
 } from "@kinde-oss/kinde-auth-nextjs/types";
+import { isValidRole, type Role } from "../../convex/rbac";
 
 // ─── Re-export token helpers ──────────────────────────────────────────────────
 //
@@ -88,7 +90,7 @@ export {
 
 // ─── Re-export Kinde types used by callers ────────────────────────────────────
 
-export type { KindeUser, KindeOrganization, KindePermission };
+export type { KindeUser, KindeOrganization, KindePermission, KindeRoles };
 
 // ─── getKindeSession ──────────────────────────────────────────────────────────
 
@@ -268,4 +270,49 @@ export async function getUserDisplayName(): Promise<string> {
   if (given_name) return given_name;
   if (email) return email;
   return "Unknown User";
+}
+
+// ─── getServerUserRoles ───────────────────────────────────────────────────────
+
+/**
+ * Returns the validated SkySpecs role keys for the current session user.
+ *
+ * Reads the `roles` claim from the Kinde access token via `getRoles()` and
+ * filters to only recognized SkySpecs role keys (admin, operator, technician,
+ * pilot).  Unknown roles from Kinde are silently dropped.
+ *
+ * Returns an empty array when:
+ *   • The user is not authenticated
+ *   • The access token has no `roles` claim
+ *   • All roles in the token are unrecognized strings
+ *
+ * Use in Server Components and Route Handlers (server-side only).
+ *
+ * @example
+ * // In a protected server layout:
+ * const roles = await getServerUserRoles();
+ * const canAccessAdmin = roles.includes("admin") || roles.includes("operator");
+ * if (!canAccessAdmin) {
+ *   redirect("/inventory");
+ * }
+ *
+ * @example
+ * // In a protected route handler:
+ * const roles = await getServerUserRoles();
+ * if (!roles.includes("admin")) {
+ *   return new Response("Forbidden", { status: 403 });
+ * }
+ */
+export async function getServerUserRoles(): Promise<Role[]> {
+  const session = getKindeServerSession();
+  const kindeRoles: KindeRoles | null = await session.getRoles();
+
+  if (!kindeRoles || kindeRoles.length === 0) return [];
+
+  // Filter to only recognized SkySpecs role keys (admin, operator, technician, pilot).
+  // Unknown role keys from Kinde (e.g. stale roles from a previous configuration)
+  // are silently dropped to prevent privilege escalation via stale tokens.
+  return kindeRoles
+    .map((r) => r.key)
+    .filter(isValidRole) as Role[];
 }
