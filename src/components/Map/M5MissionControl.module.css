@@ -490,7 +490,8 @@
 .pinDot[data-status="transit_out"] {
   background: var(--status-transit-out, var(--ink-warning));
 }
-.pinDot[data-status="flagged"] {
+.pinDot[data-status="flagged"],
+.pinDot[data-status="recalled"] {
   background: var(--status-flagged, var(--ink-error));
 }
 .pinDot[data-status="transit_in"] {

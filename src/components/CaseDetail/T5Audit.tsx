@@ -358,7 +358,7 @@ function EventItem({ event, ffEnabled }: EventItemProps) {
     const to = String(data.to);
     const validCaseStatuses = [
       "hangar", "assembled", "transit_out", "deployed",
-      "flagged", "transit_in", "received", "archived",
+      "flagged", "recalled", "transit_in", "received", "archived",
     ];
     if (validCaseStatuses.includes(to)) {
       statusKind = to as Parameters<typeof StatusPill>[0]["kind"];

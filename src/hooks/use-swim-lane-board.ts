@@ -45,7 +45,7 @@
  *
  *   // Active phases only
  *   const board = useSwimLaneBoard({
- *     phases: ["transit_out", "deployed", "flagged", "transit_in"],
+ *     phases: ["transit_out", "deployed", "flagged", "recalled", "transit_in"],
  *   });
  *
  * @module
@@ -124,7 +124,7 @@ export interface UseSwimLaneBoardArgs {
    *
    * @example
    * // Show only field-active cases
-   * phases: ["transit_out", "deployed", "flagged", "transit_in"]
+   * phases: ["transit_out", "deployed", "flagged", "recalled", "transit_in"]
    */
   phases?: SwimLanePhase[];
 

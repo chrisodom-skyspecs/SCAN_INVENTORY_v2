@@ -260,7 +260,7 @@ export function useDamageReportSummary(caseId: string | null) {
  * }
  */
 export function useAllDamageReports(
-  caseStatus?: "hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "transit_in" | "received" | "archived",
+  caseStatus?: "hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "recalled" | "transit_in" | "received" | "archived",
 ) {
   return useQuery(api.damageReports.listAllDamageReports, {
     caseStatus,

@@ -92,6 +92,52 @@ vi.mock("@/hooks/use-case-map-data", () => ({
   useCaseMapData: (...args: unknown[]) => mockUseCaseMapData(...args),
 }));
 
+vi.mock("@/hooks/use-heat-layer", () => ({
+  useHeatLayer: () => ({
+    isActive: true,
+    geojsonData: { type: "FeatureCollection", features: [] },
+    isLoading: false,
+    pointCount: 0,
+  }),
+}));
+
+vi.mock("@/hooks/use-history-trail", () => ({
+  useHistoryTrail: () => ({
+    isActive: true,
+    linesGeoJSON: { type: "FeatureCollection", features: [] },
+    pointsGeoJSON: { type: "FeatureCollection", features: [] },
+    isLoading: false,
+    trailCount: 0,
+    totalWaypoints: 0,
+  }),
+}));
+
+vi.mock("@/providers/layer-engine-provider", () => ({
+  useSharedLayerEngine: () => ({
+    toggle: vi.fn(),
+    state: {
+      deployed: true,
+      transit: true,
+      flagged: true,
+      hangar: true,
+      heat: true,
+      history: true,
+      turbines: true,
+    },
+  }),
+}));
+
+vi.mock("react-map-gl", () => ({
+  Map: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="react-map-gl-map">{children}</div>
+  ),
+  NavigationControl: () => <div data-testid="map-navigation-control" />,
+  Source: ({ id, children }: { id: string; children?: React.ReactNode }) => (
+    <div data-testid={`source-${id}`}>{children}</div>
+  ),
+  Layer: ({ id }: { id: string }) => <div data-testid={`layer-${id}`} />,
+}));
+
 // ─── CSS module stub ──────────────────────────────────────────────────────────
 
 vi.mock("../M5MissionControl.module.css", () => ({ default: {} }));

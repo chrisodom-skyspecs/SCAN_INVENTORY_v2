@@ -154,6 +154,7 @@ const commonFilterArgs = {
         v.literal("transit_out"),
         v.literal("deployed"),
         v.literal("flagged"),
+        v.literal("recalled"),
         v.literal("transit_in"),
         v.literal("received"),
         v.literal("archived")
@@ -273,6 +274,7 @@ export const getM2MapData = query({
           v.literal("transit_out"),
           v.literal("deployed"),
           v.literal("flagged"),
+          v.literal("recalled"),
           v.literal("transit_in"),
           v.literal("received"),
           v.literal("archived")
@@ -619,6 +621,7 @@ export const getCasesMapPayload = query({
           v.literal("transit_out"),
           v.literal("deployed"),
           v.literal("flagged"),
+          v.literal("recalled"),
           v.literal("transit_in"),
           v.literal("received"),
           v.literal("archived")

@@ -68,6 +68,7 @@ export type CaseStatus =
   | "transit_out"
   | "deployed"
   | "flagged"
+  | "recalled"
   | "transit_in"
   | "received"
   | "archived";

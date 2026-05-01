@@ -51,6 +51,12 @@ import {
 } from "@/lib/map-url-params";
 import { writeBrowserHistoryUrl } from "@/lib/browser-history";
 
+const MAP_URL_STATE_CHANGE_EVENT = "inventory:map-url-state-change";
+
+interface MapUrlStateChangeEvent extends CustomEvent<MapUrlState> {
+  type: typeof MAP_URL_STATE_CHANGE_EVENT;
+}
+
 // ─── Hook options ─────────────────────────────────────────────────────────────
 
 export interface SetMapStateOptions {
@@ -104,9 +110,12 @@ export function useMapUrlState(
   // After mount, this state is driven by:
   //   • setMapState (write path) — updates on every user interaction
   //   • popstate listener (read path) — updates on browser back/forward
-  const [mapState, setMapStateInternal] = useState<MapUrlState>(() =>
-    decodeMapUrlState(searchParams)
-  );
+  const [mapState, setMapStateInternal] = useState<MapUrlState>(() => {
+    if (typeof window !== "undefined") {
+      return decodeMapUrlState(new URLSearchParams(window.location.search));
+    }
+    return decodeMapUrlState(searchParams);
+  });
 
   // Stable refs so callbacks always access the latest values without
   // needing to be re-created on every render.
@@ -137,8 +146,20 @@ export function useMapUrlState(
       setMapStateInternal(state);
     }
 
+    function handleMapUrlStateChange(event: Event): void {
+      const nextState = (event as MapUrlStateChangeEvent).detail;
+      if (nextState) {
+        setMapStateInternal(nextState);
+      }
+    }
+
     window.addEventListener("popstate", handlePopstate);
-    return () => window.removeEventListener("popstate", handlePopstate);
+    window.addEventListener(MAP_URL_STATE_CHANGE_EVENT, handleMapUrlStateChange);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopstate);
+      window.removeEventListener(MAP_URL_STATE_CHANGE_EVENT, handleMapUrlStateChange);
+    };
   }, []);
 
   // ── Write: encode → history.replaceState (no navigation side-effects) ───
@@ -176,6 +197,14 @@ export function useMapUrlState(
       // propagate the change through local state to trigger re-renders.
       const newState = decodeMapUrlState(next);
       setMapStateInternal(newState);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent<MapUrlState>(MAP_URL_STATE_CHANGE_EVENT, {
+            detail: newState,
+          })
+        );
+      }
     },
     // Stable: all mutable values are accessed via refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps

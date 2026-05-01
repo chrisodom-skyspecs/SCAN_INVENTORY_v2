@@ -68,7 +68,7 @@ export const LAYER_TOGGLE_STATUS_MAP: Readonly<
 > = {
   deployed: ["deployed"],
   transit:  ["transit_out", "transit_in"],
-  flagged:  ["flagged"],
+  flagged:  ["flagged", "recalled"],
   hangar:   ["hangar", "assembled", "received", "archived"],
 } as const;
 

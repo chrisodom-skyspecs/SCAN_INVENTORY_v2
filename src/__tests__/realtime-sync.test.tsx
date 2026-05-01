@@ -181,7 +181,7 @@ import {
 const CASE_ID = "case_sync_test_001";
 const TIMESTAMP = 1_700_000_000_000;
 
-type CaseStatus = "hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "transit_in" | "received" | "archived";
+type CaseStatus = "hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "recalled" | "transit_in" | "received" | "archived";
 
 function makeCaseDoc(overrides: Partial<{
   _id: string;
@@ -228,6 +228,7 @@ function makeStatusCounts(overrides: Partial<Record<CaseStatus, number>> = {}) {
     transit_out: 1,
     deployed:    3,
     flagged:     0,
+    recalled:    0,
     transit_in:  1,
     received:    4,
     archived:    0,

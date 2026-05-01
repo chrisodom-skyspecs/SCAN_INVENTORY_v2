@@ -108,7 +108,7 @@ export interface UseM1MapDataArgs {
   /** Geographic viewport bounds.  Pass null for unbounded global view. */
   bounds?: MapViewportBounds | null;
   /** Filter to one or more case lifecycle statuses. */
-  status?: ("hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "transit_in" | "received" | "archived")[];
+  status?: ("hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "recalled" | "transit_in" | "received" | "archived")[];
   /** Filter to cases assigned to a specific technician (Kinde user ID). */
   assigneeId?: string;
   /** Filter to cases on a specific mission. */
@@ -155,7 +155,7 @@ export interface UseM2MapDataArgs {
    */
   missionId?: string | null;
   /** Filter cases within mission groups by one or more lifecycle statuses. */
-  status?: ("hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "transit_in" | "received" | "archived")[];
+  status?: ("hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "recalled" | "transit_in" | "received" | "archived")[];
 }
 
 /**

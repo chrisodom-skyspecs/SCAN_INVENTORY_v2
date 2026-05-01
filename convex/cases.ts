@@ -73,6 +73,7 @@ const caseStatusValidator = v.union(
   v.literal("transit_out"),
   v.literal("deployed"),
   v.literal("flagged"),
+  v.literal("recalled"),
   v.literal("transit_in"),
   v.literal("received"),
   v.literal("archived"),
@@ -84,7 +85,7 @@ const caseStatusValidator = v.union(
  * Valid lifecycle statuses for a case.
  *
  * Full lifecycle:
- *   hangar → assembled → transit_out → deployed → (flagged) → transit_in → received → archived
+ *   hangar → assembled → transit_out → deployed → (flagged/recalled) → transit_in → received → archived
  *
  * Matches the `caseStatus` union in convex/schema.ts and the canonical
  * `CaseStatus` type exported from src/types/case-status.ts.
@@ -95,6 +96,7 @@ export type CaseStatus =
   | "transit_out"
   | "deployed"
   | "flagged"
+  | "recalled"
   | "transit_in"
   | "received"
   | "archived";
@@ -105,6 +107,7 @@ export const CASE_STATUSES: CaseStatus[] = [
   "transit_out",
   "deployed",
   "flagged",
+  "recalled",
   "transit_in",
   "received",
   "archived",
@@ -163,6 +166,15 @@ async function requireAuth(ctx: { auth: Auth }): Promise<UserIdentity> {
     );
   }
   return identity;
+}
+
+function identityName(identity: UserIdentity): string {
+  return identity.name ?? identity.email ?? identity.subject;
+}
+
+function cleanOptional(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 // ─── getCaseStatus ────────────────────────────────────────────────────────────
@@ -795,6 +807,7 @@ export const getCaseStatusCounts = query({
       transit_out: 0,
       deployed:    0,
       flagged:     0,
+      recalled:    0,
       transit_in:  0,
       received:    0,
       archived:    0,
@@ -2049,6 +2062,99 @@ export const updateCaseStatus = mutation({
       caseId:         args.caseId,
       previousStatus,
       newStatus:      args.newStatus,
+    };
+  },
+});
+
+// ─── recallCase ────────────────────────────────────────────────────────────────
+
+export const recallCase = mutation({
+  args: {
+    caseId: v.id("cases"),
+    reason: v.string(),
+    returnMethod: v.union(
+      v.literal("fedex"),
+      v.literal("driver_pickup"),
+      v.literal("warehouse_drop_off"),
+    ),
+    notes: v.optional(v.string()),
+  },
+
+  handler: async (ctx, args): Promise<{
+    caseId: string;
+    previousStatus: string;
+    newStatus: "recalled";
+  }> => {
+    const identity = await requireAuth(ctx);
+
+    const caseDoc = await ctx.db.get(args.caseId);
+    if (!caseDoc) {
+      throw new Error(`recallCase: Case "${args.caseId}" not found.`);
+    }
+
+    const reason = args.reason.trim();
+    if (!reason) {
+      throw new Error("recallCase: Recall reason is required.");
+    }
+
+    const now = Date.now();
+    const previousStatus = caseDoc.status;
+    const userName = identityName(identity);
+    const notes = cleanOptional(args.notes);
+
+    await ctx.db.patch(args.caseId, {
+      status: "recalled",
+      recallReason: reason,
+      recallInitiatedAt: now,
+      recallInitiatedBy: identity.subject,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("events", {
+      caseId: args.caseId,
+      eventType: "case_recalled",
+      userId: identity.subject,
+      userName,
+      timestamp: now,
+      data: {
+        reason,
+        returnMethod: args.returnMethod,
+        previousStatus,
+        caseLabel: caseDoc.label,
+      },
+    });
+
+    if (notes) {
+      await ctx.db.insert("events", {
+        caseId: args.caseId,
+        eventType: "note_added",
+        userId: identity.subject,
+        userName,
+        timestamp: now,
+        data: {
+          note: notes,
+          source: "case_recall",
+          caseLabel: caseDoc.label,
+        },
+      });
+    }
+
+    if (caseDoc.assigneeId) {
+      await ctx.db.insert("notifications", {
+        userId: caseDoc.assigneeId,
+        type: "case_recalled",
+        title: `${caseDoc.label} recalled to hangar`,
+        message: `Reason: ${reason}`,
+        caseId: args.caseId,
+        read: false,
+        createdAt: now,
+      });
+    }
+
+    return {
+      caseId: args.caseId,
+      previousStatus,
+      newStatus: "recalled",
     };
   },
 });

@@ -94,6 +94,20 @@ vi.mock("convex/react", () => ({
   }),
 }));
 
+vi.mock("react-map-gl", () => ({
+  Map: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="react-map-gl-map">{children}</div>
+  ),
+  NavigationControl: () => <div data-testid="map-navigation-control" />,
+  Marker: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="map-marker">{children}</div>
+  ),
+  Source: ({ id, children }: { id: string; children?: React.ReactNode }) => (
+    <div data-testid={`source-${id}`}>{children}</div>
+  ),
+  Layer: ({ id }: { id: string }) => <div data-testid={`layer-${id}`} />,
+}));
+
 // ─── Mock useCaseMapData (injectable) ────────────────────────────────────────
 
 // vitest 4.x: vi.fn<T> takes a function type, not [Args, Return] tuple
@@ -515,14 +529,15 @@ describe("M1FleetOverview — Filtered marker set (pin list)", () => {
   });
 });
 
-// ─── 7. Mapbox-token overlay fallback ─────────────────────────────────────────
+// ─── 7. Mapbox-token overlay rendering ────────────────────────────────────────
 
-describe("M1FleetOverview — Mapbox-token overlay fallback", () => {
-  it("renders history and turbine overlays in fallback mode inside M1's plain map container", async () => {
+describe("M1FleetOverview — Mapbox-token overlays", () => {
+  it("renders a real map shell and GL overlay sources inside M1", async () => {
     await renderM1WithMapboxToken();
 
-    expect(screen.getByTestId("turbine-layer-fallback")).toBeTruthy();
-    expect(screen.getByTestId("history-trail-fallback")).toBeTruthy();
+    expect(screen.getByTestId("react-map-gl-map")).toBeTruthy();
+    expect(screen.getByTestId("source-inventory-turbines-source")).toBeTruthy();
+    expect(screen.getByTestId("source-inventory-trail-lines-source")).toBeTruthy();
   });
 });
 

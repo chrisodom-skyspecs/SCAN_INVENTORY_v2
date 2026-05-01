@@ -1,177 +1,758 @@
 /**
  * convex/seed.ts
  *
- * Realistic seed dataset for the SkySpecs INVENTORY + SCAN dev/test environment.
+ * Domain seed dataset for SCAN + INVENTORY.
  *
- * Populates the Convex database with production-representative records:
- *   • 5 case templates (packing lists of 6–15 items each)
- *   • 6 missions across Michigan, Ohio, Illinois, Indiana wind farms
- *   • 40 turbine site markers distributed across mission sites
- *   • 50 equipment cases covering all lifecycle statuses
- *   • 690 manifest items (cases × template items)
- *   • 42 inspections (completed, in-progress, and pending)
- *   • 15 shipment records with FedEx tracking numbers
- *   • ~220 immutable audit events (status changes, inspections, damage, handoffs)
- *   • 60 custody handoff records
- *   • 130 scan records
- *   • 3 feature flag entries
+ * This seed is intentionally scenario-driven. Each kit represents a real-world
+ * custody story: hangar assembly, QC signoff, shipping or handoff, field
+ * checkout, condition confirmation, onward transfer, return, and hangar intake.
  *
  * Usage:
- *   npx convex run seed:seedDatabase                        # dev (additive)
- *   npx convex run seed:seedDatabase '{"clearExisting":true}'  # dev (reset then seed)
- *
- * ⚠️  Only call with clearExisting=true in dev/test environments — it deletes
- *     ALL rows in each seeded table before inserting fresh data.
- *
- * Implementation notes:
- *   • Uses internalMutation → no auth required → safe for CI/CD pipelines.
- *   • Returns a summary object with counts of inserted rows per table.
- *   • Idempotency: when clearExisting=false (default), seed rows are still
- *     inserted, so call once per environment or always use clearExisting=true.
- *   • All timestamps are relative to the seed run time (Date.now()).
+ *   npx convex run seed:seedDatabase
+ *   npx convex run seed:seedDatabase '{"clearExisting":true}'
  */
 
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 
-// ─── Seed constants ───────────────────────────────────────────────────────────
-
-/** SkySpecs HQ — Ann Arbor, MI (return destination for all shipments) */
-const HQ = { lat: 42.2808, lng: -83.7430, name: "SkySpecs HQ — Ann Arbor, MI" };
-
-/** Geographic centres for wind farm deployment zones */
-const SITES = {
-  lakeMichigan: { lat: 43.2340, lng: -86.2506, name: "Lake Michigan Offshore Site" },
-  illinoisPrairie: { lat: 40.4842, lng: -88.9937, name: "Illinois Prairie Wind Farm" },
-  lakeErie: { lat: 41.4993, lng: -81.6944, name: "Lake Erie Basin Site" },
-  indianaHoosier: { lat: 40.4864, lng: -86.1336, name: "Indiana Hoosier Wind Farm" },
-  upperMichigan: { lat: 46.5436, lng: -87.3954, name: "Upper Michigan Legacy Site" },
-  ohioEmergency: { lat: 41.4489, lng: -82.7079, name: "Emergency Repair Delta Site" },
+type TemplateItem = {
+  id: string;
+  name: string;
+  description?: string;
+  required: boolean;
+  category?: string;
+  sortOrder?: number;
+  quantity?: number;
+  unit?: string;
+  notes?: string;
 };
 
-/** Simulated Kinde user identities (not real Kinde IDs — dev only) */
-const USERS = [
-  { id: "seed_usr_ops_mgr",    name: "Morgan Reeves",      role: "ops_manager" },
-  { id: "seed_usr_tech_alice", name: "Alice Chen",         role: "field_tech" },
-  { id: "seed_usr_tech_raj",   name: "Raj Patel",          role: "field_tech" },
-  { id: "seed_usr_tech_dana",  name: "Dana Kim",           role: "field_tech" },
-  { id: "seed_usr_tech_james", name: "James Okafor",       role: "field_tech" },
-  { id: "seed_usr_pilot_emma", name: "Emma Lundström",     role: "pilot" },
-  { id: "seed_usr_pilot_marc", name: "Marcus Brown",       role: "pilot" },
-  { id: "seed_usr_logistics",  name: "Sarah Novak",        role: "logistics" },
-];
+type TemplateKey =
+  | "foresightGsc"
+  | "foresightV1Aircraft"
+  | "foresightV2Aircraft"
+  | "foresightBattery"
+  | "foresightCharger"
+  | "skycrawlerRover"
+  | "skycrawlerSupport"
+  | "skycrawlerBattery";
 
-/** Realistic FedEx Ground / Express tracking numbers */
+type CaseStatus =
+  | "hangar"
+  | "assembled"
+  | "transit_out"
+  | "deployed"
+  | "flagged"
+  | "recalled"
+  | "transit_in"
+  | "received"
+  | "archived";
+
+type ManifestStatus = "unchecked" | "ok" | "damaged" | "missing";
+type InspectionStatus = "pending" | "in_progress" | "completed" | "flagged";
+type ShipmentStatus =
+  | "label_created"
+  | "picked_up"
+  | "in_transit"
+  | "out_for_delivery"
+  | "delivered"
+  | "exception";
+type ScanType = "check_in" | "inspection" | "handoff" | "lookup" | "shipping" | "receiving";
+type EventType =
+  | "status_change"
+  | "inspection_started"
+  | "inspection_completed"
+  | "item_checked"
+  | "damage_reported"
+  | "shipped"
+  | "delivered"
+  | "custody_handoff"
+  | "note_added"
+  | "photo_added"
+  | "mission_assigned"
+  | "template_applied"
+  | "qc_sign_off"
+  | "case_recalled"
+  | "shipment_created"
+  | "shipment_released";
+
+type User = {
+  id: string;
+  name: string;
+  role: "operator" | "logistics" | "field_tech" | "pilot" | "maintenance";
+};
+
+type Site = {
+  key: string;
+  name: string;
+  lat: number;
+  lng: number;
+  missionName: string;
+  description: string;
+  status: "planning" | "active" | "completed" | "cancelled";
+  lead: User;
+  siteCode: string;
+};
+
+type Scenario = {
+  unitId: string;
+  platform: "ForeSight" | "SkyCrawler";
+  version?: "V1" | "V2";
+  beakon: string;
+  nickname?: string;
+  faaRegistration?: string;
+  serialNumber?: string;
+  missionKey: string;
+  custodian: User;
+  narrative: string;
+  routeReason: string;
+  cases: CaseSpec[];
+};
+
+type CaseSpec = {
+  suffix: string;
+  displayName: string;
+  templateKey: TemplateKey;
+  status: CaseStatus;
+  batterySerials?: string[];
+  issueTemplateItemIds?: string[];
+  notes?: string;
+  shippingDirection?: "outbound" | "return";
+  shipmentStatus?: ShipmentStatus;
+};
+
+type SeededCase = {
+  id: Id<"cases">;
+  scenario: Scenario;
+  spec: CaseSpec;
+  label: string;
+  qrCode: string;
+  status: CaseStatus;
+  missionId: Id<"missions">;
+  site: Site;
+  assignee: User;
+};
+
+const HQ = {
+  lat: 42.2808,
+  lng: -83.7430,
+  name: "SkySpecs Hangar - Ann Arbor, MI",
+};
+
+const USERS = {
+  ops: { id: "seed_usr_ops_morgan", name: "Morgan Reeves", role: "operator" },
+  hangarLead: { id: "seed_usr_hangar_alicia", name: "Alicia Torres", role: "operator" },
+  qc: { id: "seed_usr_qc_dana", name: "Dana Kim", role: "operator" },
+  logistics: { id: "seed_usr_logistics_sarah", name: "Sarah Novak", role: "logistics" },
+  pilotEmma: { id: "seed_usr_pilot_emma", name: "Emma Lundstrom", role: "pilot" },
+  pilotMarc: { id: "seed_usr_pilot_marc", name: "Marcus Brown", role: "pilot" },
+  techAlice: { id: "seed_usr_tech_alice", name: "Alice Chen", role: "field_tech" },
+  techRaj: { id: "seed_usr_tech_raj", name: "Raj Patel", role: "field_tech" },
+  techJames: { id: "seed_usr_tech_james", name: "James Okafor", role: "field_tech" },
+  maintNia: { id: "seed_usr_maint_nia", name: "Nia Brooks", role: "maintenance" },
+} satisfies Record<string, User>;
+
 const FEDEX_TRACKING_NUMBERS = [
-  "794644823741", "771448178291", "785334928472",
-  "776271918294", "789234810293", "782918374521",
-  "773847261938", "791827364821", "768234917283",
-  "784719283746", "779283746182", "793847261934",
-  "781928374652", "796182736451", "772918364728",
+  "794644823741",
+  "771448178291",
+  "785334928472",
+  "776271918294",
+  "789234810293",
+  "782918374521",
+  "773847261938",
+  "791827364821",
+  "768234917283",
+  "784719283746",
+  "779283746182",
+  "793847261934",
+  "781928374652",
+  "796182736451",
+  "772918364728",
+  "780034918274",
+  "792837465120",
+  "775928374610",
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Return a random element from an array (not cryptographically random — fine for seed data) */
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+function daysAgo(now: number, n: number): number {
+  return now - n * 24 * 60 * 60 * 1000;
 }
 
-/** Add small jitter to coordinates so markers don't overlap on the map */
-function jitter(base: number, range: number): number {
-  return base + (Math.random() - 0.5) * range * 2;
+function daysFromNow(now: number, n: number): number {
+  return now + n * 24 * 60 * 60 * 1000;
 }
 
-/** Epoch ms N days before now */
-function daysAgo(n: number): number {
-  return Date.now() - n * 24 * 60 * 60 * 1000;
-}
-
-/** Epoch ms N days after now */
-function daysFromNow(n: number): number {
-  return Date.now() + n * 24 * 60 * 60 * 1000;
-}
-
-/** Format epoch ms as ISO date string (YYYY-MM-DD) */
 function isoDate(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
 }
 
-// ─── Template item definitions ────────────────────────────────────────────────
+function offset(base: number, index: number, step: number): number {
+  return base + (index - 2) * step;
+}
 
-const TEMPLATE_ITEMS = {
-  droneInspectionKit: [
-    { id: "dik-drone",      name: "DJI Matrice 300 RTK",          category: "Primary Equipment", required: true,  sortOrder: 1 },
-    { id: "dik-batt1",      name: "TB60 Intelligent Battery #1",  category: "Power",             required: true,  sortOrder: 2 },
-    { id: "dik-batt2",      name: "TB60 Intelligent Battery #2",  category: "Power",             required: true,  sortOrder: 3 },
-    { id: "dik-batt3",      name: "TB60 Intelligent Battery #3",  category: "Power",             required: false, sortOrder: 4 },
-    { id: "dik-batt4",      name: "TB60 Intelligent Battery #4",  category: "Power",             required: false, sortOrder: 5 },
-    { id: "dik-controller", name: "Smart Controller Enterprise",  category: "Control",           required: true,  sortOrder: 6 },
-    { id: "dik-tablet",     name: "iPad Pro 12.9-inch (with mount)",  category: "Control",           required: true,  sortOrder: 7 },
-    { id: "dik-props-cw",   name: "CW Propeller Set (4-pack)",    category: "Hardware",          required: true,  sortOrder: 8 },
-    { id: "dik-props-ccw",  name: "CCW Propeller Set (4-pack)",   category: "Hardware",          required: true,  sortOrder: 9 },
-    { id: "dik-charger",    name: "BS65 Charging Station",        category: "Power",             required: true,  sortOrder: 10 },
-    { id: "dik-sd",         name: "SanDisk 256GB microSD (×2)",   category: "Storage",           required: true,  sortOrder: 11 },
-    { id: "dik-cal-target", name: "Calibration Target Board",     category: "Calibration",       required: false, sortOrder: 12 },
-    { id: "dik-vest",       name: "Hi-Vis Safety Vest",           category: "Safety",            required: true,  sortOrder: 13 },
-    { id: "dik-logbook",    name: "Flight Operations Log Book",   category: "Documentation",     required: true,  sortOrder: 14 },
-  ],
+function withOrder(items: TemplateItem[]): TemplateItem[] {
+  return items.map((item, index) => ({ ...item, sortOrder: index + 1 }));
+}
 
-  sensorArrayPackage: [
-    { id: "sap-thermal",    name: "FLIR Zenmuse H20T Thermal",    category: "Sensors",           required: true,  sortOrder: 1 },
-    { id: "sap-lidar",      name: "Livox Avia LiDAR Module",      category: "Sensors",           required: true,  sortOrder: 2 },
-    { id: "sap-logger",     name: "Raspberry Pi 4 Data Logger",   category: "Computing",         required: true,  sortOrder: 3 },
-    { id: "sap-mount",      name: "Universal Sensor Mount Arm",   category: "Hardware",          required: true,  sortOrder: 4 },
-    { id: "sap-eth-cable",  name: "Cat6 Shielded Cable 5m",       category: "Cabling",           required: true,  sortOrder: 5 },
-    { id: "sap-powerbank1", name: "Anker 26800mAh Power Bank #1", category: "Power",             required: true,  sortOrder: 6 },
-    { id: "sap-powerbank2", name: "Anker 26800mAh Power Bank #2", category: "Power",             required: false, sortOrder: 7 },
-    { id: "sap-cal-card",   name: "Thermal Calibration Card Set", category: "Calibration",       required: true,  sortOrder: 8 },
-    { id: "sap-case-sm",    name: "Pelican 1510 Carry Case",      category: "Storage",           required: true,  sortOrder: 9 },
-    { id: "sap-case-lg",    name: "Pelican 1650 Equipment Case",  category: "Storage",           required: true,  sortOrder: 10 },
-    { id: "sap-dongle",     name: "SkySpecs Software License USB", category: "Software",         required: true,  sortOrder: 11 },
-  ],
+function item(
+  id: string,
+  name: string,
+  category: string,
+  quantity = 1,
+  unit = "each",
+  notes?: string,
+  required = true,
+): TemplateItem {
+  return { id, name, category, quantity, unit, required, notes };
+}
 
-  safetyPPEKit: [
-    { id: "ppk-hardhat",    name: "ANSI Z89.1 Hard Hat",          category: "Head Protection",   required: true,  sortOrder: 1 },
-    { id: "ppk-harness",    name: "Full-Body Safety Harness",     category: "Fall Protection",   required: true,  sortOrder: 2 },
-    { id: "ppk-lanyard",    name: "Shock-Absorbing Lanyard 6ft",  category: "Fall Protection",   required: true,  sortOrder: 3 },
-    { id: "ppk-carabiner",  name: "Auto-Lock Carabiner (×4)",     category: "Fall Protection",   required: true,  sortOrder: 4 },
-    { id: "ppk-glasses",    name: "Safety Glasses (ANSI Z87.1)",  category: "Eye Protection",    required: true,  sortOrder: 5 },
-    { id: "ppk-hiviz",      name: "Hi-Vis ANSI Class 3 Vest",     category: "Visibility",        required: true,  sortOrder: 6 },
-    { id: "ppk-firstaid",   name: "First Aid Kit (ANSI A+)",      category: "Medical",           required: true,  sortOrder: 7 },
-    { id: "ppk-gloves",     name: "Cut-Resistant Gloves (×2 pr)", category: "Hand Protection",   required: true,  sortOrder: 8 },
-  ],
+const TEMPLATE_ITEMS: Record<TemplateKey, TemplateItem[]> = {
+  foresightGsc: withOrder([
+    item("gsc-lipo-bags", "LiPo bags - inspect inside", "Safety", 2),
+    item("gsc-desiccant", "Desiccant packet - check indicator", "Environmental", 1),
+    item("gsc-usb-ethernet", "USB-A Ethernet adapter", "Connectivity", 2),
+    item("gsc-ethernet-cable", "Ethernet cable", "Connectivity", 2),
+    item("gsc-lens-blower", "Camera lens blower bulb", "Optics", 1),
+    item("gsc-fire-blanket", "Fire blanket", "Safety", 1),
+    item("gsc-dc-inverter", "300W DC inverter", "Power", 1),
+    item("gsc-repair-electrical-tape", "Electrical tape", "Repair Items", 1, "roll"),
+    item("gsc-repair-zip-ties", "Zip ties", "Repair Items", 24),
+    item("gsc-repair-vhb", "VHB strips", "Repair Items", 3),
+    item("gsc-repair-dual-lock", "Dual-lock strips", "Repair Items", 2),
+    item("gsc-repair-loctite", "Closed Loctite capsule package", "Repair Items", 1),
+    item("gsc-spare-telemetry-antennas", "Spare telemetry antennas - one left, one right", "Spares", 2),
+    item("gsc-inspection-tags", "ULINE inspection tags", "Spares", 8),
+    item("gsc-usb-mini", "USB-Mini cable", "Spares", 1),
+    item("gsc-hw-m4-nyloc", "M4 SS Nyloc nuts", "Spare Hardware", 8),
+    item("gsc-hw-m3-nyloc", "M3 SS Nyloc nuts", "Spare Hardware", 8),
+    item("gsc-hw-m4x10", "M4x10 SS patched SHCS", "Spare Hardware", 4),
+    item("gsc-hw-m3x8", "M3x8 SS patched SHCS", "Spare Hardware", 8),
+    item("gsc-hw-gps-screws", "3-48x5/16 SHCS GPS antenna screws", "Spare Hardware", 4),
+    item("gsc-hw-m3x6", "M3 x 6mm SS SHCS patched", "Spare Hardware", 6),
+    item("gsc-hw-m25x10", "M2.5 x 10mm SS SHCS", "Spare Hardware", 4),
+    item("gsc-tool-lens-wipes", "Camera lens wipes", "Toolbag", 4),
+    item("gsc-tool-microfiber", "Camera lens microfiber cloth", "Toolbag", 1),
+    item("gsc-tool-sd-reader", "USB SD card reader with micro SD", "Toolbag", 1),
+    item("gsc-tool-micro-sd", "Micro SD card and adapter", "Toolbag", 1),
+    item("gsc-tool-crescent", "Crescent wrench", "Toolbag", 1),
+    item("gsc-tool-55-wrench", "5.5mm wrench", "Toolbag", 1),
+    item("gsc-tool-7-wrench", "7mm wrench", "Toolbag", 1),
+    item("gsc-tool-25-hex", "2.5 hex ball-nose L-key", "Toolbag", 1),
+    item("gsc-tool-pliers", "Standard pliers", "Toolbag", 1),
+    item("gsc-tool-snips", "Snips", "Toolbag", 1),
+    item("gsc-tool-sma-torque", "SMA torque wrench - check torque", "Toolbag", 1),
+    item("gsc-tool-hemostat", "Hemostat pliers", "Toolbag", 1),
+    item("gsc-tool-wiha", "WIHA breakover tool with hex 2.5 set to 1.1 N-m", "Toolbag", 1),
+    item("gsc-tool-15-driver", "1.5mm straight hex driver", "Toolbag", 1),
+    item("gsc-tool-20-driver", "2.0mm straight hex driver", "Toolbag", 1),
+    item("gsc-tool-25-driver", "2.5mm straight hex driver", "Toolbag", 1),
+    item("gsc-tool-30-driver", "3.0mm straight hex driver", "Toolbag", 1),
+    item("gsc-tool-ph0", "PH0 Phillips screwdriver", "Toolbag", 1),
+    item("gsc-tool-t6", "T6x40 Torx driver", "Toolbag", 1),
+    item("gsc-tool-fh", "FH screwdriver", "Toolbag", 1),
+    item("gsc-tool-ruler", "Ruler", "Toolbag", 1),
+    item("gsc-tool-dental-pick-case", "Dental pick case without metal pick", "Toolbag", 1),
+    item("gsc-toughpad", "GCS Toughpad", "Ground Control", 1, "each", "Power on and verify screen protector."),
+    item("gsc-toughpad-power", "Toughpad power supply and AC adaptor", "Ground Control", 1),
+    item("gsc-toughpad-battery", "Spare GCS Toughpad battery", "Ground Control", 1, "each", "Verify battery is not recalled FZ-VZSU84U."),
+    item("gsc-rtk-power", "RTK power supply 16V 4.5A 90 degree connector", "RTK", 1, "each", "Check by powering on."),
+    item("gsc-rtk-cable", "RTK 12V cable assembly", "RTK", 1),
+    item("gsc-drone-power", "Drone power supply 48V 5.2A with XT90 and wall cable", "Power", 1, "each", "Check anti-spark and XT connector insertion."),
+    item("gsc-rtk-beakon", "RTK Beakon - record Beakon number", "Tracking", 1),
+    item("gsc-first-aid", "First aid kit - document expiration date", "Safety", 1),
+    item("gsc-rtk-battery-v2", "RTK battery pack - V2 only", "RTK", 1, "each", "Replace barrel adapter as needed.", false),
+  ]),
 
-  documentationStation: [
-    { id: "ds-laptop",      name: "MacBook Pro 14\" (M3 Pro)",    category: "Computing",         required: true,  sortOrder: 1 },
-    { id: "ds-camera",      name: "Sony A7R IV Mirrorless Camera",category: "Photography",       required: true,  sortOrder: 2 },
-    { id: "ds-lens",        name: "Sony 24–70mm f/2.8 GM II Lens",category: "Photography",       required: true,  sortOrder: 3 },
-    { id: "ds-sd-cards",    name: "CFexpress Type A Card (×3)",   category: "Storage",           required: true,  sortOrder: 4 },
-    { id: "ds-tripod",      name: "Manfrotto Carbon Fiber Tripod",category: "Photography",       required: false, sortOrder: 5 },
-    { id: "ds-powerstrip",  name: "Heavy-Duty 6-Outlet Strip",    category: "Power",             required: true,  sortOrder: 6 },
-    { id: "ds-usb-hub",     name: "USB-C 10-Port Hub",            category: "Computing",         required: false, sortOrder: 7 },
-  ],
+  foresightV1Aircraft: withOrder([
+    item("fv1-refurb", "Foresight refurbishment procedure complete", "Preflight", 1, "signoff", "Lens cap on, gimbal spacer installed, M4 top plate screws seated."),
+    item("fv1-aircraft-system", "Foresight V1 inspection system with inspection runtime", "Aircraft", 1),
+    item("fv1-aircraft-beakon", "Aircraft Beakon paired to ForeSight unit", "Tracking", 1),
+    item("fv1-horus", "FrSky Horus with transmitter module", "Control", 1, "each", "Verify bound to aircraft and hardware calibration performed."),
+    item("fv1-horus-protection", "Horus protection printed piece", "Control", 1),
+    item("fv1-horus-batteries", "Horus LiPo batteries Gens Ace 2200", "Control", 2, "each", "One battery disconnected in the radio."),
+    item("fv1-rigid-props-cw", "Rigid props in felt bags - clockwise", "Props", 4),
+    item("fv1-rigid-props-ccw", "Rigid props in felt bags - counter-clockwise", "Props", 4),
+    item("fv1-desiccant", "Desiccant packet", "Environmental", 1),
+    item("fv1-fpv-monitor", "FPV monitor - check by power on", "FPV", 1),
+    item("fv1-fpv-internal-battery", "Internal FPV monitor battery installed", "FPV", 1),
+    item("fv1-fpv-antennas", "FPV monitor SMA black mushroom antennas", "FPV", 3),
+    item("fv1-fpv-adapter", "FPV monitor AC adapter 12V 2A and adapter cable", "FPV", 1, "each", "Check by charging."),
+    item("fv1-spare-battery-strap", "Spare battery straps - inspect for damage", "Spare Parts", 2),
+    item("fv1-velcro-strap", "Velcro strap for battery", "Spare Parts", 1),
+    item("fv1-spare-fpv-transmitter", "Spare FPV transmitter with epoxied antenna and heatsink", "Spare Parts", 1),
+    item("fv1-spare-tbs", "Spare TBS receiver - hot glue present", "Spare Parts", 1),
+    item("fv1-radio-charge-adapter", "Spare radio battery charge adapter", "Spare Parts", 1),
+    item("fv1-lobster-tool", "Fabulous Lobster 13790-A", "Spare Parts", 1),
+    item("fv1-prop-clearance-tool", "Prop clearance tool", "Spare Parts", 1),
+    item("fv1-spare-rid-antenna", "Spare RID antenna", "Spare Parts", 1),
+    item("fv1-rigid-prop-adapters", "Rigid prop adapters and M3x12mm patched screws", "Spare Hardware", 12, "adapters", "Includes 100 screws."),
+    item("fv1-tpu-prop-adapters", "TPU prop adapters and M4x12mm BO patched screws", "Spare Hardware", 6, "adapters", "Includes 50 screws."),
+  ]),
 
-  emergencyRepairKit: [
-    { id: "erk-motor",      name: "Replacement Motor DJI M300",   category: "Motors",            required: true,  sortOrder: 1 },
-    { id: "erk-esc",        name: "ESC Replacement Module",       category: "Electronics",       required: true,  sortOrder: 2 },
-    { id: "erk-props",      name: "Emergency Propeller Set",      category: "Hardware",          required: true,  sortOrder: 3 },
-    { id: "erk-frame",      name: "Frame Arm Repair Kit",         category: "Structure",         required: true,  sortOrder: 4 },
-    { id: "erk-soldering",  name: "Hakko FX-888D Soldering Iron", category: "Tools",             required: true,  sortOrder: 5 },
-    { id: "erk-shrink",     name: "Heat Shrink Tube Assortment",  category: "Materials",         required: true,  sortOrder: 6 },
-    { id: "erk-tape",       name: "3M Electrical Tape (×3 rolls)",category: "Materials",         required: true,  sortOrder: 7 },
-    { id: "erk-multimeter", name: "Fluke 87V Multimeter",        category: "Tools",             required: true,  sortOrder: 8 },
-    { id: "erk-wiring",     name: "Spare Wiring Bundle 18–26AWG", category: "Electronics",       required: false, sortOrder: 9 },
-    { id: "erk-heatgun",    name: "DeWalt 20V Heat Gun",          category: "Tools",             required: false, sortOrder: 10 },
-  ],
+  foresightV2Aircraft: withOrder([
+    item("fv2-refurb", "Foresight refurbishment procedure complete", "Preflight", 1, "signoff", "Lens cap on and battery plate included."),
+    item("fv2-aircraft-system", "Foresight V2 inspection system with inspection runtime", "Aircraft", 1),
+    item("fv2-aircraft-beakon", "Aircraft Beakon paired to ForeSight unit", "Tracking", 1),
+    item("fv2-horus", "FrSky Horus with transmitter module", "Control", 1, "each", "Verify bound to aircraft and hardware calibration performed."),
+    item("fv2-horus-batteries", "Horus LiPo batteries Gens Ace 2200", "Control", 2, "each", "One battery disconnected in the radio."),
+    item("fv2-rigid-props-cw", "Rigid props in felt bags - clockwise", "Props", 4),
+    item("fv2-rigid-props-ccw", "Rigid props in felt bags - counter-clockwise", "Props", 4),
+    item("fv2-desiccant", "Desiccant packet", "Environmental", 1),
+    item("fv2-fpv-monitor", "FPV monitor - check by power on", "FPV", 1),
+    item("fv2-fpv-internal-battery", "Internal FPV monitor battery installed", "FPV", 1),
+    item("fv2-fpv-antennas", "FPV monitor SMA black mushroom antennas", "FPV", 2),
+    item("fv2-fpv-adapter", "FPV monitor AC adapter 12V 2A and cable", "FPV", 1, "each", "Check by charging."),
+    item("fv2-spare-battery-strap", "Spare Velcro battery straps", "Spare Parts", 2),
+    item("fv2-spare-fpv-antenna", "Spare FPV monitor SMA antenna RHCP", "Spare Parts", 1),
+    item("fv2-spare-fpv-transmitter", "Spare FPV transmitter with epoxied antenna and heatsink", "Spare Parts", 1),
+    item("fv2-fpv-clamp-bar", "FPV clamp bar", "Spare Parts", 1),
+    item("fv2-spare-tbs", "Spare TBS receiver - hot glue present and dovetail for B2", "Spare Parts", 1),
+    item("fv2-radio-charge-adapter", "Spare radio battery charge adapter", "Spare Parts", 1),
+    item("fv2-lobster-tool", "Fabulous Lobster 13790-A Horus switch nut tool", "Spare Parts", 1),
+    item("fv2-rigid-prop-adapters", "Rigid prop adapters and M3x12mm screws", "Spare Hardware", 12, "adapters", "Four packs, includes 100 screws."),
+    item("fv2-tpu-prop-adapters", "TPU prop adapters and M4x12mm BO patched screws", "Spare Hardware", 6, "adapters", "Includes 50 screws."),
+    item("fv2-landing-onshore", "Landing gear struts - onshore shorter", "Landing Gear", 4),
+    item("fv2-landing-offshore", "Landing gear struts - offshore longer", "Landing Gear", 4),
+    item("fv2-arm-locks", "Arm locks", "Airframe", 2),
+    item("fv2-offshore-inflator", "Offshore inflator mount without CO2 cartridges and salt bobbins", "Offshore Kit", 2),
+    item("fv2-tipover-clamps", "Left/right tipover clamps and jig", "Airframe", 2),
+  ]),
+
+  foresightBattery: withOrder([
+    item("fs-battery-1", "ForeSight flight battery slot 1", "Batteries", 1, "battery", "Verify serial, no swelling, storage charge 45-60%."),
+    item("fs-battery-2", "ForeSight flight battery slot 2", "Batteries", 1, "battery", "Verify serial, no swelling, storage charge 45-60%."),
+    item("fs-battery-3", "ForeSight flight battery slot 3", "Batteries", 1, "battery", "Verify serial, no swelling, storage charge 45-60%."),
+    item("fs-battery-4", "ForeSight flight battery slot 4", "Batteries", 1, "battery", "Verify serial, no swelling, storage charge 45-60%."),
+    item("fs-battery-lipo-bag", "Battery LiPo containment bag", "Safety", 1),
+    item("fs-battery-desiccant", "Desiccant packet - battery case", "Environmental", 1),
+    item("fs-battery-terminal-covers", "Terminal covers", "Safety", 4),
+    item("fs-battery-charge-log", "Battery charge log card", "Documentation", 1),
+  ]),
+
+  foresightCharger: withOrder([
+    item("fs-charger-main", "ForeSight battery charger", "Power", 1, "charger", "Power on and verify all charge bays."),
+    item("fs-charger-ac-cable", "AC wall power cable", "Power", 1),
+    item("fs-charger-dc-cable", "DC field power cable", "Power", 1),
+    item("fs-charger-balance-leads", "Balance lead set", "Power", 4),
+    item("fs-charger-spare-fuses", "Spare charger fuses", "Spares", 4),
+    item("fs-charger-thermal-bag", "Thermal-safe charging bag", "Safety", 1),
+    item("fs-charger-quick-guide", "Charging quick reference card", "Documentation", 1),
+  ]),
+
+  skycrawlerRover: withOrder([
+    item("sc-refurb", "SkyCrawler refurbishment procedure complete", "Preflight", 1, "signoff", "Tracks tensioned, camera mast locked, payload bay clean."),
+    item("sc-rover-system", "SkyCrawler rover inspection system", "Rover", 1),
+    item("sc-rover-beakon", "Rover Beakon paired to SkyCrawler unit", "Tracking", 1),
+    item("sc-controller", "SkyCrawler handheld controller", "Control", 1, "each", "Verify controller is bound to rover."),
+    item("sc-controller-battery", "Controller battery", "Control", 2),
+    item("sc-camera-mast", "Camera mast and gimbal assembly", "Payload", 1),
+    item("sc-spare-track-left", "Spare left crawler track", "Mobility", 1),
+    item("sc-spare-track-right", "Spare right crawler track", "Mobility", 1),
+    item("sc-track-pins", "Crawler track pin kit", "Mobility", 1, "kit"),
+    item("sc-tether", "Recovery tether and carabiner", "Recovery", 1),
+    item("sc-field-tablet", "Rugged field tablet with SCAN profile", "Control", 1),
+    item("sc-desiccant", "Desiccant packet", "Environmental", 1),
+  ]),
+
+  skycrawlerSupport: withOrder([
+    item("sc-support-charger", "SkyCrawler multi-bay charger", "Power", 1, "charger", "Power on and verify all bays."),
+    item("sc-support-ac-cable", "AC wall power cable", "Power", 1),
+    item("sc-support-dc-inverter", "300W DC inverter", "Power", 1),
+    item("sc-support-ethernet", "Ethernet cable", "Connectivity", 2),
+    item("sc-support-usb-ethernet", "USB-A Ethernet adapter", "Connectivity", 1),
+    item("sc-support-lens-wipes", "Lens wipes", "Optics", 4),
+    item("sc-support-microfiber", "Microfiber cloth", "Optics", 1),
+    item("sc-support-tool-roll", "SkyCrawler tool roll", "Tools", 1),
+    item("sc-support-hex-drivers", "Hex driver set 1.5mm-3.0mm", "Tools", 1, "set"),
+    item("sc-support-pliers", "Standard pliers", "Tools", 1),
+    item("sc-support-snips", "Snips", "Tools", 1),
+    item("sc-support-zip-ties", "Zip ties", "Repair Items", 24),
+    item("sc-support-vhb", "VHB strips", "Repair Items", 3),
+    item("sc-support-loctite", "Closed Loctite capsule package", "Repair Items", 1),
+    item("sc-support-first-aid", "First aid kit", "Safety", 1),
+    item("sc-support-fire-blanket", "Fire blanket", "Safety", 1),
+    item("sc-support-log-card", "Rover field service log card", "Documentation", 1),
+  ]),
+
+  skycrawlerBattery: withOrder([
+    item("sc-battery-1", "SkyCrawler traction battery slot 1", "Batteries", 1, "battery", "Verify serial, no swelling, storage charge 45-60%."),
+    item("sc-battery-2", "SkyCrawler traction battery slot 2", "Batteries", 1, "battery", "Verify serial, no swelling, storage charge 45-60%."),
+    item("sc-battery-3", "SkyCrawler traction battery slot 3", "Batteries", 1, "battery", "Verify serial, no swelling, storage charge 45-60%."),
+    item("sc-battery-4", "SkyCrawler traction battery slot 4", "Batteries", 1, "battery", "Verify serial, no swelling, storage charge 45-60%."),
+    item("sc-battery-lipo-bag", "Battery containment bag", "Safety", 1),
+    item("sc-battery-terminal-covers", "Terminal covers", "Safety", 4),
+    item("sc-battery-charge-log", "Battery charge log card", "Documentation", 1),
+  ]),
 };
 
-// ─── Seed mutation ────────────────────────────────────────────────────────────
+const TEMPLATE_DEFS: Array<{
+  key: TemplateKey;
+  name: string;
+  description: string;
+}> = [
+  {
+    key: "foresightGsc",
+    name: "ForeSight Ground Support Case",
+    description: "Ground Support Case packing list sourced from the Alicia hangar checklist. Used for ForeSight field operations, RTK setup, tools, spares, power, and safety equipment.",
+  },
+  {
+    key: "foresightV1Aircraft",
+    name: "ForeSight V1 Aircraft Case",
+    description: "ForeSight V1 aircraft case sourced from the current packing checklist, including aircraft, Horus controller, FPV monitor, props, spares, and the unit's paired Beakon.",
+  },
+  {
+    key: "foresightV2Aircraft",
+    name: "ForeSight V2 Aircraft Case",
+    description: "ForeSight V2 aircraft case sourced from the current packing checklist, including offshore/onshore hardware, FPV components, spares, and the unit's paired Beakon.",
+  },
+  {
+    key: "foresightBattery",
+    name: "ForeSight Battery Case",
+    description: "ForeSight battery transport case. Each physical case contains exactly four batteries plus safety and charge documentation items.",
+  },
+  {
+    key: "foresightCharger",
+    name: "ForeSight Charger Case",
+    description: "ForeSight charging support case for charger, power cables, balance leads, fuses, and safety documentation.",
+  },
+  {
+    key: "skycrawlerRover",
+    name: "SkyCrawler Rover Case",
+    description: "Provisional seed/demo template for a SkyCrawler ground crawler case, including the rover, controller, mobility spares, payload, and always-associated Beakon.",
+  },
+  {
+    key: "skycrawlerSupport",
+    name: "SkyCrawler Support Case",
+    description: "Provisional seed/demo support case for SkyCrawler field operations, including charger, tools, cables, repair items, and safety gear.",
+  },
+  {
+    key: "skycrawlerBattery",
+    name: "SkyCrawler Battery Case",
+    description: "Provisional seed/demo SkyCrawler battery transport case. Each physical case contains exactly four traction batteries plus safety documentation.",
+  },
+];
+
+const SITES: Site[] = [
+  {
+    key: "ann-arbor-staging",
+    name: "Ann Arbor Hangar Staging",
+    lat: HQ.lat,
+    lng: HQ.lng,
+    missionName: "ForeSight FS-101 Hangar Assembly",
+    description: "Hangar staff assemble, QC, and stage a complete ForeSight V1 shipment before outbound release.",
+    status: "planning",
+    lead: USERS.hangarLead,
+    siteCode: "AAS",
+  },
+  {
+    key: "lake-michigan",
+    name: "Lake Michigan Offshore Site",
+    lat: 43.2340,
+    lng: -86.2506,
+    missionName: "ForeSight FS-102 Outbound Deployment",
+    description: "ForeSight V2 kit moving from the Ann Arbor hangar to an offshore inspection team via FedEx.",
+    status: "active",
+    lead: USERS.pilotMarc,
+    siteCode: "LMO",
+  },
+  {
+    key: "illinois-prairie",
+    name: "Illinois Prairie Wind Farm",
+    lat: 40.4842,
+    lng: -88.9937,
+    missionName: "ForeSight FS-103 Field Operations",
+    description: "ForeSight V2 kit checked out by a pilot and operating on a multi-week turbine inspection route.",
+    status: "active",
+    lead: USERS.pilotEmma,
+    siteCode: "IPW",
+  },
+  {
+    key: "indiana-hoosier",
+    name: "Indiana Hoosier Wind Farm",
+    lat: 40.4864,
+    lng: -86.1336,
+    missionName: "SkyCrawler SC-201 Handoff Deployment",
+    description: "SkyCrawler kit transferred by handoff to a field technician for ground-based crawl inspection.",
+    status: "active",
+    lead: USERS.techRaj,
+    siteCode: "IHW",
+  },
+  {
+    key: "ohio-emergency",
+    name: "Ohio Emergency Repair Site",
+    lat: 41.4489,
+    lng: -82.7079,
+    missionName: "SkyCrawler SC-202 Incident Return",
+    description: "SkyCrawler kit with a damaged left tread and return workflow initiated after a field incident.",
+    status: "active",
+    lead: USERS.techJames,
+    siteCode: "OER",
+  },
+  {
+    key: "upper-michigan",
+    name: "Upper Michigan Legacy Fleet",
+    lat: 46.5436,
+    lng: -87.3954,
+    missionName: "SkyCrawler SC-203 Refurb Intake",
+    description: "SkyCrawler kit received back at the hangar and routed for refurb, firmware updates, and battery refresh.",
+    status: "completed",
+    lead: USERS.maintNia,
+    siteCode: "UML",
+  },
+];
+
+function fsBatterySerials(unitId: string, caseLetter: string): string[] {
+  return [1, 2, 3, 4].map((n) => `${unitId}-BAT-${caseLetter}${n}`);
+}
+
+function scBatterySerials(unitId: string, caseLetter: string): string[] {
+  return [1, 2, 3, 4].map((n) => `${unitId}-TRAC-${caseLetter}${n}`);
+}
+
+const SCENARIOS: Scenario[] = [
+  {
+    unitId: "FS-101",
+    platform: "ForeSight",
+    version: "V1",
+    beakon: "BK-4101",
+    nickname: "Lakefly",
+    faaRegistration: "N101FS",
+    serialNumber: "FSV1-2024-101",
+    missionKey: "ann-arbor-staging",
+    custodian: USERS.logistics,
+    routeReason: "Ready for pilot assignment",
+    narrative: "Complete ForeSight V1 kit assembled by hangar staff and waiting for outbound release.",
+    cases: [
+      { suffix: "GSC", displayName: "Ground Support Case", templateKey: "foresightGsc", status: "assembled" },
+      { suffix: "AC", displayName: "ForeSight V1 Aircraft Case", templateKey: "foresightV1Aircraft", status: "assembled" },
+      { suffix: "CHG", displayName: "ForeSight Charger Case", templateKey: "foresightCharger", status: "assembled" },
+      { suffix: "BAT-A", displayName: "ForeSight Battery Case A", templateKey: "foresightBattery", status: "assembled", batterySerials: fsBatterySerials("FS-101", "A") },
+      { suffix: "BAT-B", displayName: "ForeSight Battery Case B", templateKey: "foresightBattery", status: "assembled", batterySerials: fsBatterySerials("FS-101", "B") },
+    ],
+  },
+  {
+    unitId: "FS-102",
+    platform: "ForeSight",
+    version: "V2",
+    beakon: "BK-4102",
+    nickname: "Breakwater",
+    faaRegistration: "N102FS",
+    serialNumber: "FSV2-2025-102",
+    missionKey: "lake-michigan",
+    custodian: USERS.pilotMarc,
+    routeReason: "Outbound deployment to offshore pilot",
+    narrative: "Complete ForeSight V2 kit shipped by FedEx from hangar to pilot for offshore work.",
+    cases: [
+      { suffix: "GSC", displayName: "Ground Support Case", templateKey: "foresightGsc", status: "transit_out", shippingDirection: "outbound", shipmentStatus: "in_transit" },
+      { suffix: "AC", displayName: "ForeSight V2 Aircraft Case", templateKey: "foresightV2Aircraft", status: "transit_out", shippingDirection: "outbound", shipmentStatus: "out_for_delivery" },
+      { suffix: "CHG", displayName: "ForeSight Charger Case", templateKey: "foresightCharger", status: "transit_out", shippingDirection: "outbound", shipmentStatus: "in_transit" },
+      { suffix: "BAT-A", displayName: "ForeSight Battery Case A", templateKey: "foresightBattery", status: "transit_out", batterySerials: fsBatterySerials("FS-102", "A"), shippingDirection: "outbound", shipmentStatus: "picked_up" },
+      { suffix: "BAT-B", displayName: "ForeSight Battery Case B", templateKey: "foresightBattery", status: "transit_out", batterySerials: fsBatterySerials("FS-102", "B"), shippingDirection: "outbound", shipmentStatus: "in_transit" },
+      { suffix: "BAT-C", displayName: "ForeSight Battery Case C", templateKey: "foresightBattery", status: "transit_out", batterySerials: fsBatterySerials("FS-102", "C"), shippingDirection: "outbound", shipmentStatus: "in_transit" },
+    ],
+  },
+  {
+    unitId: "FS-103",
+    platform: "ForeSight",
+    version: "V2",
+    beakon: "BK-4103",
+    nickname: "Prairie Hawk",
+    faaRegistration: "N103FS",
+    serialNumber: "FSV2-2025-103",
+    missionKey: "illinois-prairie",
+    custodian: USERS.pilotEmma,
+    routeReason: "Active field assignment",
+    narrative: "ForeSight V2 kit has arrived, been checked out, and has one minor condition note for the next pilot.",
+    cases: [
+      { suffix: "GSC", displayName: "Ground Support Case", templateKey: "foresightGsc", status: "deployed" },
+      { suffix: "AC", displayName: "ForeSight V2 Aircraft Case", templateKey: "foresightV2Aircraft", status: "deployed", issueTemplateItemIds: ["fv2-fpv-antennas"], notes: "One FPV antenna cap is cracked but antenna tested functional." },
+      { suffix: "CHG", displayName: "ForeSight Charger Case", templateKey: "foresightCharger", status: "deployed" },
+      { suffix: "BAT-A", displayName: "ForeSight Battery Case A", templateKey: "foresightBattery", status: "deployed", batterySerials: fsBatterySerials("FS-103", "A") },
+      { suffix: "BAT-B", displayName: "ForeSight Battery Case B", templateKey: "foresightBattery", status: "deployed", batterySerials: fsBatterySerials("FS-103", "B") },
+    ],
+  },
+  {
+    unitId: "SC-201",
+    platform: "SkyCrawler",
+    beakon: "BK-5201",
+    nickname: "Crawler Seven",
+    serialNumber: "SC-2025-201",
+    missionKey: "indiana-hoosier",
+    custodian: USERS.techRaj,
+    routeReason: "Handoff to field technician",
+    narrative: "SkyCrawler kit transferred by handoff and checked out by the receiving technician.",
+    cases: [
+      { suffix: "ROVER", displayName: "SkyCrawler Rover Case", templateKey: "skycrawlerRover", status: "deployed" },
+      { suffix: "SUP", displayName: "SkyCrawler Support Case", templateKey: "skycrawlerSupport", status: "deployed" },
+      { suffix: "BAT-A", displayName: "SkyCrawler Battery Case A", templateKey: "skycrawlerBattery", status: "deployed", batterySerials: scBatterySerials("SC-201", "A") },
+      { suffix: "BAT-B", displayName: "SkyCrawler Battery Case B", templateKey: "skycrawlerBattery", status: "deployed", batterySerials: scBatterySerials("SC-201", "B") },
+    ],
+  },
+  {
+    unitId: "SC-202",
+    platform: "SkyCrawler",
+    beakon: "BK-5202",
+    nickname: "Gravel Runner",
+    serialNumber: "SC-2025-202",
+    missionKey: "ohio-emergency",
+    custodian: USERS.techJames,
+    routeReason: "Incident return after tread damage",
+    narrative: "SkyCrawler rover has a damaged left tread. Support and battery cases are already returning to hangar.",
+    cases: [
+      { suffix: "ROVER", displayName: "SkyCrawler Rover Case", templateKey: "skycrawlerRover", status: "flagged", issueTemplateItemIds: ["sc-spare-track-left", "sc-rover-system"], notes: "Left tread damaged after gravel impact; rover should not be redeployed until repaired." },
+      { suffix: "SUP", displayName: "SkyCrawler Support Case", templateKey: "skycrawlerSupport", status: "transit_in", shippingDirection: "return", shipmentStatus: "in_transit" },
+      { suffix: "BAT-A", displayName: "SkyCrawler Battery Case A", templateKey: "skycrawlerBattery", status: "transit_in", batterySerials: scBatterySerials("SC-202", "A"), shippingDirection: "return", shipmentStatus: "out_for_delivery" },
+      { suffix: "BAT-B", displayName: "SkyCrawler Battery Case B", templateKey: "skycrawlerBattery", status: "transit_in", batterySerials: scBatterySerials("SC-202", "B"), shippingDirection: "return", shipmentStatus: "in_transit" },
+    ],
+  },
+  {
+    unitId: "SC-203",
+    platform: "SkyCrawler",
+    beakon: "BK-5203",
+    nickname: "Northline",
+    serialNumber: "SC-2025-203",
+    missionKey: "upper-michigan",
+    custodian: USERS.maintNia,
+    routeReason: "Maintenance, refurb, and firmware upgrade",
+    narrative: "SkyCrawler kit has been received back at hangar and routed for refurb after a completed assignment.",
+    cases: [
+      { suffix: "ROVER", displayName: "SkyCrawler Rover Case", templateKey: "skycrawlerRover", status: "received", notes: "Received for refurb. Firmware update and camera mast inspection requested." },
+      { suffix: "SUP", displayName: "SkyCrawler Support Case", templateKey: "skycrawlerSupport", status: "received" },
+      { suffix: "BAT-A", displayName: "SkyCrawler Battery Case A", templateKey: "skycrawlerBattery", status: "received", batterySerials: scBatterySerials("SC-203", "A") },
+      { suffix: "BAT-B", displayName: "SkyCrawler Battery Case B", templateKey: "skycrawlerBattery", status: "received", batterySerials: scBatterySerials("SC-203", "B") },
+    ],
+  },
+];
+
+function siteByKey(key: string): Site {
+  const site = SITES.find((s) => s.key === key);
+  if (!site) throw new Error(`Missing seed site ${key}`);
+  return site;
+}
+
+function trackingFor(index: number): string {
+  return FEDEX_TRACKING_NUMBERS[index % FEDEX_TRACKING_NUMBERS.length];
+}
+
+function unitDisplayName(scenario: Scenario): string {
+  const nickname = scenario.nickname ? ` "${scenario.nickname}"` : "";
+  const registration = scenario.faaRegistration ? ` (${scenario.faaRegistration})` : "";
+  return `${scenario.unitId}${nickname}${registration}`;
+}
+
+function caseLocation(spec: CaseSpec, site: Site, index: number) {
+  if (spec.status === "assembled" || spec.status === "hangar") {
+    return {
+      lat: offset(HQ.lat, index % 5, 0.0012),
+      lng: offset(HQ.lng, index % 5, 0.0012),
+      locationName: `${HQ.name} - Staging Bay ${1 + (index % 4)}`,
+    };
+  }
+
+  if (spec.status === "received") {
+    return {
+      lat: offset(HQ.lat, index % 5, 0.001),
+      lng: offset(HQ.lng, index % 5, 0.001),
+      locationName: `${HQ.name} - Receiving Dock`,
+    };
+  }
+
+  if (spec.status === "transit_out") {
+    return {
+      lat: HQ.lat + (site.lat - HQ.lat) * 0.55 + (index % 3) * 0.05,
+      lng: HQ.lng + (site.lng - HQ.lng) * 0.55 - (index % 3) * 0.05,
+      locationName: "In Transit - FedEx outbound network",
+    };
+  }
+
+  if (spec.status === "transit_in") {
+    return {
+      lat: HQ.lat + (site.lat - HQ.lat) * 0.45 - (index % 3) * 0.04,
+      lng: HQ.lng + (site.lng - HQ.lng) * 0.45 + (index % 3) * 0.04,
+      locationName: "In Transit - FedEx return network",
+    };
+  }
+
+  return {
+    lat: offset(site.lat, index % 5, 0.007),
+    lng: offset(site.lng, index % 5, 0.009),
+    locationName: site.name,
+  };
+}
+
+function materializeManifestName(itemDef: TemplateItem, scenario: Scenario, spec: CaseSpec): string {
+  const id = itemDef.id;
+  if (id === "fv1-aircraft-system" || id === "fv2-aircraft-system") {
+    return `${scenario.unitId} ForeSight ${scenario.version} inspection system`;
+  }
+  if (id === "fv1-aircraft-beakon" || id === "fv2-aircraft-beakon") {
+    return `${scenario.beakon} Beakon paired with ${scenario.unitId}`;
+  }
+  if (id === "gsc-rtk-beakon") {
+    return `${scenario.beakon}-RTK RTK Beakon assigned to ${scenario.unitId} kit`;
+  }
+  if (id === "sc-rover-system") {
+    return `${scenario.unitId} SkyCrawler rover inspection system`;
+  }
+  if (id === "sc-rover-beakon") {
+    return `${scenario.beakon} Beakon paired with ${scenario.unitId}`;
+  }
+  const batteryIndex = ["fs-battery-1", "fs-battery-2", "fs-battery-3", "fs-battery-4", "sc-battery-1", "sc-battery-2", "sc-battery-3", "sc-battery-4"].indexOf(id);
+  if (batteryIndex >= 0 && spec.batterySerials?.[batteryIndex % 4]) {
+    return `${spec.batterySerials[batteryIndex % 4]} ${itemDef.name}`;
+  }
+  if (id === "fs-charger-main") {
+    return `${scenario.unitId}-CHG-01 ForeSight battery charger`;
+  }
+  if (id === "sc-support-charger") {
+    return `${scenario.unitId}-CHG-01 SkyCrawler multi-bay charger`;
+  }
+  return itemDef.name;
+}
+
+function manifestStatusFor(itemDef: TemplateItem, scenario: Scenario, spec: CaseSpec): ManifestStatus {
+  if (spec.status === "hangar") return "unchecked";
+  if (spec.issueTemplateItemIds?.includes(itemDef.id)) return "damaged";
+  if (scenario.unitId === "FS-103" && itemDef.id === "fv2-fpv-antennas") return "damaged";
+  if (scenario.unitId === "SC-203" && itemDef.id === "sc-camera-mast") return "damaged";
+  return "ok";
+}
+
+function manifestNotesFor(itemDef: TemplateItem, scenario: Scenario, spec: CaseSpec, status: ManifestStatus): string | undefined {
+  if (itemDef.id === "fv1-aircraft-beakon" || itemDef.id === "fv2-aircraft-beakon" || itemDef.id === "sc-rover-beakon") {
+    return `Permanent association: ${scenario.beakon} remains paired with ${scenario.unitId}.`;
+  }
+  if (itemDef.id === "gsc-rtk-beakon") {
+    return `RTK Beakon recorded during QC for ${scenario.unitId}.`;
+  }
+  if (spec.batterySerials && itemDef.id.includes("battery-")) {
+    return "Serial verified, terminals covered, no swelling observed.";
+  }
+  if (status === "damaged" && scenario.unitId === "FS-103") {
+    return "Antenna cap cracked; RF check passed. Next pilot should monitor during setup.";
+  }
+  if (status === "damaged" && scenario.unitId === "SC-202") {
+    return "Incident return: left tread damage documented before shipment to hangar.";
+  }
+  if (status === "damaged" && scenario.unitId === "SC-203") {
+    return "Camera mast has excess play; refurb ticket opened.";
+  }
+  return itemDef.notes;
+}
+
+function inspectionStatusFor(caseStatus: CaseStatus, damagedItems: number, checkedItems: number, totalItems: number): InspectionStatus {
+  if (caseStatus === "flagged" || damagedItems > 0) return "flagged";
+  if (caseStatus === "transit_out" || caseStatus === "transit_in") return "pending";
+  if (checkedItems < totalItems) return "in_progress";
+  return "completed";
+}
+
+function scanContextFor(scanType: ScanType): string {
+  return scanType;
+}
 
 export const seedDatabase = internalMutation({
   args: {
-    /** When true, delete all existing rows in seeded tables before inserting. */
     clearExisting: v.optional(v.boolean()),
   },
 
@@ -179,17 +760,30 @@ export const seedDatabase = internalMutation({
     const now = Date.now();
     const stats: Record<string, number> = {};
 
-    // ── 0. Optionally clear existing seed data ──────────────────────────────
-
     if (args.clearExisting) {
       const tables = [
-        "featureFlags", "caseTemplates", "missions", "turbines", "cases",
-        "manifestItems", "inspections", "shipments", "events", "custodyRecords",
-        "scans", "checklist_updates", "damage_reports", "notifications",
+        "featureFlags",
+        "caseTemplates",
+        "units",
+        "outboundShipments",
+        "missions",
+        "turbines",
+        "cases",
+        "manifestItems",
+        "inspections",
+        "shipments",
+        "shipping_updates",
+        "events",
+        "custodyRecords",
+        "custody_handoffs",
+        "scans",
+        "scan_events",
+        "checklist_updates",
+        "damage_reports",
+        "notifications",
       ] as const;
 
       for (const table of tables) {
-        // Convex doesn't support TRUNCATE; iterate + delete
         const rows = await ctx.db.query(table).collect();
         for (const row of rows) {
           await ctx.db.delete(row._id);
@@ -197,1050 +791,659 @@ export const seedDatabase = internalMutation({
       }
     }
 
-    // ── 1. Feature flags ────────────────────────────────────────────────────
-
-    const flagDefs = [
-      { key: "FF_AUDIT_HASH_CHAIN", enabled: true,  description: "Hash-chain tamper detection on T5 audit panel" },
-      { key: "FF_MAP_MISSION",      enabled: true,  description: "M5 Mission Control map mode" },
-      { key: "FF_INV_REDESIGN",     enabled: true,  description: "INVENTORY redesign (§0–§25) UI" },
+    const flags = [
+      { key: "FF_AUDIT_HASH_CHAIN", enabled: true, description: "Hash-chain tamper detection on T5 audit panel" },
+      { key: "FF_MAP_MISSION", enabled: true, description: "M5 Mission Control map mode" },
+      { key: "FF_INV_REDESIGN", enabled: true, description: "INVENTORY redesign UI" },
     ];
 
-    for (const flag of flagDefs) {
+    for (const flag of flags) {
       await ctx.db.insert("featureFlags", { ...flag, updatedAt: now });
     }
-    stats.featureFlags = flagDefs.length;
+    stats.featureFlags = flags.length;
 
-    // ── 2. Case templates ────────────────────────────────────────────────────
-
-    const templateDroneId = await ctx.db.insert("caseTemplates", {
-      name: "Drone Inspection Kit",
-      description: "Full DJI Matrice 300 RTK kit for turbine blade and tower inspection missions. Includes drone, batteries, controller, tablet, spare props, charging station, and required safety/documentation items.",
-      isActive: true,
-      items: TEMPLATE_ITEMS.droneInspectionKit,
-      createdAt: daysAgo(120),
-      updatedAt: daysAgo(14),
-    });
-
-    const templateSensorId = await ctx.db.insert("caseTemplates", {
-      name: "Sensor Array Package",
-      description: "Thermal + LiDAR sensor payload bundle with data logging hardware. Used when attaching advanced sensor suites to the drone platform for multi-spectral blade defect analysis.",
-      isActive: true,
-      items: TEMPLATE_ITEMS.sensorArrayPackage,
-      createdAt: daysAgo(90),
-      updatedAt: daysAgo(7),
-    });
-
-    const templateSafetyId = await ctx.db.insert("caseTemplates", {
-      name: "Safety & PPE Kit",
-      description: "Complete ANSI-compliant personal protective equipment set for field operations. Mandatory issue to all field technicians and pilots before site access.",
-      isActive: true,
-      items: TEMPLATE_ITEMS.safetyPPEKit,
-      createdAt: daysAgo(180),
-      updatedAt: daysAgo(30),
-    });
-
-    const templateDocId = await ctx.db.insert("caseTemplates", {
-      name: "Documentation Station",
-      description: "Laptop, mirrorless camera, and supporting peripherals for on-site inspection documentation, report authoring, and stakeholder deliverables.",
-      isActive: true,
-      items: TEMPLATE_ITEMS.documentationStation,
-      createdAt: daysAgo(60),
-      updatedAt: daysAgo(5),
-    });
-
-    const templateRepairId = await ctx.db.insert("caseTemplates", {
-      name: "Emergency Repair Kit",
-      description: "Field repair consumables and tools for on-site drone maintenance. Dispatched when a unit sustains field damage that can be resolved without return to depot.",
-      isActive: true,
-      items: TEMPLATE_ITEMS.emergencyRepairKit,
-      createdAt: daysAgo(45),
-      updatedAt: daysAgo(10),
-    });
-
-    stats.caseTemplates = 5;
-
-    // ── 3. Missions ──────────────────────────────────────────────────────────
-
-    const mission1Id = await ctx.db.insert("missions", {
-      name: "Lake Michigan Offshore Pilot Q2",
-      description: "Spring offshore wind farm inspection campaign. 24 turbines in the proposed Lake Michigan Offshore Wind Energy Area. Priority on blade leading-edge erosion assessment.",
-      status: "active",
-      lat: SITES.lakeMichigan.lat,
-      lng: SITES.lakeMichigan.lng,
-      locationName: SITES.lakeMichigan.name,
-      startDate: daysAgo(14),
-      endDate: daysFromNow(21),
-      leadId: "seed_usr_pilot_marc",
-      leadName: "Marcus Brown",
-      createdAt: daysAgo(30),
-      updatedAt: daysAgo(1),
-    });
-
-    const mission2Id = await ctx.db.insert("missions", {
-      name: "Illinois Prairie Wind Survey",
-      description: "Annual preventive maintenance inspection for the 68-turbine Heartland Wind Farm in McLean County. Includes nacelle access and blade root inspections.",
-      status: "active",
-      lat: SITES.illinoisPrairie.lat,
-      lng: SITES.illinoisPrairie.lng,
-      locationName: SITES.illinoisPrairie.name,
-      startDate: daysAgo(7),
-      endDate: daysFromNow(28),
-      leadId: "seed_usr_tech_alice",
-      leadName: "Alice Chen",
-      createdAt: daysAgo(21),
-      updatedAt: daysAgo(2),
-    });
-
-    const mission3Id = await ctx.db.insert("missions", {
-      name: "Lake Erie Basin Inspection",
-      description: "Completed Q1 inspection of 45 offshore turbines in the Lake Erie Energy Development Zone. All blades assessed; 3 units flagged for leading-edge repair.",
-      status: "completed",
-      lat: SITES.lakeErie.lat,
-      lng: SITES.lakeErie.lng,
-      locationName: SITES.lakeErie.name,
-      startDate: daysAgo(90),
-      endDate: daysAgo(45),
-      leadId: "seed_usr_pilot_emma",
-      leadName: "Emma Lundström",
-      createdAt: daysAgo(120),
-      updatedAt: daysAgo(45),
-    });
-
-    const mission4Id = await ctx.db.insert("missions", {
-      name: "Indiana Hoosier Wind Fleet",
-      description: "Multi-week inspection contract for the Hoosier Energy Cooperative 52-turbine fleet across Tipton, Clinton, and Benton counties. Includes gearbox vibration sensing.",
-      status: "active",
-      lat: SITES.indianaHoosier.lat,
-      lng: SITES.indianaHoosier.lng,
-      locationName: SITES.indianaHoosier.name,
-      startDate: daysAgo(3),
-      endDate: daysFromNow(35),
-      leadId: "seed_usr_tech_raj",
-      leadName: "Raj Patel",
-      createdAt: daysAgo(14),
-      updatedAt: now,
-    });
-
-    const mission5Id = await ctx.db.insert("missions", {
-      name: "Upper Michigan Legacy Fleet",
-      description: "Planned inspection of aging Marquette County turbine fleet. Assets 15–25 years old; focus on structural integrity and blade delamination. Awaiting site access permits.",
-      status: "planning",
-      lat: SITES.upperMichigan.lat,
-      lng: SITES.upperMichigan.lng,
-      locationName: SITES.upperMichigan.name,
-      startDate: daysFromNow(30),
-      endDate: daysFromNow(70),
-      leadId: "seed_usr_ops_mgr",
-      leadName: "Morgan Reeves",
-      createdAt: daysAgo(7),
-      updatedAt: daysAgo(2),
-    });
-
-    const mission6Id = await ctx.db.insert("missions", {
-      name: "Emergency Repair Delta Site",
-      description: "Unplanned dispatch to Sandusky OH after a lightning strike damaged 2 turbines. Emergency repair teams on-site; drone survey required for damage extent assessment.",
-      status: "active",
-      lat: SITES.ohioEmergency.lat,
-      lng: SITES.ohioEmergency.lng,
-      locationName: SITES.ohioEmergency.name,
-      startDate: daysAgo(2),
-      endDate: daysFromNow(5),
-      leadId: "seed_usr_tech_james",
-      leadName: "James Okafor",
-      createdAt: daysAgo(3),
-      updatedAt: now,
-    });
-
-    stats.missions = 6;
-
-    // ── 4. Turbines (40 total across all sites) ──────────────────────────────
-
-    const turbineRows: Array<{
-      name: string; lat: number; lng: number;
-      missionId?: Id<"missions">; siteCode: string;
-      status: "active" | "inactive" | "decommissioned";
-      hubHeight: number; rotorDiameter: number;
-    }> = [];
-
-    // Lake Michigan (8 turbines)
-    for (let i = 1; i <= 8; i++) {
-      turbineRows.push({
-        name: `LMO-T${String(i).padStart(3, "0")}`,
-        lat: jitter(SITES.lakeMichigan.lat, 0.08),
-        lng: jitter(SITES.lakeMichigan.lng, 0.12),
-        missionId: mission1Id,
-        siteCode: "LMO",
-        status: i <= 6 ? "active" : "inactive",
-        hubHeight: 95 + Math.floor(Math.random() * 15),
-        rotorDiameter: 126 + Math.floor(Math.random() * 20),
+    const templateIds = {} as Record<TemplateKey, Id<"caseTemplates">>;
+    for (const template of TEMPLATE_DEFS) {
+      templateIds[template.key] = await ctx.db.insert("caseTemplates", {
+        name: template.name,
+        description: template.description,
+        isActive: true,
+        items: TEMPLATE_ITEMS[template.key],
+        createdAt: daysAgo(now, 120),
+        updatedAt: daysAgo(now, 1),
       });
     }
+    stats.caseTemplates = TEMPLATE_DEFS.length;
 
-    // Illinois Prairie (8 turbines)
-    for (let i = 1; i <= 8; i++) {
-      turbineRows.push({
-        name: `IPW-T${String(i).padStart(3, "0")}`,
-        lat: jitter(SITES.illinoisPrairie.lat, 0.12),
-        lng: jitter(SITES.illinoisPrairie.lng, 0.15),
-        missionId: mission2Id,
-        siteCode: "IPW",
-        status: "active",
-        hubHeight: 80 + Math.floor(Math.random() * 20),
-        rotorDiameter: 117 + Math.floor(Math.random() * 25),
+    const missionIds = new Map<string, Id<"missions">>();
+    for (const site of SITES) {
+      const missionId = await ctx.db.insert("missions", {
+        name: site.missionName,
+        description: site.description,
+        status: site.status,
+        lat: site.lat,
+        lng: site.lng,
+        locationName: site.name,
+        startDate: site.status === "planning" ? daysFromNow(now, 10) : daysAgo(now, 20),
+        endDate: site.status === "completed" ? daysAgo(now, 2) : daysFromNow(now, 30),
+        leadId: site.lead.id,
+        leadName: site.lead.name,
+        createdAt: daysAgo(now, 45),
+        updatedAt: daysAgo(now, site.status === "completed" ? 2 : 1),
       });
+      missionIds.set(site.key, missionId);
     }
+    stats.missions = missionIds.size;
 
-    // Lake Erie Basin (7 turbines — completed mission, still tracked)
-    for (let i = 1; i <= 7; i++) {
-      turbineRows.push({
-        name: `LEB-T${String(i).padStart(3, "0")}`,
-        lat: jitter(SITES.lakeErie.lat, 0.06),
-        lng: jitter(SITES.lakeErie.lng, 0.10),
-        missionId: mission3Id,
-        siteCode: "LEB",
-        status: i <= 4 ? "active" : "inactive",
-        hubHeight: 90 + Math.floor(Math.random() * 10),
-        rotorDiameter: 130,
+    const unitIds = new Map<string, Id<"units">>();
+    for (const scenario of SCENARIOS) {
+      const missionId = missionIds.get(scenario.missionKey);
+      const unitId = await ctx.db.insert("units", {
+        unitId: scenario.unitId,
+        assetType: scenario.platform === "ForeSight" ? "aircraft" : "rover",
+        platform: scenario.platform,
+        version: scenario.version,
+        nickname: scenario.nickname,
+        faaRegistration: scenario.faaRegistration,
+        pairedBeakon: scenario.beakon,
+        serialNumber: scenario.serialNumber,
+        homeBase: HQ.name,
+        currentMissionId: missionId,
+        notes: scenario.narrative,
+        createdAt: daysAgo(now, 120),
+        updatedAt: daysAgo(now, 1),
       });
+      unitIds.set(scenario.unitId, unitId);
     }
+    stats.units = unitIds.size;
 
-    // Indiana Hoosier (7 turbines)
-    for (let i = 1; i <= 7; i++) {
-      turbineRows.push({
-        name: `IHW-T${String(i).padStart(3, "0")}`,
-        lat: jitter(SITES.indianaHoosier.lat, 0.10),
-        lng: jitter(SITES.indianaHoosier.lng, 0.12),
-        missionId: mission4Id,
-        siteCode: "IHW",
-        status: "active",
-        hubHeight: 85 + Math.floor(Math.random() * 15),
-        rotorDiameter: 120 + Math.floor(Math.random() * 15),
-      });
+    let turbineCount = 0;
+    for (const site of SITES.filter((s) => s.key !== "ann-arbor-staging")) {
+      for (let i = 1; i <= 4; i++) {
+        await ctx.db.insert("turbines", {
+          name: `${site.siteCode}-T${String(i).padStart(3, "0")}`,
+          lat: offset(site.lat, i, 0.012),
+          lng: offset(site.lng, i, 0.014),
+          missionId: missionIds.get(site.key),
+          siteCode: site.siteCode,
+          status: site.status === "completed" ? "inactive" : "active",
+          hubHeight: 85 + i * 4,
+          rotorDiameter: 118 + i * 3,
+          createdAt: daysAgo(now, 180),
+          updatedAt: daysAgo(now, i),
+        });
+        turbineCount++;
+      }
     }
+    stats.turbines = turbineCount;
 
-    // Upper Michigan (5 turbines — legacy/planning)
-    for (let i = 1; i <= 5; i++) {
-      turbineRows.push({
-        name: `UML-T${String(i).padStart(3, "0")}`,
-        lat: jitter(SITES.upperMichigan.lat, 0.08),
-        lng: jitter(SITES.upperMichigan.lng, 0.10),
-        missionId: mission5Id,
-        siteCode: "UML",
-        status: i <= 3 ? "active" : "decommissioned",
-        hubHeight: 65 + Math.floor(Math.random() * 20),
-        rotorDiameter: 80 + Math.floor(Math.random() * 20),
-      });
-    }
+    const seededCases: SeededCase[] = [];
+    let caseIndex = 0;
 
-    // Emergency Delta Site (5 turbines)
-    for (let i = 1; i <= 5; i++) {
-      turbineRows.push({
-        name: `EDS-T${String(i).padStart(3, "0")}`,
-        lat: jitter(SITES.ohioEmergency.lat, 0.05),
-        lng: jitter(SITES.ohioEmergency.lng, 0.07),
-        missionId: mission6Id,
-        siteCode: "EDS",
-        status: i <= 3 ? "active" : "inactive",
-        hubHeight: 78 + Math.floor(Math.random() * 12),
-        rotorDiameter: 112 + Math.floor(Math.random() * 18),
-      });
-    }
+    for (const scenario of SCENARIOS) {
+      const site = siteByKey(scenario.missionKey);
+      const missionId = missionIds.get(site.key);
+      if (!missionId) throw new Error(`Missing mission for ${site.key}`);
+      const unitId = unitIds.get(scenario.unitId);
+      if (!unitId) throw new Error(`Missing unit for ${scenario.unitId}`);
 
-    for (const t of turbineRows) {
-      await ctx.db.insert("turbines", {
-        name: t.name,
-        lat: t.lat,
-        lng: t.lng,
-        missionId: t.missionId,
-        siteCode: t.siteCode,
-        status: t.status,
-        hubHeight: t.hubHeight,
-        rotorDiameter: t.rotorDiameter,
-        createdAt: daysAgo(180),
-        updatedAt: daysAgo(Math.floor(Math.random() * 30)),
-      });
-    }
-    stats.turbines = turbineRows.length;
+      for (const spec of scenario.cases) {
+        caseIndex++;
+        const label = `${scenario.unitId}-${spec.suffix}`;
+        const qrCode = `SCAN:${label}:${scenario.beakon}`;
+        const location = caseLocation(spec, site, caseIndex);
+        const trackingNumber = spec.shippingDirection ? trackingFor(caseIndex) : undefined;
+        const destinationName = spec.shippingDirection === "outbound" ? site.name : HQ.name;
+        const destinationLat = spec.shippingDirection === "outbound" ? site.lat : HQ.lat;
+        const destinationLng = spec.shippingDirection === "outbound" ? site.lng : HQ.lng;
 
-    // ── 5. Cases (50 total) ──────────────────────────────────────────────────
-
-    /**
-     * Case distribution across lifecycle statuses:
-     *   hangar:      8  (stored in warehouse, not yet assembled)
-     *   assembled:   7  (packed and ready to ship)
-     *   transit_out: 5  (en route to field site)
-     *   deployed:    14 (actively in use at a site)
-     *   flagged:     4  (has outstanding issues)
-     *   transit_in:  4  (returning to base)
-     *   received:    5  (back at base, awaiting teardown)
-     *   archived:    3  (decommissioned)
-     */
-
-    const caseIds: Id<"cases">[] = [];
-
-    // Helper to insert a case and record its ID
-    const insertCase = async (data: Parameters<typeof ctx.db.insert<"cases">>[1]) => {
-      const id = await ctx.db.insert("cases", data);
-      caseIds.push(id);
-      return id;
-    };
-
-    // ── Hangar cases (CASE-001 through CASE-008) ────────────────────────────
-
-    for (let i = 1; i <= 8; i++) {
-      await insertCase({
-        label: `CASE-${String(i).padStart(3, "0")}`,
-        qrCode: `SKY:CASE-${String(i).padStart(3, "0")}:${(1000000 + i).toString(36).toUpperCase()}`,
-        qrCodeSource: "generated",
-        status: "hangar",
-        templateId: [templateDroneId, templateSafetyId, templateDocId, templateRepairId, templateSensorId, templateDroneId, templateSafetyId, templateDocId][i - 1],
-        lat: jitter(HQ.lat, 0.005),
-        lng: jitter(HQ.lng, 0.005),
-        locationName: `${HQ.name} — Bay ${i}`,
-        notes: i === 3 ? "Awaiting replacement battery — on order from DJI" : undefined,
-        createdAt: daysAgo(180 - i * 5),
-        updatedAt: daysAgo(30 - i),
-      });
-    }
-
-    // ── Assembled cases (CASE-009 through CASE-015) ─────────────────────────
-
-    const assembledTemplates = [templateDroneId, templateSensorId, templateSafetyId, templateDocId, templateRepairId, templateDroneId, templateSensorId];
-    for (let i = 9; i <= 15; i++) {
-      await insertCase({
-        label: `CASE-${String(i).padStart(3, "0")}`,
-        qrCode: `SKY:CASE-${String(i).padStart(3, "0")}:${(1000000 + i).toString(36).toUpperCase()}`,
-        qrCodeSource: "generated",
-        status: "assembled",
-        templateId: assembledTemplates[i - 9],
-        lat: jitter(HQ.lat, 0.005),
-        lng: jitter(HQ.lng, 0.005),
-        locationName: `${HQ.name} — Staging Area`,
-        assigneeId: pick(USERS.filter(u => u.role === "logistics")).id,
-        assigneeName: pick(USERS.filter(u => u.role === "logistics")).name,
-        createdAt: daysAgo(60 - i),
-        updatedAt: daysAgo(5),
-      });
-    }
-
-    // ── Transit Out cases (CASE-016 through CASE-020) ───────────────────────
-
-    const transitOutDestinations = [
-      { missionId: mission1Id, site: SITES.lakeMichigan, assignee: USERS[6] },
-      { missionId: mission2Id, site: SITES.illinoisPrairie, assignee: USERS[1] },
-      { missionId: mission4Id, site: SITES.indianaHoosier, assignee: USERS[2] },
-      { missionId: mission6Id, site: SITES.ohioEmergency, assignee: USERS[4] },
-      { missionId: mission2Id, site: SITES.illinoisPrairie, assignee: USERS[3] },
-    ];
-
-    const transitOutCaseIds: Id<"cases">[] = [];
-
-    for (let i = 16; i <= 20; i++) {
-      const dest = transitOutDestinations[i - 16];
-      const trackingNum = FEDEX_TRACKING_NUMBERS[i - 16];
-      const shippedAt = daysAgo(2 - (i - 16) * 0.3);
-      const caseId = await insertCase({
-        label: `CASE-${String(i).padStart(3, "0")}`,
-        qrCode: `SKY:CASE-${String(i).padStart(3, "0")}:${(1000000 + i).toString(36).toUpperCase()}`,
-        qrCodeSource: "generated",
-        status: "transit_out",
-        templateId: pick([templateDroneId, templateSensorId, templateRepairId]),
-        missionId: dest.missionId,
-        lat: jitter(HQ.lat + (dest.site.lat - HQ.lat) * 0.4, 0.3),
-        lng: jitter(HQ.lng + (dest.site.lng - HQ.lng) * 0.4, 0.4),
-        locationName: "In Transit — FedEx Ground Network",
-        assigneeId: dest.assignee.id,
-        assigneeName: dest.assignee.name,
-        trackingNumber: trackingNum,
-        carrier: "FedEx",
-        shippedAt,
-        destinationName: dest.site.name,
-        destinationLat: dest.site.lat,
-        destinationLng: dest.site.lng,
-        createdAt: daysAgo(30 - (i - 16)),
-        updatedAt: shippedAt,
-      });
-      transitOutCaseIds.push(caseId);
-    }
-
-    // ── Deployed cases (CASE-021 through CASE-034) ──────────────────────────
-
-    const deployedSites = [
-      { missionId: mission1Id, site: SITES.lakeMichigan, assignee: USERS[6] },
-      { missionId: mission1Id, site: SITES.lakeMichigan, assignee: USERS[1] },
-      { missionId: mission2Id, site: SITES.illinoisPrairie, assignee: USERS[1] },
-      { missionId: mission2Id, site: SITES.illinoisPrairie, assignee: USERS[3] },
-      { missionId: mission2Id, site: SITES.illinoisPrairie, assignee: USERS[5] },
-      { missionId: mission4Id, site: SITES.indianaHoosier, assignee: USERS[2] },
-      { missionId: mission4Id, site: SITES.indianaHoosier, assignee: USERS[5] },
-      { missionId: mission4Id, site: SITES.indianaHoosier, assignee: USERS[4] },
-      { missionId: mission6Id, site: SITES.ohioEmergency, assignee: USERS[4] },
-      { missionId: mission6Id, site: SITES.ohioEmergency, assignee: USERS[3] },
-      { missionId: mission1Id, site: SITES.lakeMichigan, assignee: USERS[5] },
-      { missionId: mission2Id, site: SITES.illinoisPrairie, assignee: USERS[2] },
-      { missionId: mission4Id, site: SITES.indianaHoosier, assignee: USERS[1] },
-      { missionId: mission6Id, site: SITES.ohioEmergency, assignee: USERS[6] },
-    ];
-
-    const deployedCaseIds: Id<"cases">[] = [];
-
-    for (let i = 21; i <= 34; i++) {
-      const si = i - 21;
-      const site = deployedSites[si];
-      const caseId = await insertCase({
-        label: `CASE-${String(i).padStart(3, "0")}`,
-        qrCode: `SKY:CASE-${String(i).padStart(3, "0")}:${(1000000 + i).toString(36).toUpperCase()}`,
-        qrCodeSource: "generated",
-        status: "deployed",
-        templateId: [
-          templateDroneId, templateSensorId, templateDroneId, templateSafetyId,
-          templateDocId, templateDroneId, templateSensorId, templateRepairId,
-          templateDroneId, templateSensorId, templateDroneId, templateSafetyId,
-          templateDocId, templateRepairId,
-        ][si],
-        missionId: site.missionId,
-        lat: jitter(site.site.lat, 0.05),
-        lng: jitter(site.site.lng, 0.06),
-        locationName: site.site.name,
-        assigneeId: site.assignee.id,
-        assigneeName: site.assignee.name,
-        createdAt: daysAgo(90 - si * 2),
-        updatedAt: daysAgo(Math.floor(Math.random() * 5)),
-      });
-      deployedCaseIds.push(caseId);
-    }
-
-    // ── Flagged cases (CASE-035 through CASE-038) ────────────────────────────
-
-    const flaggedReasons = [
-      "Battery swelling detected during pre-flight check — unit grounded pending inspection",
-      "Controller firmware update failed mid-mission — cannot reconnect",
-      "Thermal sensor mounting arm cracked on landing — needs depot repair",
-      "SD card corruption — multiple flights lost; under investigation",
-    ];
-
-    const flaggedCaseIds: Id<"cases">[] = [];
-
-    for (let i = 35; i <= 38; i++) {
-      const si = i - 35;
-      const site = [
-        { missionId: mission1Id, site: SITES.lakeMichigan, assignee: USERS[1] },
-        { missionId: mission2Id, site: SITES.illinoisPrairie, assignee: USERS[3] },
-        { missionId: mission4Id, site: SITES.indianaHoosier, assignee: USERS[2] },
-        { missionId: mission6Id, site: SITES.ohioEmergency, assignee: USERS[4] },
-      ][si];
-      const caseId = await insertCase({
-        label: `CASE-${String(i).padStart(3, "0")}`,
-        qrCode: `SKY:CASE-${String(i).padStart(3, "0")}:${(1000000 + i).toString(36).toUpperCase()}`,
-        qrCodeSource: "generated",
-        status: "flagged",
-        templateId: pick([templateDroneId, templateSensorId]),
-        missionId: site.missionId,
-        lat: jitter(site.site.lat, 0.04),
-        lng: jitter(site.site.lng, 0.04),
-        locationName: site.site.name,
-        assigneeId: site.assignee.id,
-        assigneeName: site.assignee.name,
-        notes: flaggedReasons[si],
-        createdAt: daysAgo(40 - si * 3),
-        updatedAt: daysAgo(1),
-      });
-      flaggedCaseIds.push(caseId);
-    }
-
-    // ── Transit In cases (CASE-039 through CASE-042) ─────────────────────────
-
-    const transitInCaseIds: Id<"cases">[] = [];
-
-    for (let i = 39; i <= 42; i++) {
-      const si = i - 39;
-      const trackingNum = FEDEX_TRACKING_NUMBERS[5 + si];
-      const shippedAt = daysAgo(1 + si * 0.5);
-      const caseId = await insertCase({
-        label: `CASE-${String(i).padStart(3, "0")}`,
-        qrCode: `SKY:CASE-${String(i).padStart(3, "0")}:${(1000000 + i).toString(36).toUpperCase()}`,
-        qrCodeSource: "generated",
-        status: "transit_in",
-        templateId: pick([templateDroneId, templateSensorId]),
-        lat: jitter(HQ.lat + (SITES.lakeErie.lat - HQ.lat) * 0.5, 0.2),
-        lng: jitter(HQ.lng + (SITES.lakeErie.lng - HQ.lng) * 0.5, 0.3),
-        locationName: "In Transit — FedEx Ground Network (Return)",
-        assigneeId: USERS[7].id,
-        assigneeName: USERS[7].name,
-        trackingNumber: trackingNum,
-        carrier: "FedEx",
-        shippedAt,
-        destinationName: HQ.name,
-        destinationLat: HQ.lat,
-        destinationLng: HQ.lng,
-        createdAt: daysAgo(60 - si * 5),
-        updatedAt: shippedAt,
-      });
-      transitInCaseIds.push(caseId);
-    }
-
-    // ── Received cases (CASE-043 through CASE-047) ───────────────────────────
-
-    const receivedCaseIds: Id<"cases">[] = [];
-
-    for (let i = 43; i <= 47; i++) {
-      const caseId = await insertCase({
-        label: `CASE-${String(i).padStart(3, "0")}`,
-        qrCode: `SKY:CASE-${String(i).padStart(3, "0")}:${(1000000 + i).toString(36).toUpperCase()}`,
-        qrCodeSource: "generated",
-        status: "received",
-        templateId: pick([templateDroneId, templateSensorId, templateSafetyId, templateDocId]),
-        lat: jitter(HQ.lat, 0.005),
-        lng: jitter(HQ.lng, 0.005),
-        locationName: `${HQ.name} — Receiving Dock`,
-        assigneeId: USERS[7].id,
-        assigneeName: USERS[7].name,
-        createdAt: daysAgo(90 - (i - 43) * 10),
-        updatedAt: daysAgo(3 + (i - 43)),
-      });
-      receivedCaseIds.push(caseId);
-    }
-
-    // ── Archived cases (CASE-048 through CASE-050) ───────────────────────────
-
-    for (let i = 48; i <= 50; i++) {
-      await insertCase({
-        label: `CASE-${String(i).padStart(3, "0")}`,
-        qrCode: `SKY:CASE-${String(i).padStart(3, "0")}:${(1000000 + i).toString(36).toUpperCase()}`,
-        qrCodeSource: "generated",
-        status: "archived",
-        templateId: templateDroneId,
-        lat: jitter(HQ.lat, 0.005),
-        lng: jitter(HQ.lng, 0.005),
-        locationName: `${HQ.name} — Archive Storage`,
-        notes: ["Unit total loss — crash during storm at Lake Erie Site (Q4 prior year)",
-                 "Beyond economic repair — frame corrosion after 3 seasons",
-                 "Replaced by CASE-002 — end of service life"][i - 48],
-        createdAt: daysAgo(365 - (i - 48) * 60),
-        updatedAt: daysAgo(60 + (i - 48) * 20),
-      });
-    }
-
-    stats.cases = caseIds.length;
-
-    // ── 6. Manifest items ─────────────────────────────────────────────────────
-
-    let manifestItemCount = 0;
-
-    // Build manifest items for all 50 cases
-    // We need to look up each case's templateId and insert the appropriate items.
-    // Re-read the cases we just inserted (they have known IDs in caseIds array).
-
-    // Predefine template items map for lookup
-    const templateItemsMap = new Map<string, typeof TEMPLATE_ITEMS.droneInspectionKit>([
-      [templateDroneId,   TEMPLATE_ITEMS.droneInspectionKit],
-      [templateSensorId,  TEMPLATE_ITEMS.sensorArrayPackage],
-      [templateSafetyId,  TEMPLATE_ITEMS.safetyPPEKit],
-      [templateDocId,     TEMPLATE_ITEMS.documentationStation],
-      [templateRepairId,  TEMPLATE_ITEMS.emergencyRepairKit],
-    ]);
-
-    // We need to associate manifest items with cases. Load each case to get its templateId.
-    const allCases = await Promise.all(caseIds.map(id => ctx.db.get(id)));
-
-    // manifestItemId lookup: caseId → Map<templateItemId, manifestItemId>
-    const caseManifestMap = new Map<Id<"cases">, Map<string, Id<"manifestItems">>>();
-
-    for (const c of allCases) {
-      if (!c || !c.templateId) continue;
-      const items = templateItemsMap.get(c.templateId as string);
-      if (!items) continue;
-
-      const itemMap = new Map<string, Id<"manifestItems">>();
-
-      // Determine item statuses based on case status
-      const isDeployed = c.status === "deployed";
-      const isFlagged = c.status === "flagged";
-      const isCompleted = c.status === "received" || c.status === "archived";
-
-      for (const item of items) {
-        let status: "unchecked" | "ok" | "damaged" | "missing" = "unchecked";
-        let checkedAt: number | undefined;
-        let checkedById: string | undefined;
-        let checkedByName: string | undefined;
-        let notes: string | undefined;
-
-        if (isCompleted || isDeployed) {
-          // Most items checked OK, a few damaged/missing
-          const roll = Math.random();
-          if (roll < 0.82) {
-            status = "ok";
-          } else if (roll < 0.92) {
-            status = "damaged";
-            notes = pick([
-              "Minor surface scratch",
-              "Connector bent — still functional",
-              "Case latch damaged",
-              "Label worn off",
-            ]);
-          } else if (roll < 0.97) {
-            status = "missing";
-            notes = "Not found during inspection";
-          } else {
-            status = "unchecked";
-          }
-
-          if (status !== "unchecked") {
-            const techUser = pick(USERS.filter(u => u.role === "field_tech" || u.role === "pilot"));
-            checkedAt = daysAgo(Math.floor(Math.random() * 20) + 1);
-            checkedById = c.assigneeId ?? techUser.id;
-            checkedByName = c.assigneeName ?? techUser.name;
-          }
-        } else if (isFlagged) {
-          // Flagged cases: mix of ok and damaged
-          const roll = Math.random();
-          if (roll < 0.60) {
-            status = "ok";
-          } else if (roll < 0.88) {
-            status = "damaged";
-            notes = pick([
-              "Impact damage observed",
-              "Visible crack in housing",
-              "Bent connector pins",
-              "Scorch mark from short circuit",
-            ]);
-          } else if (roll < 0.95) {
-            status = "missing";
-          } else {
-            status = "unchecked";
-          }
-          if (status !== "unchecked") {
-            const techUser = pick(USERS.filter(u => u.role === "field_tech"));
-            checkedAt = daysAgo(2);
-            checkedById = c.assigneeId ?? techUser.id;
-            checkedByName = c.assigneeName ?? techUser.name;
-          }
-        }
-
-        const manifestItemId = await ctx.db.insert("manifestItems", {
-          caseId: c._id,
-          templateItemId: item.id,
-          name: item.name,
-          status,
-          notes,
-          checkedAt,
-          checkedById,
-          checkedByName,
+        const caseId = await ctx.db.insert("cases", {
+          label,
+          qrCode,
+          qrCodeSource: "generated",
+          status: spec.status,
+          templateId: templateIds[spec.templateKey],
+          missionId,
+          unitId,
+          lat: location.lat,
+          lng: location.lng,
+          locationName: location.locationName,
+          assigneeId: scenario.custodian.id,
+          assigneeName: scenario.custodian.name,
+          trackingNumber,
+          carrier: trackingNumber ? "FedEx" : undefined,
+          shippedAt: trackingNumber ? daysAgo(now, spec.shippingDirection === "outbound" ? 2 : 1) : undefined,
+          destinationName,
+          destinationLat,
+          destinationLng,
+          carrierStatus: spec.shipmentStatus,
+          estimatedDelivery: spec.shippingDirection ? isoDate(daysFromNow(now, spec.shippingDirection === "outbound" ? 2 : 1)) : undefined,
+          lastCarrierEvent: spec.shipmentStatus
+            ? {
+                timestamp: new Date(daysAgo(now, 1)).toISOString(),
+                eventType: spec.shipmentStatus === "out_for_delivery" ? "OD" : "IT",
+                description: spec.shipmentStatus === "out_for_delivery" ? "Out for delivery" : "In transit",
+                location: { city: spec.shippingDirection === "outbound" ? "Toledo" : "Ann Arbor", state: "MI", country: "US" },
+              }
+            : undefined,
+          qcSignOffStatus: spec.status === "flagged" ? "rejected" : "approved",
+          qcSignedOffBy: spec.status === "flagged" ? USERS.qc.id : USERS.hangarLead.id,
+          qcSignedOffByName: spec.status === "flagged" ? USERS.qc.name : USERS.hangarLead.name,
+          qcSignedOffAt: daysAgo(now, spec.status === "received" ? 12 : 4),
+          qcSignOffNotes: spec.status === "flagged" ? "Rejected for return workflow after field incident." : "QC1/QC2 checklist complete; case contents verified.",
+          notes: [scenario.narrative, spec.notes].filter(Boolean).join(" "),
+          createdAt: daysAgo(now, 35 + caseIndex),
+          updatedAt: daysAgo(now, spec.status === "received" ? 2 : 1),
         });
 
-        itemMap.set(item.id, manifestItemId);
+        seededCases.push({ id: caseId, scenario, spec, label, qrCode, status: spec.status, missionId, site, assignee: scenario.custodian });
+      }
+    }
+    stats.cases = seededCases.length;
+
+    const outboundShipmentScenarios = [
+      { unitId: "FS-101", status: "draft" as const, releasedAt: undefined },
+      { unitId: "FS-102", status: "released" as const, releasedAt: daysAgo(now, 2) },
+    ];
+    let outboundShipmentCount = 0;
+    let outboundShipmentEventCount = 0;
+
+    for (const bundle of outboundShipmentScenarios) {
+      const scenario = SCENARIOS.find((item) => item.unitId === bundle.unitId);
+      if (!scenario) continue;
+
+      const unitId = unitIds.get(scenario.unitId);
+      const site = siteByKey(scenario.missionKey);
+      const missionId = missionIds.get(site.key);
+      if (!unitId || !missionId) continue;
+
+      const bundleCases = seededCases
+        .filter((seededCase) => seededCase.scenario.unitId === scenario.unitId)
+        .map((seededCase) => seededCase.id);
+
+      const outboundShipmentId = await ctx.db.insert("outboundShipments", {
+        unitId,
+        displayName: unitDisplayName(scenario),
+        status: bundle.status,
+        originName: HQ.name,
+        destinationMissionId: missionId,
+        destinationName: site.name,
+        destinationLat: site.lat,
+        destinationLng: site.lng,
+        recipientUserId: scenario.custodian.id,
+        recipientName: scenario.custodian.name,
+        caseIds: bundleCases,
+        routeReason: scenario.routeReason,
+        notes: scenario.narrative,
+        createdBy: USERS.hangarLead.id,
+        createdByName: USERS.hangarLead.name,
+        releasedAt: bundle.releasedAt,
+        createdAt: daysAgo(now, bundle.status === "draft" ? 1 : 3),
+        updatedAt: daysAgo(now, bundle.status === "draft" ? 1 : 2),
+      });
+      outboundShipmentCount++;
+
+      for (const seededCase of seededCases.filter((item) => item.scenario.unitId === scenario.unitId)) {
+        await ctx.db.insert("events", {
+          caseId: seededCase.id,
+          eventType: bundle.status === "released" ? "shipment_released" : "shipment_created",
+          userId: USERS.hangarLead.id,
+          userName: USERS.hangarLead.name,
+          timestamp: bundle.status === "released" ? daysAgo(now, 2) : daysAgo(now, 1),
+          data: {
+            outboundShipmentId,
+            displayName: unitDisplayName(scenario),
+            routeReason: scenario.routeReason,
+            caseLabel: seededCase.label,
+          },
+        });
+        outboundShipmentEventCount++;
+      }
+    }
+    stats.outboundShipments = outboundShipmentCount;
+
+    const caseManifestMap = new Map<Id<"cases">, Map<string, Id<"manifestItems">>>();
+    let manifestItemCount = 0;
+
+    for (const seededCase of seededCases) {
+      const itemMap = new Map<string, Id<"manifestItems">>();
+      const items = TEMPLATE_ITEMS[seededCase.spec.templateKey];
+
+      for (const itemDef of items) {
+        const status = manifestStatusFor(itemDef, seededCase.scenario, seededCase.spec);
+        const checked = status !== "unchecked";
+        const manifestItemId = await ctx.db.insert("manifestItems", {
+          caseId: seededCase.id,
+          templateItemId: itemDef.id,
+          name: materializeManifestName(itemDef, seededCase.scenario, seededCase.spec),
+          status,
+          notes: manifestNotesFor(itemDef, seededCase.scenario, seededCase.spec, status),
+          photoStorageIds: status === "damaged" ? [`seed-photo-${seededCase.label}-${itemDef.id}`] : undefined,
+          checkedAt: checked ? daysAgo(now, seededCase.status === "received" ? 4 : 1) : undefined,
+          checkedById: checked ? seededCase.assignee.id : undefined,
+          checkedByName: checked ? seededCase.assignee.name : undefined,
+        });
+        itemMap.set(itemDef.id, manifestItemId);
         manifestItemCount++;
       }
 
-      caseManifestMap.set(c._id, itemMap);
+      caseManifestMap.set(seededCase.id, itemMap);
     }
-
     stats.manifestItems = manifestItemCount;
 
-    // ── 7. Inspections ───────────────────────────────────────────────────────
-
+    const caseInspectionMap = new Map<Id<"cases">, Id<"inspections">>();
     let inspectionCount = 0;
 
-    // Create inspections for deployed, flagged, received, and archived cases
-    const inspectionCaseIds = [
-      ...deployedCaseIds,
-      ...flaggedCaseIds,
-      ...receivedCaseIds,
-      caseIds[47], caseIds[48], caseIds[49], // archived
-    ].filter(Boolean);
+    for (const seededCase of seededCases) {
+      if (seededCase.status === "transit_out" || seededCase.status === "transit_in") continue;
 
-    // inspectionId lookup: caseId → inspectionId
-    const caseInspectionMap = new Map<Id<"cases">, Id<"inspections">>();
-
-    for (const caseId of inspectionCaseIds) {
-      const c = await ctx.db.get(caseId);
-      if (!c || !c.templateId) continue;
-
-      const items = templateItemsMap.get(c.templateId as string) ?? [];
-      const itemMap = caseManifestMap.get(caseId);
+      const itemMap = caseManifestMap.get(seededCase.id);
       if (!itemMap) continue;
 
-      let checked = 0, damaged = 0, missing = 0;
-      for (const [, manifestId] of itemMap.entries()) {
-        const mi = await ctx.db.get(manifestId);
-        if (!mi) continue;
-        if (mi.status === "ok") checked++;
-        else if (mi.status === "damaged") { checked++; damaged++; }
-        else if (mi.status === "missing") { checked++; missing++; }
+      let checkedItems = 0;
+      let damagedItems = 0;
+      let missingItems = 0;
+
+      for (const manifestId of itemMap.values()) {
+        const row = await ctx.db.get(manifestId);
+        if (!row) continue;
+        if (row.status !== "unchecked") checkedItems++;
+        if (row.status === "damaged") damagedItems++;
+        if (row.status === "missing") missingItems++;
       }
 
-      const total = items.length;
-      const inspector = pick(USERS.filter(u => u.role === "field_tech" || u.role === "pilot"));
-
-      let inspStatus: "pending" | "in_progress" | "completed" | "flagged" = "completed";
-      let completedAt: number | undefined = daysAgo(Math.floor(Math.random() * 14) + 1);
-
-      if (c.status === "deployed") {
-        const allChecked = checked === total;
-        inspStatus = allChecked ? "completed" : "in_progress";
-        if (!allChecked) completedAt = undefined;
-      } else if (c.status === "flagged") {
-        inspStatus = "flagged";
-        completedAt = daysAgo(2);
-      } else if (c.status === "archived") {
-        inspStatus = "completed";
-        completedAt = daysAgo(60);
-      }
-
+      const totalItems = itemMap.size;
+      const status = inspectionStatusFor(seededCase.status, damagedItems, checkedItems, totalItems);
       const inspectionId = await ctx.db.insert("inspections", {
-        caseId,
-        inspectorId: c.assigneeId ?? inspector.id,
-        inspectorName: c.assigneeName ?? inspector.name,
-        status: inspStatus,
-        startedAt: daysAgo(Math.floor(Math.random() * 20) + 2),
-        completedAt,
-        totalItems: total,
-        checkedItems: checked,
-        damagedItems: damaged,
-        missingItems: missing,
-        notes: c.status === "flagged" ? "Inspection flagged — items require supervisor review" : undefined,
+        caseId: seededCase.id,
+        inspectorId: seededCase.assignee.id,
+        inspectorName: seededCase.assignee.name,
+        status,
+        startedAt: daysAgo(now, seededCase.status === "received" ? 7 : 2),
+        completedAt: status === "completed" || status === "flagged" ? daysAgo(now, seededCase.status === "received" ? 6 : 1) : undefined,
+        notes: status === "flagged" ? "Condition issue documented for next custodian and hangar review." : "Checklist completed in SCAN.",
+        totalItems,
+        checkedItems,
+        damagedItems,
+        missingItems,
       });
-
-      caseInspectionMap.set(caseId, inspectionId);
+      caseInspectionMap.set(seededCase.id, inspectionId);
       inspectionCount++;
     }
-
     stats.inspections = inspectionCount;
 
-    // ── 8. Shipments ─────────────────────────────────────────────────────────
-
     let shipmentCount = 0;
+    let shippingUpdateCount = 0;
 
-    // Transit-out shipments (CASE-016 through CASE-020)
-    for (let i = 0; i < transitOutCaseIds.length; i++) {
-      const caseId = transitOutCaseIds[i];
-      const c = await ctx.db.get(caseId);
-      if (!c) continue;
+    for (const seededCase of seededCases) {
+      const shouldCreateShipment =
+        seededCase.spec.shippingDirection !== undefined || seededCase.status === "received" || seededCase.status === "deployed";
+      if (!shouldCreateShipment) continue;
 
-      await ctx.db.insert("shipments", {
-        caseId,
-        trackingNumber: FEDEX_TRACKING_NUMBERS[i],
-        carrier: "FedEx",
-        status: pick(["in_transit", "in_transit", "in_transit", "picked_up", "out_for_delivery"]),
-        originLat: HQ.lat,
-        originLng: HQ.lng,
-        originName: HQ.name,
-        destinationLat: c.destinationLat,
-        destinationLng: c.destinationLng,
-        destinationName: c.destinationName,
-        currentLat: c.lat,
-        currentLng: c.lng,
-        estimatedDelivery: isoDate(daysFromNow(2 - i * 0.2)),
-        shippedAt: c.shippedAt,
-        createdAt: c.shippedAt ?? now,
-        updatedAt: now,
-      });
-      shipmentCount++;
-    }
-
-    // Transit-in shipments (CASE-039 through CASE-042)
-    for (let i = 0; i < transitInCaseIds.length; i++) {
-      const caseId = transitInCaseIds[i];
-      const c = await ctx.db.get(caseId);
-      if (!c) continue;
+      const outbound = seededCase.spec.shippingDirection !== "return";
+      const trackingNumber = seededCase.spec.shippingDirection ? trackingFor(shipmentCount) : trackingFor(shipmentCount + 7);
+      const delivered = seededCase.status === "received" || seededCase.status === "deployed";
+      const shipmentStatus: ShipmentStatus = delivered ? "delivered" : seededCase.spec.shipmentStatus ?? "in_transit";
+      const origin = outbound ? HQ : seededCase.site;
+      const destination = outbound ? seededCase.site : HQ;
+      const shippedAt = delivered ? daysAgo(now, seededCase.status === "received" ? 12 : 8) : daysAgo(now, outbound ? 2 : 1);
+      const deliveredAt = delivered ? daysAgo(now, seededCase.status === "received" ? 8 : 5) : undefined;
 
       await ctx.db.insert("shipments", {
-        caseId,
-        trackingNumber: FEDEX_TRACKING_NUMBERS[5 + i],
+        caseId: seededCase.id,
+        trackingNumber,
         carrier: "FedEx",
-        status: pick(["in_transit", "in_transit", "out_for_delivery", "in_transit"]),
-        originLat: SITES.lakeErie.lat,
-        originLng: SITES.lakeErie.lng,
-        originName: SITES.lakeErie.name,
-        destinationLat: HQ.lat,
-        destinationLng: HQ.lng,
-        destinationName: HQ.name,
-        currentLat: c.lat,
-        currentLng: c.lng,
-        estimatedDelivery: isoDate(daysFromNow(1 + i * 0.5)),
-        shippedAt: c.shippedAt,
-        createdAt: c.shippedAt ?? now,
-        updatedAt: now,
-      });
-      shipmentCount++;
-    }
-
-    // Delivered historical shipments for received cases (CASE-043 through CASE-047)
-    for (let i = 0; i < receivedCaseIds.length; i++) {
-      const caseId = receivedCaseIds[i];
-      const deliveredAt = daysAgo(4 + i);
-      await ctx.db.insert("shipments", {
-        caseId,
-        trackingNumber: FEDEX_TRACKING_NUMBERS[9 + i],
-        carrier: "FedEx",
-        status: "delivered",
-        originLat: SITES.lakeErie.lat,
-        originLng: SITES.lakeErie.lng,
-        originName: SITES.lakeErie.name,
-        destinationLat: HQ.lat,
-        destinationLng: HQ.lng,
-        destinationName: HQ.name,
-        currentLat: HQ.lat,
-        currentLng: HQ.lng,
-        estimatedDelivery: isoDate(deliveredAt),
-        shippedAt: daysAgo(8 + i),
+        status: shipmentStatus,
+        originLat: origin.lat,
+        originLng: origin.lng,
+        originName: origin.name,
+        destinationLat: destination.lat,
+        destinationLng: destination.lng,
+        destinationName: destination.name,
+        currentLat: delivered ? destination.lat : seededCase.site.lat + (HQ.lat - seededCase.site.lat) * 0.35,
+        currentLng: delivered ? destination.lng : seededCase.site.lng + (HQ.lng - seededCase.site.lng) * 0.35,
+        estimatedDelivery: isoDate(deliveredAt ?? daysFromNow(now, 2)),
+        lastEvent: {
+          timestamp: new Date(deliveredAt ?? daysAgo(now, 1)).toISOString(),
+          eventType: delivered ? "DL" : shipmentStatus === "out_for_delivery" ? "OD" : "IT",
+          description: delivered ? "Delivered" : shipmentStatus === "out_for_delivery" ? "Out for delivery" : "In transit",
+          location: { city: delivered ? destination.name.split(" ")[0] : "Toledo", state: "MI", country: "US" },
+        },
+        shippedAt,
         deliveredAt,
-        createdAt: daysAgo(8 + i),
-        updatedAt: deliveredAt,
+        createdAt: shippedAt,
+        updatedAt: deliveredAt ?? daysAgo(now, 1),
       });
+
+      const updates: Array<{ status: ShipmentStatus; offsetDays: number; city: string; state: string; eventType: string; description: string }> = delivered
+        ? [
+            { status: "picked_up", offsetDays: 11, city: "Ann Arbor", state: "MI", eventType: "PU", description: "Picked up" },
+            { status: "in_transit", offsetDays: 10, city: "Toledo", state: "OH", eventType: "IT", description: "In transit" },
+            { status: "delivered", offsetDays: 8, city: destination.name.split(" ")[0], state: "MI", eventType: "DL", description: "Delivered" },
+          ]
+        : [
+            { status: "picked_up", offsetDays: 2, city: "Ann Arbor", state: "MI", eventType: "PU", description: "Picked up" },
+            { status: shipmentStatus, offsetDays: 1, city: "Toledo", state: "OH", eventType: "IT", description: shipmentStatus === "out_for_delivery" ? "Out for delivery" : "In transit" },
+          ];
+
+      for (const update of updates) {
+        await ctx.db.insert("shipping_updates", {
+          caseId: seededCase.id,
+          fedexTrackingId: trackingNumber,
+          status: update.status,
+          timestamp: daysAgo(now, update.offsetDays),
+          location: {
+            city: update.city,
+            state: update.state,
+            country: "US",
+            lat: delivered ? destination.lat : seededCase.site.lat,
+            lng: delivered ? destination.lng : seededCase.site.lng,
+          },
+          eventType: update.eventType,
+          description: update.description,
+        });
+        shippingUpdateCount++;
+      }
+
       shipmentCount++;
     }
-
     stats.shipments = shipmentCount;
+    stats.shippingUpdates = shippingUpdateCount;
 
-    // ── 9. Events (audit trail) ──────────────────────────────────────────────
-
-    let eventCount = 0;
-
-    // Helper to insert an audit event
+    let eventCount = outboundShipmentEventCount;
     const addEvent = async (
-      caseId: Id<"cases">,
-      eventType: string,
-      userId: string,
-      userName: string,
+      seededCase: SeededCase,
+      eventType: EventType,
+      user: User,
       timestamp: number,
       data: Record<string, unknown>,
     ) => {
       await ctx.db.insert("events", {
-        caseId,
-        eventType: eventType as "status_change",
-        userId,
-        userName,
+        caseId: seededCase.id,
+        eventType,
+        userId: user.id,
+        userName: user.name,
         timestamp,
         data,
       });
       eventCount++;
     };
 
-    // Generate events for every case
-    for (const c of allCases) {
-      if (!c) continue;
+    let custodyCount = 0;
+    let custodyHandoffCount = 0;
+    const addCustody = async (
+      seededCase: SeededCase,
+      from: User,
+      to: User,
+      timestamp: number,
+      notes: string,
+    ) => {
+      await ctx.db.insert("custodyRecords", {
+        caseId: seededCase.id,
+        fromUserId: from.id,
+        fromUserName: from.name,
+        toUserId: to.id,
+        toUserName: to.name,
+        transferredAt: timestamp,
+        notes,
+        signatureStorageId: `seed-signature-${seededCase.label}-${timestamp}`,
+      });
+      custodyCount++;
 
-      const assigneeId = c.assigneeId ?? USERS[0].id;
-      const assigneeName = c.assigneeName ?? USERS[0].name;
-      const logisticsUser = USERS[7];
+      await ctx.db.insert("custody_handoffs", {
+        caseId: seededCase.id,
+        fromUserId: from.id,
+        toUserId: to.id,
+        timestamp,
+        signature: `seed-signature-${seededCase.label}-${timestamp}`,
+        location: {
+          lat: seededCase.status === "assembled" ? HQ.lat : seededCase.site.lat,
+          lng: seededCase.status === "assembled" ? HQ.lng : seededCase.site.lng,
+          name: seededCase.status === "assembled" ? HQ.name : seededCase.site.name,
+          accuracy: 12,
+        },
+      });
+      custodyHandoffCount++;
 
-      // Creation event
-      await addEvent(c._id, "status_change", logisticsUser.id, logisticsUser.name,
-        c.createdAt, { fromStatus: null, toStatus: "hangar", reason: "Case created and registered in INVENTORY" });
+      await addEvent(seededCase, "custody_handoff", to, timestamp, {
+        fromUserId: from.id,
+        fromUserName: from.name,
+        toUserId: to.id,
+        toUserName: to.name,
+        notes,
+      });
+    };
 
-      // Status progression events based on current status
-      if (["assembled", "transit_out", "deployed", "flagged", "transit_in", "received", "archived"].includes(c.status)) {
-        await addEvent(c._id, "status_change", logisticsUser.id, logisticsUser.name,
-          c.createdAt + 3600000, { fromStatus: "hangar", toStatus: "assembled", reason: "Packing list verified and case sealed" });
+    let scanCount = 0;
+    let scanEventCount = 0;
+    const addScan = async (seededCase: SeededCase, user: User, scanType: ScanType, timestamp: number, inspectionId?: Id<"inspections">) => {
+      const location = caseLocation(seededCase.spec, seededCase.site, scanCount % 5);
+      await ctx.db.insert("scans", {
+        caseId: seededCase.id,
+        qrPayload: seededCase.qrCode,
+        scannedBy: user.id,
+        scannedByName: user.name,
+        scannedAt: timestamp,
+        lat: location.lat,
+        lng: location.lng,
+        locationName: location.locationName,
+        scanContext: scanContextFor(scanType),
+        inspectionId,
+        deviceInfo: scanType === "shipping" ? "{\"ua\":\"iPad Pro 12.9\",\"app\":\"SCAN v2.4.1\"}" : "{\"ua\":\"iPhone 15 Pro\",\"app\":\"SCAN v2.4.1\"}",
+      });
+      scanCount++;
 
-        await addEvent(c._id, "template_applied", logisticsUser.id, logisticsUser.name,
-          c.createdAt + 1800000, { templateId: c.templateId, templateName: "Applied during assembly" });
+      await ctx.db.insert("scan_events", {
+        caseId: seededCase.id,
+        userId: user.id,
+        timestamp,
+        location: {
+          lat: location.lat,
+          lng: location.lng,
+          name: location.locationName,
+          accuracy: 10,
+        },
+        scanType,
+      });
+      scanEventCount++;
+    };
+
+    let checklistUpdateCount = 0;
+    let damageReportCount = 0;
+    let notificationCount = 0;
+
+    for (const seededCase of seededCases) {
+      const inspectionId = caseInspectionMap.get(seededCase.id);
+      await addEvent(seededCase, "status_change", USERS.hangarLead, daysAgo(now, 34), {
+        fromStatus: null,
+        toStatus: "hangar",
+        reason: `${seededCase.label} registered for ${seededCase.scenario.unitId}.`,
+      });
+      await addEvent(seededCase, "template_applied", USERS.hangarLead, daysAgo(now, 33), {
+        templateName: TEMPLATE_DEFS.find((t) => t.key === seededCase.spec.templateKey)?.name,
+        unitId: seededCase.scenario.unitId,
+        beakon: seededCase.scenario.beakon,
+      });
+      await addEvent(seededCase, "qc_sign_off", USERS.qc, daysAgo(now, 4), {
+        status: seededCase.status === "flagged" ? "rejected" : "approved",
+        notes: seededCase.status === "flagged" ? "Field issue requires hangar repair." : "QC1/QC2 complete.",
+      });
+
+      if (seededCase.status !== "hangar") {
+        await addEvent(seededCase, "status_change", USERS.hangarLead, daysAgo(now, 4), {
+          fromStatus: "hangar",
+          toStatus: "assembled",
+          reason: "Packing list verified and case sealed.",
+        });
       }
 
-      if (["transit_out", "deployed", "flagged", "transit_in", "received", "archived"].includes(c.status)) {
-        await addEvent(c._id, "shipped", logisticsUser.id, logisticsUser.name,
-          daysAgo(10), {
-            trackingNumber: c.trackingNumber ?? FEDEX_TRACKING_NUMBERS[0],
-            carrier: "FedEx",
-            destination: c.destinationName ?? "Field Site",
+      if (seededCase.spec.shippingDirection === "outbound") {
+        await addEvent(seededCase, "shipped", USERS.logistics, daysAgo(now, 2), {
+          carrier: "FedEx",
+          direction: "outbound",
+          destination: seededCase.site.name,
+          trackingNumber: trackingFor(eventCount),
+        });
+        await addScan(seededCase, USERS.logistics, "shipping", daysAgo(now, 2));
+      }
+
+      if (seededCase.status === "deployed" || seededCase.status === "flagged") {
+        await addEvent(seededCase, "delivered", USERS.logistics, daysAgo(now, 5), {
+          location: seededCase.site.name,
+          handoffRequired: true,
+        });
+        await addEvent(seededCase, "status_change", seededCase.assignee, daysAgo(now, 5), {
+          fromStatus: "transit_out",
+          toStatus: "deployed",
+          reason: "Case arrived and was checked out in SCAN.",
+        });
+        await addCustody(seededCase, USERS.logistics, seededCase.assignee, daysAgo(now, 5), "Outbound custody accepted during field checkout.");
+        await addScan(seededCase, seededCase.assignee, "check_in", daysAgo(now, 5), inspectionId);
+      }
+
+      if (seededCase.scenario.unitId === "SC-201") {
+        await addCustody(seededCase, USERS.techAlice, USERS.techRaj, daysAgo(now, 3), "Direct handoff at site trailer before crawl inspection.");
+        await addScan(seededCase, USERS.techRaj, "handoff", daysAgo(now, 3), inspectionId);
+      }
+
+      if (seededCase.status === "received") {
+        await addEvent(seededCase, "delivered", USERS.logistics, daysAgo(now, 8), {
+          location: HQ.name,
+          destination: "maintenance intake",
+        });
+        await addEvent(seededCase, "status_change", USERS.maintNia, daysAgo(now, 7), {
+          fromStatus: "transit_in",
+          toStatus: "received",
+          reason: seededCase.scenario.routeReason,
+        });
+        await addCustody(seededCase, seededCase.scenario.custodian, USERS.maintNia, daysAgo(now, 7), "Returned to hangar and accepted for refurb intake.");
+        await addScan(seededCase, USERS.maintNia, "receiving", daysAgo(now, 7), inspectionId);
+      }
+
+      if (seededCase.spec.shippingDirection === "return") {
+        await addEvent(seededCase, "shipped", seededCase.assignee, daysAgo(now, 1), {
+          carrier: "FedEx",
+          direction: "return",
+          destination: HQ.name,
+          reason: seededCase.scenario.routeReason,
+        });
+        await addScan(seededCase, seededCase.assignee, "shipping", daysAgo(now, 1), inspectionId);
+      }
+
+      if (inspectionId) {
+        await addEvent(seededCase, "inspection_started", seededCase.assignee, daysAgo(now, seededCase.status === "received" ? 7 : 2), {
+          inspectionId,
+          inspectorName: seededCase.assignee.name,
+        });
+      }
+
+      const itemMap = caseManifestMap.get(seededCase.id);
+      if (itemMap) {
+        for (const [templateItemId, manifestItemId] of itemMap.entries()) {
+          const manifest = await ctx.db.get(manifestItemId);
+          if (!manifest || manifest.status === "unchecked") continue;
+
+          await ctx.db.insert("checklist_updates", {
+            caseId: seededCase.id,
+            manifestItemId,
+            templateItemId,
+            itemName: manifest.name,
+            previousStatus: "unchecked",
+            newStatus: manifest.status,
+            updatedBy: manifest.checkedById ?? seededCase.assignee.id,
+            updatedByName: manifest.checkedByName ?? seededCase.assignee.name,
+            updatedAt: manifest.checkedAt ?? daysAgo(now, 1),
+            notes: manifest.notes,
+            photoStorageIds: manifest.photoStorageIds,
+            damageDescription: manifest.status === "damaged" ? manifest.notes ?? "Condition issue documented during checklist." : undefined,
+            damageSeverity: manifest.status === "damaged" ? "moderate" : undefined,
+            inspectionId,
           });
+          checklistUpdateCount++;
+
+          if (manifest.status === "damaged") {
+            await addEvent(seededCase, "damage_reported", seededCase.assignee, manifest.checkedAt ?? daysAgo(now, 1), {
+              manifestItemId,
+              templateItemId,
+              itemName: manifest.name,
+              severity: "moderate",
+              notes: manifest.notes,
+            });
+
+            await ctx.db.insert("damage_reports", {
+              caseId: seededCase.id,
+              photoStorageId: `seed-photo-${seededCase.label}-${templateItemId}`,
+              annotations: [
+                { x: 0.42, y: 0.58, label: "Documented condition", color: "#f97316" },
+              ],
+              severity: "moderate",
+              reportedAt: manifest.checkedAt ?? daysAgo(now, 1),
+              manifestItemId,
+              templateItemId,
+              reportedById: seededCase.assignee.id,
+              reportedByName: seededCase.assignee.name,
+              notes: manifest.notes,
+            });
+            damageReportCount++;
+
+            await ctx.db.insert("notifications", {
+              userId: USERS.ops.id,
+              type: "damage_reported",
+              title: `${seededCase.label} condition issue`,
+              message: `${manifest.name} was marked damaged by ${seededCase.assignee.name}.`,
+              caseId: seededCase.id,
+              read: false,
+              createdAt: manifest.checkedAt ?? daysAgo(now, 1),
+            });
+            notificationCount++;
+          }
+        }
       }
 
-      if (["deployed", "flagged", "transit_in", "received", "archived"].includes(c.status)) {
-        const inspId = caseInspectionMap.get(c._id);
-        await addEvent(c._id, "status_change", assigneeId, assigneeName,
-          daysAgo(7), { fromStatus: "transit_out", toStatus: "deployed", reason: "Case arrived at site and checked in via SCAN app" });
-
-        await addEvent(c._id, "inspection_started", assigneeId, assigneeName,
-          daysAgo(7) + 3600000, { inspectionId: inspId ?? null, inspectorName: assigneeName });
+      if (inspectionId) {
+        await addEvent(seededCase, "inspection_completed", seededCase.assignee, daysAgo(now, seededCase.status === "received" ? 6 : 1), {
+          inspectionId,
+          result: seededCase.status === "flagged" ? "flagged" : "completed",
+        });
       }
 
-      if (["received", "archived"].includes(c.status)) {
-        await addEvent(c._id, "inspection_completed", assigneeId, assigneeName,
-          daysAgo(6), { totalItems: 14, checkedItems: 13, damagedItems: 1, missingItems: 0 });
-
-        await addEvent(c._id, "shipped", logisticsUser.id, logisticsUser.name,
-          daysAgo(5), { trackingNumber: FEDEX_TRACKING_NUMBERS[0], carrier: "FedEx", destination: HQ.name });
-
-        await addEvent(c._id, "delivered", logisticsUser.id, logisticsUser.name,
-          daysAgo(3), { deliveredAt: daysAgo(3), location: HQ.name });
-
-        await addEvent(c._id, "status_change", logisticsUser.id, logisticsUser.name,
-          daysAgo(3), { fromStatus: "transit_in", toStatus: "received", reason: "Delivery confirmed via SCAN app scan at receiving dock" });
-      }
-
-      if (c.status === "flagged") {
-        await addEvent(c._id, "damage_reported", assigneeId, assigneeName,
-          daysAgo(2), {
-            severity: "moderate",
-            itemName: "Primary drone unit",
-            notes: c.notes ?? "Damage observed during field inspection",
-          });
-
-        await addEvent(c._id, "status_change", assigneeId, assigneeName,
-          daysAgo(2), { fromStatus: "deployed", toStatus: "flagged", reason: "Damage reported requiring supervisor review" });
-      }
-
-      if (c.status === "archived") {
-        await addEvent(c._id, "status_change", USERS[0].id, USERS[0].name,
-          daysAgo(60), { fromStatus: "received", toStatus: "archived", reason: c.notes ?? "Decommissioned per annual equipment review" });
+      if (seededCase.status === "received") {
+        await ctx.db.insert("notifications", {
+          userId: USERS.maintNia.id,
+          type: "shipment_delivered",
+          title: `${seededCase.label} received at hangar`,
+              message: `${seededCase.spec.displayName} is ready for refurb intake.`,
+          caseId: seededCase.id,
+          read: false,
+          createdAt: daysAgo(now, 7),
+        });
+        notificationCount++;
       }
     }
 
     stats.events = eventCount;
-
-    // ── 10. Custody records ──────────────────────────────────────────────────
-
-    let custodyCount = 0;
-
-    // Create custody chains for deployed and flagged cases
-    const custodyCaseIds = [...deployedCaseIds, ...flaggedCaseIds];
-
-    for (const caseId of custodyCaseIds) {
-      const c = await ctx.db.get(caseId);
-      if (!c) continue;
-
-      // Logistics → Field Tech handoff (outbound)
-      await ctx.db.insert("custodyRecords", {
-        caseId,
-        fromUserId: USERS[7].id,
-        fromUserName: USERS[7].name,
-        toUserId: c.assigneeId ?? USERS[1].id,
-        toUserName: c.assigneeName ?? USERS[1].name,
-        transferredAt: daysAgo(8),
-        notes: "Outbound: Case checked out for field deployment",
-      });
-      custodyCount++;
-
-      // Field Tech → Pilot handoff (for deployed cases on active missions)
-      if (c.status === "deployed" && Math.random() < 0.5) {
-        const pilot = pick(USERS.filter(u => u.role === "pilot"));
-        await ctx.db.insert("custodyRecords", {
-          caseId,
-          fromUserId: c.assigneeId ?? USERS[1].id,
-          fromUserName: c.assigneeName ?? USERS[1].name,
-          toUserId: pilot.id,
-          toUserName: pilot.name,
-          transferredAt: daysAgo(5),
-          notes: "Handoff: Transferring to pilot for flight operations",
-        });
-        custodyCount++;
-      }
-    }
-
     stats.custodyRecords = custodyCount;
-
-    // ── 11. Scans ─────────────────────────────────────────────────────────────
-
-    let scanCount = 0;
-
-    // Generate scan records for deployed, flagged, and transit cases
-    const scanCases = [...deployedCaseIds, ...flaggedCaseIds, ...transitOutCaseIds, ...transitInCaseIds];
-
-    for (const caseId of scanCases) {
-      const c = await ctx.db.get(caseId);
-      if (!c) continue;
-
-      const numScans = 2 + Math.floor(Math.random() * 4); // 2–5 scans per case
-
-      for (let s = 0; s < numScans; s++) {
-        const scanner = pick(USERS.filter(u => u.role === "field_tech" || u.role === "pilot"));
-        const scannedAt = daysAgo(s * 2 + Math.random());
-        const contexts: string[] = ["check_in", "inspection", "lookup", "handoff"];
-        const ctx_val = contexts[Math.floor(Math.random() * contexts.length)];
-
-        await ctx.db.insert("scans", {
-          caseId,
-          qrPayload: c.qrCode,
-          scannedBy: scanner.id,
-          scannedByName: scanner.name,
-          scannedAt,
-          lat: c.lat ? jitter(c.lat, 0.001) : undefined,
-          lng: c.lng ? jitter(c.lng, 0.001) : undefined,
-          locationName: c.locationName,
-          scanContext: ctx_val,
-          deviceInfo: pick([
-            '{"ua":"iPhone 15 Pro","app":"SCAN v2.4.1"}',
-            '{"ua":"Samsung Galaxy S24","app":"SCAN v2.4.1"}',
-            '{"ua":"iPad Pro 12.9","app":"SCAN v2.4.1"}',
-          ]),
-        });
-        scanCount++;
-      }
-    }
-
-    // Additional historical scans for received cases
-    for (const caseId of receivedCaseIds) {
-      const c = await ctx.db.get(caseId);
-      if (!c) continue;
-
-      await ctx.db.insert("scans", {
-        caseId,
-        qrPayload: c.qrCode,
-        scannedBy: USERS[7].id,
-        scannedByName: USERS[7].name,
-        scannedAt: daysAgo(3),
-        lat: jitter(HQ.lat, 0.001),
-        lng: jitter(HQ.lng, 0.001),
-        locationName: `${HQ.name} — Receiving Dock`,
-        scanContext: "check_in",
-        deviceInfo: '{"ua":"iPad Pro 12.9","app":"SCAN v2.4.1"}',
-      });
-      scanCount++;
-    }
-
+    stats.custodyHandoffs = custodyHandoffCount;
     stats.scans = scanCount;
-
-    // ── 12. Checklist update history ─────────────────────────────────────────
-
-    let checklistUpdateCount = 0;
-
-    // Generate checklist update history for deployed + flagged + received cases
-    for (const caseId of [...deployedCaseIds, ...flaggedCaseIds, ...receivedCaseIds]) {
-      const c = await ctx.db.get(caseId);
-      if (!c || !c.templateId) continue;
-
-      const itemMap = caseManifestMap.get(caseId);
-      if (!itemMap) continue;
-
-      const items = templateItemsMap.get(c.templateId as string) ?? [];
-      const inspectionId = caseInspectionMap.get(caseId);
-
-      for (const item of items.slice(0, Math.min(items.length, 6))) {
-        const manifestItemId = itemMap.get(item.id);
-        if (!manifestItemId) continue;
-
-        const mi = await ctx.db.get(manifestItemId);
-        if (!mi || mi.status === "unchecked") continue;
-
-        const techUser = pick(USERS.filter(u => u.role === "field_tech" || u.role === "pilot"));
-        await ctx.db.insert("checklist_updates", {
-          caseId,
-          manifestItemId,
-          templateItemId: item.id,
-          itemName: item.name,
-          previousStatus: "unchecked",
-          newStatus: mi.status as "ok" | "damaged" | "missing",
-          updatedBy: c.assigneeId ?? techUser.id,
-          updatedByName: c.assigneeName ?? techUser.name,
-          updatedAt: daysAgo(Math.floor(Math.random() * 10) + 1),
-          notes: mi.notes,
-          inspectionId,
-          damageSeverity: mi.status === "damaged" ? pick(["minor", "moderate", "severe"]) : undefined,
-        });
-        checklistUpdateCount++;
-      }
-    }
-
+    stats.scanEvents = scanEventCount;
     stats.checklistUpdates = checklistUpdateCount;
-
-    // ─────────────────────────────────────────────────────────────────────────
+    stats.damageReports = damageReportCount;
+    stats.notifications = notificationCount;
 
     return {
       success: true,
       timestamp: new Date(now).toISOString(),
       stats,
+      scenarios: SCENARIOS.map((scenario) => ({
+        unitId: scenario.unitId,
+        platform: scenario.platform,
+        version: scenario.version,
+        beakon: scenario.beakon,
+        nickname: scenario.nickname,
+        faaRegistration: scenario.faaRegistration,
+        caseCount: scenario.cases.length,
+        narrative: scenario.narrative,
+      })),
     };
   },
 });

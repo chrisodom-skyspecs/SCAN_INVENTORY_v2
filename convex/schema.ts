@@ -86,6 +86,7 @@ const caseStatus = v.union(
   v.literal("transit_out"),  // in transit to field site
   v.literal("deployed"),     // actively in use at a field site
   v.literal("flagged"),      // has outstanding issues requiring review
+  v.literal("recalled"),     // recalled to hangar for maintenance / upgrade / incident review
   v.literal("transit_in"),   // in transit returning to base
   v.literal("received"),     // received back at base
   v.literal("archived"),     // decommissioned; no longer in active rotation
@@ -141,6 +142,10 @@ const eventType = v.union(
   v.literal("mission_assigned"),
   v.literal("template_applied"),
   v.literal("qc_sign_off"),   // QC quality-control sign-off (approve / reject / revoke)
+  v.literal("case_recalled"),
+  v.literal("condition_note"),
+  v.literal("shipment_created"),
+  v.literal("shipment_released"),
 );
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
@@ -162,6 +167,7 @@ export default defineSchema({
     status: caseStatus,
     templateId: v.optional(v.id("caseTemplates")),
     missionId: v.optional(v.id("missions")),
+    unitId: v.optional(v.id("units")),
 
     // Geographic position of the case (last known)
     lat: v.optional(v.number()),
@@ -338,11 +344,31 @@ export default defineSchema({
      */
     qcSignOffNotes: v.optional(v.string()),
 
+    /**
+     * Recall state summary.
+     *
+     * A recalled case remains assigned to its current holder until they scan or
+     * acknowledge the recall. These fields let INVENTORY and SCAN surface the
+     * reason without parsing the audit event payload.
+     */
+    recallReason: v.optional(v.string()),
+    recallInitiatedAt: v.optional(v.number()),
+    recallInitiatedBy: v.optional(v.string()),
+
+    /**
+     * Current outbound shipment bundle, when this case is part of a hangar-built
+     * kit release. This denormalized reverse link makes SCAN and INVENTORY
+     * verification cheap from the case detail screen.
+     */
+    currentOutboundShipmentId: v.optional(v.id("outboundShipments")),
+
     notes: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_status", ["status"])
+    .index("by_assignee", ["assigneeId"])
+    .index("by_outbound_shipment", ["currentOutboundShipmentId"])
     .index("by_qc_sign_off_status", ["qcSignOffStatus"])
     .index("by_mission", ["missionId"])
     .index("by_qr_code", ["qrCode"])
@@ -359,7 +385,76 @@ export default defineSchema({
      * function applies trim() before using this index.
      */
     .index("by_label", ["label"])
+    .index("by_unit", ["unitId"])
     .index("by_updated", ["updatedAt"]),
+
+  /**
+   * units — long-lived asset identity for aircraft and rovers.
+   *
+   * A unit (for example FS-101 or SC-201) owns the durable operational identity
+   * that can appear across many physical cases and outbound shipments.
+   */
+  units: defineTable({
+    unitId: v.string(),
+    assetType: v.union(v.literal("aircraft"), v.literal("rover")),
+    platform: v.string(),
+    version: v.optional(v.string()),
+    nickname: v.optional(v.string()),
+    faaRegistration: v.optional(v.string()),
+    pairedBeakon: v.optional(v.string()),
+    serialNumber: v.optional(v.string()),
+    homeBase: v.optional(v.string()),
+    currentMissionId: v.optional(v.id("missions")),
+
+    // SCAN mobile profile facts. Optional so existing unit rows remain valid.
+    firmware: v.optional(v.string()),
+    flightHours: v.optional(v.number()),
+    batteryCycles: v.optional(v.number()),
+    bornAt: v.optional(v.number()),
+    inServiceAt: v.optional(v.number()),
+    lastCalibrationAt: v.optional(v.number()),
+    lastQcAt: v.optional(v.number()),
+    ownerName: v.optional(v.string()),
+
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_unit_id", ["unitId"])
+    .index("by_asset_type", ["assetType"])
+    .index("by_platform", ["platform"]),
+
+  /**
+   * unitQuirks — serial-traveling operational notes for aircraft and rovers.
+   *
+   * These are not case notes. They follow the durable unit identity so the next
+   * holder sees known behavior before flight, even after the unit moves between
+   * cases or outbound shipment bundles.
+   */
+  unitQuirks: defineTable({
+    unitId: v.id("units"),
+    title: v.string(),
+    detail: v.string(),
+    severity: v.union(
+      v.literal("info"),
+      v.literal("watch"),
+      v.literal("warning"),
+      v.literal("critical"),
+    ),
+    occurrenceCount: v.optional(v.number()),
+    meta: v.optional(v.string()),
+    workOrder: v.optional(v.string()),
+    pinned: v.optional(v.boolean()),
+    reportedById: v.optional(v.string()),
+    reportedByName: v.optional(v.string()),
+    firstSeenAt: v.optional(v.number()),
+    lastSeenAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_unit", ["unitId"])
+    .index("by_unit_severity", ["unitId", "severity"])
+    .index("by_unit_pinned", ["unitId", "pinned"]),
 
   /**
    * missions — a field deployment grouping cases together.
@@ -560,6 +655,43 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   /**
+   * outboundShipments — hangar-created bundle of cases moving with one unit.
+   *
+   * This is distinct from `shipments`, which remains the per-case carrier/FedEx
+   * tracking table. One outbound shipment can contain multiple physical cases.
+   */
+  outboundShipments: defineTable({
+    unitId: v.id("units"),
+    displayName: v.string(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("assembled"),
+      v.literal("released"),
+      v.literal("in_transit"),
+      v.literal("delivered"),
+      v.literal("cancelled"),
+    ),
+    originName: v.string(),
+    destinationMissionId: v.optional(v.id("missions")),
+    destinationName: v.optional(v.string()),
+    destinationLat: v.optional(v.number()),
+    destinationLng: v.optional(v.number()),
+    recipientUserId: v.optional(v.string()),
+    recipientName: v.optional(v.string()),
+    caseIds: v.array(v.id("cases")),
+    routeReason: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdBy: v.string(),
+    createdByName: v.string(),
+    releasedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_unit", ["unitId"])
+    .index("by_status", ["status"])
+    .index("by_updated", ["updatedAt"]),
+
+  /**
    * shipping_updates — append-only log of FedEx tracking events.
    *
    * Each row represents a single scan/status update received from FedEx for
@@ -643,13 +775,15 @@ export default defineSchema({
     userName: v.string(),
     timestamp: v.number(),         // epoch ms — used for ordering
     data: v.any(),                 // event-specific payload (typed per eventType)
+    clientId: v.optional(v.string()),
 
     // Hash chain fields (populated when FF_AUDIT_HASH_CHAIN is enabled)
     hash: v.optional(v.string()),
     prevHash: v.optional(v.string()),
   })
     .index("by_case", ["caseId"])
-    .index("by_case_timestamp", ["caseId", "timestamp"]),
+    .index("by_case_timestamp", ["caseId", "timestamp"])
+    .index("by_client_id", ["clientId"]),
 
   /**
    * custodyRecords — implements the SCAN app `custody_handoffs` entity.
@@ -703,6 +837,7 @@ export default defineSchema({
     transferredAt: v.number(),
     notes: v.optional(v.string()),
     signatureStorageId: v.optional(v.string()),  // optional signature image
+    clientId: v.optional(v.string()),
   })
     .index("by_case",      ["caseId"])
     .index("by_to_user",   ["toUserId"])
@@ -732,7 +867,8 @@ export default defineSchema({
      * shared sensor kit that rotates between many field technicians over the
      * course of a multi-week deployment).
      */
-    .index("by_case_transferred_at", ["caseId", "transferredAt"]),
+    .index("by_case_transferred_at", ["caseId", "transferredAt"])
+    .index("by_client_id", ["clientId"]),
 
   /**
    * custody_handoffs — canonical custody handoff event log per AC 350003 sub-AC 3.
@@ -842,6 +978,7 @@ export default defineSchema({
         accuracy: v.optional(v.number()),
       })
     ),
+    clientId: v.optional(v.string()),
   })
     /**
      * by_case_timestamp — AC-required compound index (caseId + timestamp).
@@ -872,6 +1009,7 @@ export default defineSchema({
      * Used for audit trails listing every handoff a user initiated.
      */
     .index("by_from_user",      ["fromUserId"])
+    .index("by_client_id",      ["clientId"])
     /**
      * by_timestamp — fleet-wide time-ordered handoff feed.
      * Used by the dashboard "Recent Activity" rails, telemetry aggregations,
@@ -1150,6 +1288,9 @@ export default defineSchema({
      * Not indexed; used for support investigations only.
      */
     deviceInfo:    v.optional(v.string()),
+
+    /** Client-generated idempotency key for offline replay. */
+    clientId:      v.optional(v.string()),
   })
     /**
      * by_case — primary per-case scan lookup.
@@ -1174,7 +1315,8 @@ export default defineSchema({
      * Used by: dashboard overview "Recent Activity", telemetry aggregations,
      * operations monitoring ("no scans in the last N hours" alerts).
      */
-    .index("by_scanned_at",      ["scannedAt"]),
+    .index("by_scanned_at",      ["scannedAt"])
+    .index("by_client_id",       ["clientId"]),
 
   /**
    * scan_events — canonical scan-event audit log per AC 350001 sub-AC 1.
@@ -1273,6 +1415,7 @@ export default defineSchema({
       v.literal("shipping"),
       v.literal("receiving"),
     ),
+    clientId: v.optional(v.string()),
   })
     /**
      * by_case_timestamp — AC-required compound index (caseId + timestamp).
@@ -1309,7 +1452,49 @@ export default defineSchema({
      * Used by dashboard "Recent Activity" rails, telemetry aggregations,
      * and operations monitoring ("no scans in the last N hours" alerts).
      */
-    .index("by_timestamp",      ["timestamp"]),
+    .index("by_timestamp",      ["timestamp"])
+    .index("by_client_id",      ["clientId"]),
+
+  /**
+   * conditionNotes — structured SCAN condition flags.
+   *
+   * A condition note is the mobile-first form shown when a technician flags a
+   * case, manifest item, or durable unit. Each row also has one immutable
+   * `events` row so INVENTORY audit timelines can verify who saw what, when.
+   */
+  conditionNotes: defineTable({
+    caseId: v.id("cases"),
+    unitId: v.optional(v.id("units")),
+    manifestItemId: v.optional(v.id("manifestItems")),
+    eventId: v.optional(v.id("events")),
+    component: v.union(
+      v.literal("airframe"),
+      v.literal("prop"),
+      v.literal("battery"),
+      v.literal("camera"),
+      v.literal("controller"),
+      v.literal("case"),
+      v.literal("other"),
+    ),
+    severity: v.union(
+      v.literal("info"),
+      v.literal("minor"),
+      v.literal("major"),
+      v.literal("ground"),
+    ),
+    summary: v.string(),
+    photoStorageIds: v.optional(v.array(v.string())),
+    reportedById: v.string(),
+    reportedByName: v.string(),
+    reportedAt: v.number(),
+    clientId: v.optional(v.string()),
+  })
+    .index("by_case", ["caseId"])
+    .index("by_case_reported_at", ["caseId", "reportedAt"])
+    .index("by_unit", ["unitId"])
+    .index("by_unit_reported_at", ["unitId", "reportedAt"])
+    .index("by_case_severity", ["caseId", "severity"])
+    .index("by_client_id", ["clientId"]),
 
   /**
    * checklist_updates — immutable log of each manifest item state change.
@@ -1444,6 +1629,9 @@ export default defineSchema({
      * Enables queries like "all updates during inspection X".
      */
     inspectionId:    v.optional(v.id("inspections")),
+
+    /** Client-generated idempotency key for offline replay. */
+    clientId:        v.optional(v.string()),
   })
     /**
      * by_case — all checklist updates for a case.
@@ -1484,7 +1672,8 @@ export default defineSchema({
      * Without this index, the query would require loading all updates for the
      * case and filtering in memory.
      */
-    .index("by_case_new_status", ["caseId", "newStatus"]),
+    .index("by_case_new_status", ["caseId", "newStatus"])
+    .index("by_client_id", ["clientId"]),
 
   /**
    * users — verified SkySpecs users, created on first Kinde login.

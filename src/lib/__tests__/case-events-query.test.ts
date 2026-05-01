@@ -478,7 +478,7 @@ describe("timestamp-range guard (getCaseEventRange logic)", () => {
 
 // ─── CaseEventType completeness ───────────────────────────────────────────────
 
-describe("CaseEventType completeness — all 12 schema event types are present", () => {
+describe("CaseEventType completeness — all schema event types are present", () => {
   /**
    * The canonical set of event types defined in convex/schema.ts eventType union.
    * If a new type is added to the schema, this test will catch it if the type
@@ -500,10 +500,15 @@ describe("CaseEventType completeness — all 12 schema event types are present",
     "photo_added",
     "mission_assigned",
     "template_applied",
+    "qc_sign_off",
+    "case_recalled",
+    "condition_note",
+    "shipment_created",
+    "shipment_released",
   ];
 
-  it("covers all 12 event types defined in the schema", () => {
-    expect(SCHEMA_EVENT_TYPES).toHaveLength(12);
+  it("covers all event types defined in the schema", () => {
+    expect(SCHEMA_EVENT_TYPES).toHaveLength(17);
   });
 
   it("each schema event type is a valid CaseEventType at compile time", () => {

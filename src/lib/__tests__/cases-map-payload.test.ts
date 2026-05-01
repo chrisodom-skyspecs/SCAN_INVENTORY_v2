@@ -191,7 +191,7 @@ describe("CaseModeFlags computation", () => {
     it("is always true for every case status", () => {
       const statuses: CaseStatusLiteral[] = [
         "hangar", "assembled", "transit_out", "deployed",
-        "flagged", "transit_in", "received", "archived",
+        "flagged", "recalled", "transit_in", "received", "archived",
       ];
       for (const status of statuses) {
         const flags = computeModeFlags(makeCase({ status }));

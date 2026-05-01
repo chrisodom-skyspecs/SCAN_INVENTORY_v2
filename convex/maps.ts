@@ -118,7 +118,7 @@ export interface MapQueryArgs {
  * Also mirrors: `CaseStatus` in src/types/case-status.ts (application-level alias).
  *
  * Lifecycle order:
- *   hangar → assembled → transit_out → deployed → (flagged) → transit_in → received → archived
+ *   hangar → assembled → transit_out → deployed → (flagged/recalled) → transit_in → received → archived
  */
 export type CaseStatusLiteral =
   | "hangar"        // stored in hangar; not yet assembled
@@ -126,6 +126,7 @@ export type CaseStatusLiteral =
   | "transit_out"   // in transit to field site
   | "deployed"      // actively in use at a field site
   | "flagged"       // has outstanding issues requiring review
+  | "recalled"      // recalled to hangar by operations
   | "transit_in"    // in transit returning to base
   | "received"      // received back at base
   | "archived";     // decommissioned; no longer in active rotation

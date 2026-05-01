@@ -604,6 +604,7 @@ export const listAllDamageReports = query({
         v.literal("transit_out"),
         v.literal("deployed"),
         v.literal("flagged"),
+        v.literal("recalled"),
         v.literal("transit_in"),
         v.literal("received"),
         v.literal("archived")

@@ -10,6 +10,7 @@
 
 import type { Metadata, Viewport } from "next";
 import { Providers } from "./providers";
+import "mapbox-gl/dist/mapbox-gl.css";
 import "../styles/tokens/base.css";
 import "../styles/tokens/breakpoints.css";
 import "./globals.css";

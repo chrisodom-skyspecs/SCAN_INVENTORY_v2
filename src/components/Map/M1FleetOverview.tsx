@@ -49,6 +49,8 @@ import { useIsDark } from "@/providers/theme-provider";
 import { useMapManifestHover } from "@/providers/map-manifest-hover-provider";
 import { HistoryTrailLayer } from "./HistoryTrailLayer";
 import { TurbineLayer } from "./TurbineLayer";
+import { InventoryMapCanvas } from "./InventoryMapCanvas";
+import { InventoryCaseMarkers } from "./InventoryCaseMarkers";
 import styles from "./M1FleetOverview.module.css";
 
 // ─── Mapbox style URLs ────────────────────────────────────────────────────────
@@ -453,11 +455,6 @@ export function M1FleetOverview({
         )}
 
         {mapboxToken ? (
-          /* Map rendered by react-map-gl; pin data exposed via data attributes
-             for the Mapbox layer integration to consume.
-             HistoryTrailLayer with showToggle=true renders an in-map toggle button
-             for the history trails overlay. When isActive the component renders
-             Mapbox GL Source+Layer pairs as children of the react-map-gl Map. */
           <div
             id="m1-map-container"
             className={styles.mapContainer}
@@ -469,33 +466,19 @@ export function M1FleetOverview({
             data-hidden-count={hiddenCount}
             data-loading={isLoading ? "true" : undefined}
           >
-            {/* Turbine site markers overlay.
-                Reads `state.turbines` from LayerEngine via useTurbineLayer.
-                showToggle renders an in-map toggle button at top-right.
-                showLegend renders a floating legend at bottom-left.
-                M1 currently renders a plain map container, not react-map-gl's
-                <Map>, so use fallbackMode to avoid registering <Source>/<Layer>
-                without a Map context.
-                missionId scopes markers to the selected org (mission). */}
-            <TurbineLayer
-              missionId={org ?? null}
-              fallbackMode={true}
-              showToggle={true}
-              showLegend={true}
-            />
-
-            {/* History trails toggle + overlay.
-                Reads `state.history` from LayerEngine via useHistoryTrail.
-                showToggle renders an in-map button; showLegend shows the legend.
-                M1 currently renders a plain map container, not react-map-gl's
-                <Map>, so use fallbackMode to avoid registering <Source>/<Layer>
-                without a Map context. */}
-            <HistoryTrailLayer
-              missionId={org ?? null}
-              fallbackMode={true}
-              showToggle={true}
-              showLegend={true}
-            />
+            <InventoryMapCanvas
+              mapboxToken={mapboxToken}
+              mapStyle={mapStyle}
+              aria-label="Fleet overview map"
+              showEmptyMessage={!isLoading && pins.length === 0}
+              emptyMessage="No fleet case locations to display yet."
+            >
+              <InventoryCaseMarkers
+                records={pins}
+                hoveredCaseId={hoveredCaseId}
+                onHoverCase={setHoveredCaseId}
+              />
+            </InventoryMapCanvas>
           </div>
         ) : (
           <div

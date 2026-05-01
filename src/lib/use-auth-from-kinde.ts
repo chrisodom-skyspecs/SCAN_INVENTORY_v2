@@ -46,6 +46,7 @@
 "use client";
 
 import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
+import { useCallback, useMemo, useRef } from "react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -108,16 +109,14 @@ export function useAuthFromKinde(): ConvexAuthAdapter {
   const authenticated = isAuthenticated ?? false;
   const tokenClaimsReady = !authenticated || accessToken != null;
   const convexIsLoading = (isLoading ?? true) || (authenticated && !tokenClaimsReady);
+  const getTokenRef = useRef(getToken);
+  const refreshDataRef = useRef(refreshData);
 
-  return {
-    // Keep Convex paused until Kinde has hydrated the token claims. Kinde can
-    // briefly report an authenticated session before getToken() is ready.
-    isLoading: convexIsLoading,
+  getTokenRef.current = getToken;
+  refreshDataRef.current = refreshData;
 
-    // `?? false` ensures we default to not-authenticated (safe default).
-    isAuthenticated: authenticated && tokenClaimsReady,
-
-    fetchAccessToken: async ({
+  const fetchAccessToken = useCallback(
+    async ({
       forceRefreshToken,
     }: {
       forceRefreshToken: boolean;
@@ -128,7 +127,7 @@ export function useAuthFromKinde(): ConvexAuthAdapter {
       // from the Kinde issuer endpoint.
       if (forceRefreshToken) {
         try {
-          await refreshData();
+          await refreshDataRef.current();
         } catch {
           // refreshData failure is non-fatal — the client may be offline or the
           // session may be truly expired.  Fall through to getToken() which will
@@ -139,7 +138,19 @@ export function useAuthFromKinde(): ConvexAuthAdapter {
 
       // getToken() returns the current Kinde access token (a signed RS256 JWT)
       // or null/undefined when the user is not authenticated.
-      return getToken() ?? null;
+      return getTokenRef.current() ?? null;
     },
-  };
+    [],
+  );
+
+  return useMemo(() => ({
+    // Keep Convex paused until Kinde has hydrated the token claims. Kinde can
+    // briefly report an authenticated session before getToken() is ready.
+    isLoading: convexIsLoading,
+
+    // `?? false` ensures we default to not-authenticated (safe default).
+    isAuthenticated: authenticated && tokenClaimsReady,
+
+    fetchAccessToken,
+  }), [authenticated, convexIsLoading, fetchAccessToken, tokenClaimsReady]);
 }

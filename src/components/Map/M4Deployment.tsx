@@ -44,6 +44,8 @@ import { useCaseMapData } from "@/hooks/use-case-map-data";
 import { MAP_VIEW_VALUES, type MapView } from "@/types/map";
 import { useIsDark } from "@/providers/theme-provider";
 import { useMapManifestHover } from "@/providers/map-manifest-hover-provider";
+import { InventoryMapCanvas } from "./InventoryMapCanvas";
+import { InventoryCaseMarkers } from "./InventoryCaseMarkers";
 import styles from "./M4Deployment.module.css";
 
 // ─── Mapbox style URLs ────────────────────────────────────────────────────────
@@ -404,15 +406,6 @@ export function M4Deployment({
           data-m4-map-pane="true"
         >
           {mapboxToken ? (
-            /* Map rendered by react-map-gl; M4 shipment pin data exposed via data
-               attributes for the Mapbox layer integration. Each CaseMapRecord carries
-               tracking fields (trackingNumber, carrier, origin, destination,
-               estimatedDelivery) for shipment overlay rendering.
-               data-in-transit-count — reactive in-transit shipment count from
-                 useCaseMapData({ mode: "M4" }) → summary.inTransit; drives the
-                 Mapbox source layer badge overlay without re-querying.
-               data-pin-count — total visible shipment pin count; drives cluster
-                 layer expansion threshold in the Mapbox GL layer config. */
             <div
               id="m4-map-container"
               className={styles.mapContainer}
@@ -422,7 +415,24 @@ export function M4Deployment({
               data-pin-count={pins.length}
               data-in-transit-count={inTransitCount}
               data-loading={isLoading ? "true" : undefined}
-            />
+            >
+              <InventoryMapCanvas
+                mapboxToken={mapboxToken}
+                mapStyle={mapStyle}
+                aria-label="Logistics shipment map"
+                showEmptyMessage={!isLoading && pins.length === 0}
+                emptyMessage="No shipment locations to display yet."
+              >
+                <InventoryCaseMarkers
+                  records={pins}
+                  hoveredCaseId={hoveredCaseId}
+                  onHoverCase={setHoveredCaseId}
+                  getMeta={(pin) =>
+                    pin.trackingNumber ?? pin.locationName ?? pin.status
+                  }
+                />
+              </InventoryMapCanvas>
+            </div>
           ) : (
             <div
               className={styles.mapPlaceholder}

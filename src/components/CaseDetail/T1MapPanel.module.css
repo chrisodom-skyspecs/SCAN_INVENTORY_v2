@@ -313,7 +313,8 @@
   background: var(--layer-deployed-bg);
 }
 
-.caseMarkerHead[data-status="flagged"] {
+.caseMarkerHead[data-status="flagged"],
+.caseMarkerHead[data-status="recalled"] {
   background: var(--layer-flagged-bg);
 }
 

@@ -171,6 +171,108 @@
   box-sizing: border-box;
 }
 
+/* ── Today custody/task panel ─────────────────────────────────────── */
+
+.todayPanel {
+  display: grid;
+  gap: 0.875rem;
+}
+
+.todayStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.todayStat {
+  display: grid;
+  gap: 0.125rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background: var(--surface-raised);
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.todayStat strong {
+  color: var(--ink-primary);
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1.375rem;
+}
+
+.todayStat span,
+.todaySectionHeader span,
+.todayRow span,
+.todayEmpty {
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+}
+
+.todaySectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.todaySectionHeader h2 {
+  margin: 0;
+  color: var(--ink-tertiary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.todayList {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.todayRow {
+  display: flex;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background: var(--surface-raised);
+  color: var(--ink-primary);
+  padding: 0.75rem;
+  text-decoration: none;
+}
+
+.todayRow div {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.todayRow strong {
+  color: var(--ink-primary);
+  font-size: 0.9375rem;
+}
+
+.todayRow span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todayChevron {
+  color: var(--ink-tertiary);
+  font-size: 1.5rem;
+}
+
+.todayEmpty {
+  margin: 0;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 0.75rem;
+  padding: 0.875rem;
+  text-align: center;
+}
+
 /* ── Manual entry fallback ───────────────────────────────────── */
 
 .manual {

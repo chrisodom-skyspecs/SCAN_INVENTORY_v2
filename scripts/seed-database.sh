@@ -16,17 +16,14 @@
 #
 # What this creates:
 #   • 3 feature flags  (FF_AUDIT_HASH_CHAIN, FF_MAP_MISSION, FF_INV_REDESIGN)
-#   • 5 case templates (packing lists with 6–14 items each)
-#   • 6 missions       (wind farm deployments across MI, OH, IL, IN)
-#   • 40 turbines      (distributed across all mission sites)
-#   • 50 cases         (all lifecycle statuses: hangar → archived)
-#   • ~700 manifest items
-#   • ~42 inspections
-#   • ~15 shipments    (with realistic FedEx tracking numbers)
-#   • ~220 events      (immutable audit trail)
-#   • ~60 custody records
-#   • ~130 scans
-#   • ~200 checklist update history rows
+#   • 8 case templates (ForeSight, GSC, battery, charger, SkyCrawler)
+#   • 6 complete equipment datasets (FS-101/102/103, SC-201/202/203)
+#   • 6 missions       (hangar staging, outbound, deployed, return, refurb)
+#   • 20 turbines      (distributed across field mission sites)
+#   • 28 cases         (GSC, aircraft/rover, charger/support, battery cases)
+#   • ~600 manifest items with serialised aircraft, rover, Beakon, and battery rows
+#   • inspections, shipments, shipping updates, events, custody handoffs,
+#     scans, checklist history, damage reports, and notifications
 #
 # ─────────────────────────────────────────────────────────────────────────────
 

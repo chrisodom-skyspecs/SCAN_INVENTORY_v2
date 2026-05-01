@@ -378,6 +378,7 @@ export const handoffCustody = mutation({
      * server-side via ctx.storage.getUrl(signatureStorageId).
      */
     signatureStorageId: v.optional(v.string()),
+    clientId: v.optional(v.string()),
   },
 
   handler: async (ctx, args): Promise<HandoffCustodyResult> => {
@@ -385,6 +386,27 @@ export const handoffCustody = mutation({
     await requireAuth(ctx);
 
     const now = args.handoffAt;
+
+    if (args.clientId) {
+      const existing = await ctx.db
+        .query("custodyRecords")
+        .withIndex("by_client_id", (q) => q.eq("clientId", args.clientId))
+        .first();
+      if (existing) {
+        const existingEvent = await ctx.db
+          .query("events")
+          .withIndex("by_client_id", (q) => q.eq("clientId", args.clientId))
+          .first();
+        return {
+          custodyRecordId: existing._id.toString(),
+          caseId: existing.caseId,
+          fromUserId: existing.fromUserId,
+          toUserId: existing.toUserId,
+          handoffAt: existing.transferredAt,
+          eventId: existingEvent?._id.toString() ?? "",
+        };
+      }
+    }
 
     // ── Input guard: self-handoff ─────────────────────────────────────────────
     //
@@ -443,6 +465,24 @@ export const handoffCustody = mutation({
       transferredAt:      now,
       notes:              args.notes,
       signatureStorageId: args.signatureStorageId,
+      clientId:           args.clientId,
+    });
+
+    await ctx.db.insert("custody_handoffs", {
+      caseId: args.caseId,
+      fromUserId: args.fromUserId,
+      toUserId: args.toUserId,
+      timestamp: now,
+      signature: args.signatureStorageId,
+      location:
+        args.lat !== undefined || args.lng !== undefined || args.locationName !== undefined
+          ? {
+              lat: args.lat,
+              lng: args.lng,
+              name: args.locationName,
+            }
+          : undefined,
+      clientId: args.clientId,
     });
 
     // ── Step 3: PATCH case with new custodian (case ownership state update) ───
@@ -517,6 +557,7 @@ export const handoffCustody = mutation({
         notes:              args.notes,
         signatureStorageId: args.signatureStorageId,
       },
+      clientId: args.clientId,
     });
 
     // ── Step 5: INSERT in-app notification for incoming custodian ─────────────

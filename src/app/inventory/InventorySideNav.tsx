@@ -208,6 +208,42 @@ function CasesIcon({ className }: IconProps) {
 }
 
 /**
+ * Shipments icon — outbound bundle / carrier box.
+ */
+function ShipmentsIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M2 4.25A1.75 1.75 0 0 1 3.75 2.5h5.5A1.75 1.75 0 0 1 11 4.25V5h1.05c.47 0 .913.22 1.197.596l1.45 1.92c.196.26.303.577.303.904v2.33A1.75 1.75 0 0 1 13.25 12.5h-.39a2 2 0 0 1-3.72 0H6.36a2 2 0 0 1-3.72 0H2.5A1.5 1.5 0 0 1 1 11V5.25c0-.552.448-1 1-1Zm1.75-.25a.25.25 0 0 0-.25.25V11h.14a2 2 0 0 1 3.72 0H9.25V4.25A.25.25 0 0 0 9 4H3.75ZM11 6.5V11h.14a2 2 0 0 1 2.36-1.358V8.42l-1.45-1.92H11ZM4.5 13a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1Zm6.5-.5a.5.5 0 1 0 1 0 .5.5 0 0 0-1 0Z" />
+    </svg>
+  );
+}
+
+/**
+ * Add icon — quick action for a new outbound shipment.
+ */
+function AddIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M8 2.25a.75.75 0 0 1 .75.75v4.25H13a.75.75 0 0 1 0 1.5H8.75V13a.75.75 0 0 1-1.5 0V8.75H3a.75.75 0 0 1 0-1.5h4.25V3A.75.75 0 0 1 8 2.25Z" />
+    </svg>
+  );
+}
+
+/**
  * Reports icon — document with chart lines.
  */
 function ReportsIcon({ className }: IconProps) {
@@ -363,6 +399,22 @@ const UTILITY_NAV_ITEMS: NavItemDef[] = [
     group: "secondary",
   },
   {
+    key: "shipments",
+    label: "Shipments",
+    href: "/inventory/shipments",
+    icon: ShipmentsIcon,
+    enabled: true,
+    group: "secondary",
+  },
+  {
+    key: "shipments-new",
+    label: "+ Shipment",
+    href: "/inventory/shipments/new",
+    icon: AddIcon,
+    enabled: true,
+    group: "secondary",
+  },
+  {
     key: "reports",
     label: "Reports",
     href: "/inventory/reports",
@@ -416,6 +468,10 @@ function isNavItemActive(
     // Absent view param → default to M1.
     const effectiveView = viewParam ?? "M1";
     return effectiveView.toUpperCase() === item.mapView;
+  }
+
+  if (item.key === "shipments" && pathname.startsWith("/inventory/shipments/new")) {
+    return false;
   }
 
   // Utility routes: prefix match (handles /inventory/cases, /inventory/admin, etc.)

@@ -43,6 +43,9 @@ import { useMapParams } from "@/hooks/use-map-params";
 import { useCaseMapData } from "@/hooks/use-case-map-data";
 import { MAP_VIEW_VALUES, type MapView } from "@/types/map";
 import { useIsDark } from "@/providers/theme-provider";
+import { InventoryMapCanvas } from "./InventoryMapCanvas";
+import { HeatLayer } from "./HeatLayer";
+import { HistoryTrailLayer } from "./HistoryTrailLayer";
 import styles from "./M5MissionControl.module.css";
 
 // ─── Mapbox style URLs ────────────────────────────────────────────────────────
@@ -402,17 +405,6 @@ export function M5MissionControl({
       {/* ── Map canvas ── */}
       <main className={styles.mapCanvas} aria-label="Mission Control map">
         {mapboxToken ? (
-          /* Map rendered by react-map-gl; M5 cluster/heatmap aggregates are
-             consumed directly by the Mapbox GL source layer.  summary.total and
-             summary.byStatus drive the analytics overlay and heatmap legend.
-             records is always [] for M5 — no individual case pins.
-
-             data-fleet-count — reactive total case count from
-               useCaseMapData({ mode: "M5" }) → summary.total; drives the
-               fleet-wide analytics overlay header in the Mapbox GL layer.
-             data-by-status — reactive JSON-serialized status breakdown from
-               summary.byStatus; drives the heatmap legend layer colors and
-               cluster status badge overlays without re-querying Convex. */
           <div
             id="m5-map-container"
             className={styles.mapContainer}
@@ -422,7 +414,25 @@ export function M5MissionControl({
             data-fleet-count={totalMissionCases}
             data-by-status={summary ? JSON.stringify(summary.byStatus) : undefined}
             data-loading={isLoading ? "true" : undefined}
-          />
+          >
+            <InventoryMapCanvas
+              mapboxToken={mapboxToken}
+              mapStyle={mapStyle}
+              aria-label="Mission Control map"
+              showEmptyMessage={!isLoading && totalMissionCases === 0}
+              emptyMessage="No mission aggregate data to display yet."
+            >
+              <HeatLayer
+                missionId={org ?? undefined}
+                showLegend={true}
+              />
+              <HistoryTrailLayer
+                missionId={org ?? null}
+                showLegend={true}
+                showToggle={true}
+              />
+            </InventoryMapCanvas>
+          </div>
         ) : (
           <div
             className={styles.mapPlaceholder}

@@ -39,6 +39,8 @@ export type RecallReturnMethod =
 
 /** Data emitted by the reroute form on submit. */
 export interface RecallRerouteData {
+  /** Required reason shown to the current case holder and audit trail. */
+  reason: string;
   /** The chosen return-logistics method. */
   returnMethod: RecallReturnMethod;
   /** Optional operator note attached to the recall event. */
@@ -258,10 +260,13 @@ export function RecallModalStep2Reroute({
   // ── Form state ────────────────────────────────────────────────────────────
   const [selectedMethod, setSelectedMethod] =
     React.useState<RecallReturnMethod>("fedex");
+  const [reason, setReason] = React.useState("");
   const [notes, setNotes] = React.useState("");
 
   // ── Stable IDs (scoped to caseId to avoid collisions if multiple modals) ─
   const groupLabelId = `recall-method-lbl-${caseId}`;
+  const reasonId = `recall-reason-${caseId}`;
+  const reasonLabelId = `recall-reason-lbl-${caseId}`;
   const notesId = `recall-notes-${caseId}`;
   const notesLabelId = `recall-notes-lbl-${caseId}`;
 
@@ -281,12 +286,15 @@ export function RecallModalStep2Reroute({
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       if (isSubmitting) return;
+      const trimmedReason = reason.trim();
+      if (!trimmedReason) return;
       onSubmit({
+        reason: trimmedReason,
         returnMethod: selectedMethod,
         notes: notes.trim() || undefined,
       });
     },
-    [isSubmitting, onSubmit, selectedMethod, notes]
+    [isSubmitting, onSubmit, selectedMethod, reason, notes]
   );
 
   return (
@@ -421,6 +429,31 @@ export function RecallModalStep2Reroute({
           </div>
         </fieldset>
 
+        {/* ── Recall reason ─────────────────────────────────────────────── */}
+        <div className={styles.notesSection}>
+          <label
+            id={reasonLabelId}
+            htmlFor={reasonId}
+            className={styles.notesLabel}
+          >
+            Recall Reason
+          </label>
+          <textarea
+            id={reasonId}
+            name="recall-reason"
+            className={styles.notesTextarea}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            disabled={isSubmitting}
+            placeholder="Maintenance, upgrade, incident review, or known issue…"
+            maxLength={500}
+            rows={2}
+            required
+            aria-labelledby={reasonLabelId}
+            data-testid="recall-reason-textarea"
+          />
+        </div>
+
         {/* ── Notes textarea ────────────────────────────────────────────── */}
         <div className={styles.notesSection}>
           <label
@@ -480,8 +513,8 @@ export function RecallModalStep2Reroute({
           type="submit"
           form={FORM_ID}
           className={styles.submitButton}
-          disabled={isSubmitting}
-          aria-disabled={isSubmitting}
+          disabled={isSubmitting || reason.trim().length === 0}
+          aria-disabled={isSubmitting || reason.trim().length === 0}
           aria-label={
             isSubmitting
               ? "Submitting recall…"

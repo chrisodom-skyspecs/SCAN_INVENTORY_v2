@@ -24,6 +24,8 @@
  *   flagged     → M2 + T3  Site detail + inspection: same as deployed but
  *                           flagged for damage/missing items; inspection is
  *                           critical context.
+ *   recalled    → M2 + T4  Site detail + shipping: holder action is required
+ *                           and the return route / custody chain matters.
  *   transit_in  → M3 + T4  Transit tracker + shipping: live FedEx tracking
  *                           for the inbound return leg.
  *   received    → M1 + T1  Fleet overview + summary: case has returned to
@@ -193,6 +195,20 @@ export const STATE_LAYOUT_MAP: Readonly<Record<CaseStatus, StateLayoutEntry>> =
         "Case is flagged for outstanding issues. Site Detail (M2) keeps the " +
         "field location in view; Inspection (T3) surfaces the flagged items, " +
         "damage reports, and annotated photos that need review.",
+    },
+
+    /**
+     * recalled — case should return to the hangar.
+     * Site context remains useful because the current holder is still in the
+     * field; Shipping/Custody (T4) is the most relevant next-step view.
+     */
+    recalled: {
+      mapMode: "M2",
+      caseLayout: "T4",
+      reason:
+        "Case has been recalled to the hangar. Site Detail (M2) keeps the " +
+        "current field context visible; Shipping/Custody (T4) shows return " +
+        "handoff and carrier progress.",
     },
 
     /**
@@ -427,6 +443,7 @@ export const ALL_STATE_LAYOUT_ENTRIES: ReadonlyArray<
     "transit_out",
     "deployed",
     "flagged",
+    "recalled",
     "transit_in",
     "received",
     "archived",

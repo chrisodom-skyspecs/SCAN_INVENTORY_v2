@@ -43,6 +43,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
+import { useConvexAuth } from "convex/react";
 import { M1FleetOverview } from "@/components/Map/M1FleetOverview";
 import { M2SiteDetail } from "@/components/Map/M2SiteDetail";
 import { M3TransitTracker } from "@/components/Map/M3TransitTracker";
@@ -235,6 +236,10 @@ export function InventoryMapClient({
   // (all 8 params) rather than a hardcoded "M1" fallback.
   const activeView: MapView =
     view ?? initialState?.view ?? MAP_URL_STATE_DEFAULTS.view;
+  const effectiveActiveView: MapView =
+    activeView === "M5" && !FF_MAP_MISSION
+      ? MAP_URL_STATE_DEFAULTS.view
+      : activeView;
 
   // ── Kinde user identity ───────────────────────────────────────────────────────
   //
@@ -247,6 +252,10 @@ export function InventoryMapClient({
     isLoading: isAuthLoading,
   } = useKindeUser({ fallbackName: "Operator" });
   const { accessToken } = useKindeBrowserClient();
+  const {
+    isAuthenticated: isConvexAuthenticated,
+    isLoading: isConvexAuthLoading,
+  } = useConvexAuth();
 
   // ── Default layout on case selection / status change ─────────────────────────
   //
@@ -268,6 +277,12 @@ export function InventoryMapClient({
     setParams,
   });
 
+  useEffect(() => {
+    if (activeView === "M5" && !FF_MAP_MISSION) {
+      setParams({ view: MAP_URL_STATE_DEFAULTS.view });
+    }
+  }, [activeView, setParams]);
+
   // ── Map mode telemetry ────────────────────────────────────────────────────────
   //
   // Fire INV_NAV_MAP_VIEW_CHANGED every time the active map mode changes.
@@ -285,18 +300,18 @@ export function InventoryMapClient({
     const previousView = previousViewRef.current;
 
     // Guard: skip if the view did not change (e.g., re-renders without a mode switch).
-    if (previousView === activeView) return;
+    if (previousView === effectiveActiveView) return;
 
     trackEvent({
       eventCategory: "navigation",
       eventName: TelemetryEventName.INV_NAV_MAP_VIEW_CHANGED,
       app: "inventory",
-      mapView: activeView,
+      mapView: effectiveActiveView,
       previousMapView: previousView,
     });
 
-    previousViewRef.current = activeView;
-  }, [activeView]);
+    previousViewRef.current = effectiveActiveView;
+  }, [effectiveActiveView]);
 
   // ── Page load telemetry ───────────────────────────────────────────────────────
   //
@@ -506,7 +521,12 @@ export function InventoryMapClient({
   //
   // Both hooks return empty arrays while loading (subscriptions pending),
   // which renders the dropdowns with only the "All" option until data arrives.
-  const canLoadFilterData = !isAuthLoading && isAuthenticated && accessToken != null;
+  const canLoadFilterData =
+    !isAuthLoading &&
+    isAuthenticated &&
+    accessToken != null &&
+    !isConvexAuthLoading &&
+    isConvexAuthenticated;
   const { orgs } = useMissions({ enabled: canLoadFilterData });
   const { kits } = useCaseTemplates({ enabled: canLoadFilterData });
 
@@ -535,7 +555,7 @@ export function InventoryMapClient({
   // ── Mode rendering ───────────────────────────────────────────────────────────
 
   function renderMapMode() {
-    switch (activeView) {
+    switch (effectiveActiveView) {
       case "M1":
         return (
           <M1FleetOverview
@@ -573,20 +593,16 @@ export function InventoryMapClient({
         );
 
       case "M5":
-        // M5 is gated behind FF_MAP_MISSION.
-        // When disabled, show a locked placeholder so users know why the mode
-        // is unavailable rather than silently falling back to M1.
-        // When enabled, render M5MissionControl which reads all four URL params
+        // M5 is gated behind FF_MAP_MISSION. When enabled, render
+        // M5MissionControl which reads all four URL params
         // (view, org, kit, at) via useMapParams on mount, fully restoring state
         // on page load and hard refresh.
-        return FF_MAP_MISSION ? (
+        return (
           <M5MissionControl
             mapboxToken={mapboxToken}
             orgs={orgs}
             kits={kits}
           />
-        ) : (
-          <M5LockedStub />
         );
 
       default:

@@ -80,7 +80,11 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { StatusPill } from "../StatusPill";
+import { RecallModal, type RecallRerouteData } from "../RecallModal";
 import { DossierOverviewPanel } from "./DossierOverviewPanel";
 import { DossierActivityPanel } from "./DossierActivityPanel";
 import { DossierMapPanel } from "./DossierMapPanel";
@@ -340,6 +344,14 @@ export function T4DossierShell({
 }: T4DossierShellProps) {
   // ── Tab state — uncontrolled when `activeTab` is not provided ───────────────
   const [internalTab, setInternalTab] = useState<DossierTab>(initialTab);
+  const [isRecallOpen, setIsRecallOpen] = useState(false);
+  const [isRecallSubmitting, setIsRecallSubmitting] = useState(false);
+  const [recallError, setRecallError] = useState<string | null>(null);
+
+  const caseDoc = useQuery(api.cases.getCaseById, {
+    caseId: caseId as Id<"cases">,
+  });
+  const recallCase = useMutation(api.cases.recallCase);
 
   // Resolve the effective active tab: controlled > internal
   const activeTab = controlledTab ?? internalTab;
@@ -472,6 +484,29 @@ export function T4DossierShell({
   }
 
   const rootClass = [styles.dossier, className].filter(Boolean).join(" ");
+  const canRecall =
+    caseDoc !== undefined &&
+    caseDoc !== null &&
+    ["assembled", "transit_out", "deployed", "flagged"].includes(caseDoc.status);
+
+  async function handleRecallSubmit(data: RecallRerouteData) {
+    if (!caseDoc) return;
+    setRecallError(null);
+    setIsRecallSubmitting(true);
+    try {
+      await recallCase({
+        caseId: caseDoc._id,
+        reason: data.reason,
+        returnMethod: data.returnMethod,
+        notes: data.notes,
+      });
+      setIsRecallOpen(false);
+    } catch (err) {
+      setRecallError(err instanceof Error ? err.message : "Unable to recall case.");
+    } finally {
+      setIsRecallSubmitting(false);
+    }
+  }
 
   return (
     <section
@@ -481,6 +516,31 @@ export function T4DossierShell({
       data-case-id={caseId}
       data-active-tab={activeTab}
     >
+      {caseDoc && (
+        <div className={styles.actionBar}>
+          <div>
+            <p className={styles.actionEyebrow}>Case dossier</p>
+            <div className={styles.actionTitleRow}>
+              <strong>{caseDoc.label}</strong>
+              <StatusPill kind={caseDoc.status} />
+            </div>
+            {caseDoc.recallReason && (
+              <p className={styles.recallReason}>Recall reason: {caseDoc.recallReason}</p>
+            )}
+            {recallError && <p className={styles.recallError}>{recallError}</p>}
+          </div>
+          {canRecall && (
+            <button
+              type="button"
+              className={styles.recallButton}
+              onClick={() => setIsRecallOpen(true)}
+            >
+              Recall
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ── Tab navigation bar ────────────────────────────────────── */}
       <nav
         className={styles.tabBar}
@@ -566,6 +626,23 @@ export function T4DossierShell({
           </div>
         );
       })}
+      {caseDoc && (
+        <RecallModal
+          isOpen={isRecallOpen}
+          onClose={() => setIsRecallOpen(false)}
+          onConfirm={() => undefined}
+          onSubmit={(data) => void handleRecallSubmit(data)}
+          caseId={caseDoc._id}
+          caseData={{
+            label: caseDoc.label,
+            status: caseDoc.status,
+            locationName: caseDoc.locationName,
+            assigneeName: caseDoc.assigneeName,
+            updatedAt: caseDoc.updatedAt,
+          }}
+          isSubmitting={isRecallSubmitting}
+        />
+      )}
     </section>
   );
 }

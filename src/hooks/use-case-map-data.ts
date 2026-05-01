@@ -61,7 +61,7 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type {
   M1Response,
@@ -170,6 +170,7 @@ export type CaseStatus =
   | "transit_out"
   | "deployed"
   | "flagged"
+  | "recalled"
   | "transit_in"
   | "received"
   | "archived";
@@ -650,6 +651,13 @@ export function useCaseMapData(
     skip = false,
   } = args;
 
+  const {
+    isAuthenticated: isConvexAuthenticated,
+    isLoading: isConvexAuthLoading,
+  } = useConvexAuth();
+  const shouldSkip =
+    skip || isConvexAuthLoading || !isConvexAuthenticated;
+
   // ── Shared bounds — flattened to match Convex validator shape ─────────────
   //
   // Convex query validators accept individual number fields (swLat, swLng,
@@ -662,11 +670,11 @@ export function useCaseMapData(
   // Each mode is "active" only when both `mode === "Mn"` and `skip` is false.
   // An active mode's query args are passed normally; inactive modes receive
   // "skip" so their Convex subscriptions are suspended.
-  const isM1 = mode === "M1" && !skip;
-  const isM2 = mode === "M2" && !skip;
-  const isM3 = mode === "M3" && !skip;
-  const isM4 = mode === "M4" && !skip;
-  const isM5 = mode === "M5" && !skip;
+  const isM1 = mode === "M1" && !shouldSkip;
+  const isM2 = mode === "M2" && !shouldSkip;
+  const isM3 = mode === "M3" && !shouldSkip;
+  const isM4 = mode === "M4" && !shouldSkip;
+  const isM5 = mode === "M5" && !shouldSkip;
 
   // ── M1: Fleet Overview — all case pins with status/position/custody ────────
   const m1Result = useQuery(
@@ -752,13 +760,13 @@ export function useCaseMapData(
   // the skip flag toggles.  Using performance.now() for sub-millisecond
   // precision; falls back to Date.now() in environments without the API.
   useEffect(() => {
-    if (skip) {
+    if (shouldSkip) {
       _queryStartRef.current = null;
       return;
     }
     _queryStartRef.current =
       typeof performance !== "undefined" ? performance.now() : Date.now();
-  }, [mode, skip]);
+  }, [mode, shouldSkip]);
 
   // True while the currently-active mode's query has not yet returned its
   // first result.  This is a plain boolean derived from the query results —
@@ -775,7 +783,7 @@ export function useCaseMapData(
   // changes (or when mode/skip changes), keeping overhead negligible.
   useEffect(() => {
     if (
-      !skip &&
+      !shouldSkip &&
       _wasLoadingRef.current &&     // was loading on the previous render
       !_activeIsLoading &&          // now has data
       _queryStartRef.current !== null
@@ -787,10 +795,10 @@ export function useCaseMapData(
     }
     // Update ref so the next render can detect the next transition.
     _wasLoadingRef.current = _activeIsLoading;
-  }, [_activeIsLoading, mode, skip]);
+  }, [_activeIsLoading, mode, shouldSkip]);
 
   // ── Skip: return empty state immediately ──────────────────────────────────
-  if (skip) {
+  if (shouldSkip) {
     return { records: [], isLoading: false, summary: undefined, mode };
   }
 

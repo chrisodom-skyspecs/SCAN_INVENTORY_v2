@@ -76,7 +76,7 @@
  *
  *   // Active phases only (reduced board)
  *   <T3SwimLaneConnected
- *     phases={["transit_out", "deployed", "flagged", "transit_in"]}
+ *     phases={["transit_out", "deployed", "flagged", "recalled", "transit_in"]}
  *   />
  */
 

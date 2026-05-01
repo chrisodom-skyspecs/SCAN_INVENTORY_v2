@@ -120,7 +120,12 @@ export type CaseEventType =
   | "note_added"
   | "photo_added"
   | "mission_assigned"
-  | "template_applied";
+  | "template_applied"
+  | "qc_sign_off"
+  | "case_recalled"
+  | "condition_note"
+  | "shipment_created"
+  | "shipment_released";
 
 /**
  * A single event record from the immutable audit trail.
@@ -145,6 +150,10 @@ export type CaseEventType =
  *   damage_reported:
  *     { manifestItemId?: string, templateItemId?: string, severity: string,
  *       photoStorageId: string, notes?: string }
+ *
+ *   condition_note:
+ *     { conditionNoteId: string, component: string, severity: string,
+ *       summary: string, photoCount: number }
  *
  *   shipped:
  *     { trackingNumber: string, carrier: string, originName?: string,
@@ -224,6 +233,11 @@ const eventTypeValidator = v.union(
   v.literal("photo_added"),
   v.literal("mission_assigned"),
   v.literal("template_applied"),
+  v.literal("qc_sign_off"),
+  v.literal("case_recalled"),
+  v.literal("condition_note"),
+  v.literal("shipment_created"),
+  v.literal("shipment_released"),
 );
 
 // ─── Shared row → CaseEvent projection ───────────────────────────────────────

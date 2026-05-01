@@ -362,4 +362,32 @@ describe("useAuthFromKinde — ConvexProviderWithAuth wiring contract", () => {
     const notok = await r2.current.fetchAccessToken({ forceRefreshToken: false });
     expect(notok).toBeNull();
   });
+
+  it("keeps fetchAccessToken stable across equivalent re-renders", () => {
+    setupKinde({ isAuthenticated: true, isLoading: false, token: "bearer-tok" });
+    const { result, rerender } = renderHook(() => useAuthFromKinde());
+    const firstFetchAccessToken = result.current.fetchAccessToken;
+
+    rerender();
+
+    expect(result.current.fetchAccessToken).toBe(firstFetchAccessToken);
+  });
+
+  it("keeps fetchAccessToken stable when Kinde method identities change", async () => {
+    setupKinde({ isAuthenticated: true, isLoading: false, token: "first-token" });
+    const { result, rerender } = renderHook(() => useAuthFromKinde());
+    const firstFetchAccessToken = result.current.fetchAccessToken;
+
+    const nextGetToken = vi.fn(() => "second-token");
+    const nextRefreshData = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    mockKindeState.getToken = nextGetToken;
+    mockKindeState.refreshData = nextRefreshData;
+    rerender();
+
+    expect(result.current.fetchAccessToken).toBe(firstFetchAccessToken);
+    await expect(
+      result.current.fetchAccessToken({ forceRefreshToken: true })
+    ).resolves.toBe("second-token");
+    expect(nextRefreshData).toHaveBeenCalledOnce();
+  });
 });

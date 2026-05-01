@@ -16,6 +16,8 @@
  *                  │               │              │                           │
  *                  │         (redirected)      flagged ────────────────▶ transit_in
  *                  │                              │
+ *                  │                           recalled ───────────────▶ transit_in
+ *                  │                              │
  *                  └──────────────────────────────┘ (re-assemble at site)
  *
  * Status definitions
@@ -25,6 +27,7 @@
  *   transit_out  — In transit from base to a field site via carrier.
  *   deployed     — Actively in use at a field site; may be under inspection.
  *   flagged      — Has outstanding issues (damage / missing items) requiring review.
+ *   recalled     — Current holder has been notified to return the case to the hangar.
  *   transit_in   — In transit from a field site back to base.
  *   received     — Received back at base after return from field.
  *   archived     — Decommissioned; no longer in active rotation.
@@ -44,6 +47,7 @@ export type CaseStatus =
   | "transit_out"
   | "deployed"
   | "flagged"
+  | "recalled"
   | "transit_in"
   | "received"
   | "archived";
@@ -67,6 +71,7 @@ export const CASE_STATUSES: CaseStatus[] = [
   "transit_out",
   "deployed",
   "flagged",
+  "recalled",
   "transit_in",
   "received",
   "archived",
@@ -91,6 +96,7 @@ export const CaseStatusValues = {
   transit_out: "transit_out" as const,
   deployed:    "deployed"    as const,
   flagged:     "flagged"     as const,
+  recalled:    "recalled"    as const,
   transit_in:  "transit_in"  as const,
   received:    "received"    as const,
   archived:    "archived"    as const,
@@ -108,6 +114,7 @@ export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
   transit_out: "Transit Out",
   deployed:    "Deployed",
   flagged:     "Flagged",
+  recalled:    "Recalled",
   transit_in:  "Transit In",
   received:    "Received",
   archived:    "Archived",
@@ -122,6 +129,7 @@ export const CASE_STATUS_HINTS: Record<CaseStatus, string> = {
   transit_out: "In transit to field site",
   deployed:    "Actively in use at a field site",
   flagged:     "Has outstanding issues requiring review",
+  recalled:    "Recalled to hangar; current holder should return it",
   transit_in:  "In transit returning to base",
   received:    "Received back at base",
   archived:    "Decommissioned; no longer in active rotation",
@@ -135,7 +143,7 @@ export const CASE_STATUS_HINTS: Record<CaseStatus, string> = {
  * Lower values sort first. The order mirrors the typical lifecycle progression:
  *
  *   hangar (0) → assembled (1) → transit_out (2) → deployed (3)
- *             → flagged (4) → transit_in (5) → received (6) → archived (7)
+ *             → flagged/recalled (4/5) → transit_in (6) → received (7) → archived (8)
  *
  * Useful when sorting case lists, tables, or dropdowns by lifecycle stage
  * rather than by string value or display label.
@@ -149,9 +157,10 @@ export const CASE_STATUS_SORT_ORDER: Readonly<Record<CaseStatus, number>> = {
   transit_out: 2,
   deployed:    3,
   flagged:     4,
-  transit_in:  5,
-  received:    6,
-  archived:    7,
+  recalled:    5,
+  transit_in:  6,
+  received:    7,
+  archived:    8,
 };
 
 // ─── Valid status transitions ─────────────────────────────────────────────────
@@ -180,6 +189,8 @@ export const CASE_STATUS_SORT_ORDER: Readonly<Record<CaseStatus, number>> = {
  *   flagged     → deployed             (issues resolved on-site)
  *               → transit_in           (shipping back despite issues)
  *               → assembled            (returned to base for repair/repack)
+ *   recalled    → transit_in           (return shipment started)
+ *               → received             (returned directly to hangar)
  *   transit_in  → received             (arrived back at base)
  *   received    → assembled            (repackaged for next mission)
  *               → archived             (decommissioned)
@@ -192,8 +203,9 @@ export const CASE_STATUS_TRANSITIONS: Readonly<
   hangar:      ["assembled"],
   assembled:   ["transit_out", "deployed", "hangar"],
   transit_out: ["deployed", "received"],
-  deployed:    ["flagged", "transit_in", "assembled"],
-  flagged:     ["deployed", "transit_in", "assembled"],
+  deployed:    ["flagged", "recalled", "transit_in", "assembled"],
+  flagged:     ["deployed", "recalled", "transit_in", "assembled"],
+  recalled:    ["transit_in", "received"],
   transit_in:  ["received"],
   received:    ["assembled", "archived", "hangar"],
   archived:    [],

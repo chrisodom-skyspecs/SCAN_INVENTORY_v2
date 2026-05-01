@@ -103,6 +103,11 @@ const ACTION_CATEGORY_LABEL: Record<CaseEventType, string> = {
   template_applied:     "CONFIG",
   photo_added:          "MEDIA",
   note_added:           "MEDIA",
+  qc_sign_off:          "QC",
+  case_recalled:        "RECALL",
+  condition_note:       "FLAG",
+  shipment_created:     "SHIP",
+  shipment_released:    "SHIP",
 };
 
 /**
@@ -128,6 +133,11 @@ const ACTION_CATEGORY_VARIANT: Record<CaseEventType, string> = {
   template_applied:     "neutral",
   photo_added:          "neutral",
   note_added:           "neutral",
+  qc_sign_off:          "field",
+  case_recalled:        "damage",
+  condition_note:       "damage",
+  shipment_created:     "field",
+  shipment_released:    "field",
 };
 
 /**
@@ -147,6 +157,11 @@ const EVENT_TYPE_LABELS: Record<CaseEventType, string> = {
   template_applied:     "Template Applied",
   photo_added:          "Photo Added",
   note_added:           "Note Added",
+  qc_sign_off:          "QC Sign-Off",
+  case_recalled:        "Case Recalled",
+  condition_note:       "Condition Note",
+  shipment_created:     "Shipment Created",
+  shipment_released:    "Shipment Released",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -187,7 +202,7 @@ function toISOString(epochMs: number): string {
 function deriveStatusKind(event: CaseEvent): StatusKind | null {
   const validCaseStatuses = new Set([
     "hangar", "assembled", "transit_out", "deployed",
-    "flagged", "transit_in", "received", "archived",
+    "flagged", "recalled", "transit_in", "received", "archived",
   ]);
 
   switch (event.eventType) {

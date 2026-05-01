@@ -27,6 +27,67 @@
   isolation: isolate;
 }
 
+.actionBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--border-default);
+  background-color: var(--surface-raised);
+}
+
+.actionEyebrow {
+  margin: 0 0 0.25rem;
+  color: var(--ink-tertiary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.actionTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.recallReason,
+.recallError {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+}
+
+.recallReason {
+  color: var(--ink-secondary);
+}
+
+.recallError {
+  color: var(--ink-danger, var(--signal-error-text-subtle));
+}
+
+.recallButton {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--signal-error-border);
+  border-radius: 999px;
+  background: var(--signal-error-fill-subtle);
+  color: var(--signal-error-text-subtle);
+  cursor: pointer;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0 0.875rem;
+}
+
+.recallButton:hover {
+  background: var(--signal-error-fill);
+}
+
 /* ── Tab navigation bar ───────────────────────────────────────────── */
 
 .tabBar {

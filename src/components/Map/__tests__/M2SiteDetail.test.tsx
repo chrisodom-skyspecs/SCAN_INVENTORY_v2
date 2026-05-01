@@ -111,6 +111,16 @@ vi.mock("@/hooks/use-m2-journey-stops", () => ({
     mockUseM2JourneyStopsBatch(...args),
 }));
 
+vi.mock("react-map-gl", () => ({
+  Map: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="react-map-gl-map">{children}</div>
+  ),
+  NavigationControl: () => <div data-testid="map-navigation-control" />,
+  Marker: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="map-marker">{children}</div>
+  ),
+}));
+
 // ─── Mock JourneyPathLine ─────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

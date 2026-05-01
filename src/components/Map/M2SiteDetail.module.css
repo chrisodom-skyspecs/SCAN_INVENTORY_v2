@@ -405,7 +405,8 @@
 .pinDot[data-status="deployed"] {
   background: var(--status-deployed, var(--ink-brand));
 }
-.pinDot[data-status="flagged"] {
+.pinDot[data-status="flagged"],
+.pinDot[data-status="recalled"] {
   background: var(--status-flagged, var(--ink-error));
 }
 

@@ -362,7 +362,8 @@
   background: var(--layer-deployed-bg, var(--ink-success));
 }
 
-.pinDot[data-status="flagged"] {
+.pinDot[data-status="flagged"],
+.pinDot[data-status="recalled"] {
   background: var(--layer-flagged-bg, var(--ink-warning));
 }
 

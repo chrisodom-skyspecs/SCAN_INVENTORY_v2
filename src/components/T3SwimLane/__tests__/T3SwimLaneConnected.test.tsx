@@ -165,7 +165,7 @@ describe("toSwimLaneCase", () => {
   it("maps all 8 valid phases as status", () => {
     const phases: SwimLaneCaseCard["currentPhase"][] = [
       "hangar", "assembled", "transit_out", "deployed",
-      "flagged", "transit_in", "received", "archived",
+      "flagged", "recalled", "transit_in", "received", "archived",
     ];
     for (const phase of phases) {
       const card = makeCard({ caseId: "c1", currentPhase: phase });

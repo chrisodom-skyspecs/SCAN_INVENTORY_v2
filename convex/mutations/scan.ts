@@ -153,6 +153,7 @@ const caseStatusValidator = v.union(
   v.literal("transit_out"),
   v.literal("deployed"),
   v.literal("flagged"),
+  v.literal("recalled"),
   v.literal("transit_in"),
   v.literal("received"),
   v.literal("archived"),
@@ -176,6 +177,22 @@ const scanContextValidator = v.optional(
   )
 );
 
+type ScanEventType = "check_in" | "inspection" | "handoff" | "lookup" | "shipping" | "receiving";
+
+function scanEventType(context: string | undefined, fallback: ScanEventType): ScanEventType {
+  if (
+    context === "check_in" ||
+    context === "inspection" ||
+    context === "handoff" ||
+    context === "lookup" ||
+    context === "shipping" ||
+    context === "receiving"
+  ) {
+    return context;
+  }
+  return fallback;
+}
+
 // ─── Status transition guard ──────────────────────────────────────────────────
 
 /**
@@ -195,8 +212,9 @@ const VALID_TRANSITIONS: Readonly<Record<string, ReadonlySet<string>>> = {
   hangar:      new Set(["assembled"]),
   assembled:   new Set(["transit_out", "deployed", "hangar"]),
   transit_out: new Set(["deployed", "received"]),
-  deployed:    new Set(["flagged", "transit_in", "assembled"]),
-  flagged:     new Set(["deployed", "transit_in", "assembled"]),
+  deployed:    new Set(["flagged", "recalled", "transit_in", "assembled"]),
+  flagged:     new Set(["deployed", "recalled", "transit_in", "assembled"]),
+  recalled:    new Set(["transit_in", "received"]),
   transit_in:  new Set(["received"]),
   received:    new Set(["assembled", "archived", "hangar"]),
   archived:    new Set([]),
@@ -471,6 +489,9 @@ export const checkInCase = mutation({
      * Example: JSON.stringify({ userAgent: navigator.userAgent, camera: "rear" })
      */
     deviceInfo: v.optional(v.string()),
+
+    /** Client-generated idempotency key for offline replay. */
+    clientId: v.optional(v.string()),
   },
 
   handler: async (ctx, args): Promise<CheckInCaseResult> => {
@@ -478,6 +499,24 @@ export const checkInCase = mutation({
     await requireAuth(ctx);
 
     const now = args.timestamp;
+
+    if (args.clientId) {
+      const existing = await ctx.db
+        .query("scans")
+        .withIndex("by_client_id", (q) => q.eq("clientId", args.clientId))
+        .first();
+      if (existing) {
+        const existingCase = await ctx.db.get(existing.caseId);
+        return {
+          scanId: existing._id.toString(),
+          caseId: existing.caseId,
+          previousStatus: existingCase?.status ?? args.newStatus,
+          newStatus: existingCase?.status ?? args.newStatus,
+          scannedAt: existing.scannedAt,
+          inspectionId: existing.inspectionId?.toString(),
+        };
+      }
+    }
 
     // ── Step 1: Verify case exists ────────────────────────────────────────────
     //
@@ -591,7 +630,24 @@ export const checkInCase = mutation({
       locationName:  args.locationName,
       scanContext:   args.scanContext,
       deviceInfo:    args.deviceInfo,
+      clientId:      args.clientId,
       // inspectionId linked in Step 5 after the inspection row is created
+    });
+
+    await ctx.db.insert("scan_events", {
+      caseId: args.caseId,
+      userId: args.technicianId,
+      timestamp: now,
+      location:
+        args.lat !== undefined || args.lng !== undefined || args.locationName !== undefined
+          ? {
+              lat: args.lat,
+              lng: args.lng,
+              name: args.locationName,
+            }
+          : undefined,
+      scanType: scanEventType(args.scanContext, "check_in"),
+      clientId: args.clientId,
     });
 
     // ── Step 5: CREATE inspection when transitioning to "deployed" ────────────
@@ -682,6 +738,7 @@ export const checkInCase = mutation({
           scanContext: args.scanContext,
           source:      "scan_check_in",
         },
+        clientId: args.clientId,
       });
     }
 
@@ -819,11 +876,25 @@ export const logScanOnly = mutation({
      * Optional device / browser metadata JSON string (support diagnostics only).
      */
     deviceInfo: v.optional(v.string()),
+    clientId: v.optional(v.string()),
   },
 
   handler: async (ctx, args): Promise<LogScanOnlyResult> => {
     // ── Auth guard ────────────────────────────────────────────────────────────
     await requireAuth(ctx);
+
+    if (args.clientId) {
+      const existing = await ctx.db
+        .query("scans")
+        .withIndex("by_client_id", (q) => q.eq("clientId", args.clientId))
+        .first();
+      if (existing) {
+        return {
+          scanId: existing._id.toString(),
+          scannedAt: existing.scannedAt,
+        };
+      }
+    }
 
     // ── Verify the case exists ────────────────────────────────────────────────
     // Prevents orphaned scan rows referencing nonexistent cases.
@@ -854,6 +925,23 @@ export const logScanOnly = mutation({
       scanContext:   args.scanContext,
       inspectionId:  args.inspectionId,
       deviceInfo:    args.deviceInfo,
+      clientId:      args.clientId,
+    });
+
+    await ctx.db.insert("scan_events", {
+      caseId: args.caseId,
+      userId: args.scannedBy,
+      timestamp: args.scannedAt,
+      location:
+        args.lat !== undefined || args.lng !== undefined || args.locationName !== undefined
+          ? {
+              lat: args.lat,
+              lng: args.lng,
+              name: args.locationName,
+            }
+          : undefined,
+      scanType: scanEventType(args.scanContext, "lookup"),
+      clientId: args.clientId,
     });
 
     return {

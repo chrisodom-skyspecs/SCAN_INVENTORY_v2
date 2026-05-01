@@ -352,7 +352,7 @@ describe("normaliseM1Records", () => {
   it("preserves status", () => {
     const statuses = [
       "hangar", "assembled", "transit_out", "deployed",
-      "flagged", "transit_in", "received", "archived",
+      "flagged", "recalled", "transit_in", "received", "archived",
     ] as const;
     for (const status of statuses) {
       const [record] = normaliseM1Records([makeM1Pin("x", { status })]);

@@ -52,7 +52,7 @@ interface CaseDoc {
   _creationTime: number;
   label: string;
   qrCode: string;
-  status: "hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "transit_in" | "received" | "archived";
+  status: "hangar" | "assembled" | "transit_out" | "deployed" | "flagged" | "recalled" | "transit_in" | "received" | "archived";
   templateId?: ConvexId<"caseTemplates">;
   missionId?: ConvexId<"missions">;
   lat?: number;
@@ -134,6 +134,7 @@ const CASE_STATUSES: CaseDoc["status"][] = [
   "transit_out",
   "deployed",
   "flagged",
+  "recalled",
   "transit_in",
   "received",
   "archived",

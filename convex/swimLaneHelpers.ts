@@ -58,6 +58,7 @@ export type SwimLanePhase =
   | "transit_out"
   | "deployed"
   | "flagged"
+  | "recalled"
   | "transit_in"
   | "received"
   | "archived";
@@ -76,6 +77,7 @@ export const SWIM_LANE_PHASES: readonly SwimLanePhase[] = [
   "transit_out",
   "deployed",
   "flagged",
+  "recalled",
   "transit_in",
   "received",
   "archived",
@@ -91,6 +93,7 @@ export const SWIM_LANE_LABELS: Record<SwimLanePhase, string> = {
   transit_out: "Transit Out",
   deployed:    "Deployed",
   flagged:     "Flagged",
+  recalled:    "Recalled",
   transit_in:  "Transit In",
   received:    "Received",
   archived:    "Archived",

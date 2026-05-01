@@ -85,6 +85,16 @@ vi.mock("@/hooks/use-case-map-data", () => ({
   useCaseMapData: (...args: unknown[]) => mockUseCaseMapData(...args),
 }));
 
+vi.mock("react-map-gl", () => ({
+  Map: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="react-map-gl-map">{children}</div>
+  ),
+  NavigationControl: () => <div data-testid="map-navigation-control" />,
+  Marker: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="map-marker">{children}</div>
+  ),
+}));
+
 // ─── CSS module stub ──────────────────────────────────────────────────────────
 
 vi.mock("../M4Deployment.module.css", () => ({ default: {} }));

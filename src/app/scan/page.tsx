@@ -53,6 +53,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { ScanLandingManualEntry } from "./ScanLandingManualEntry";
+import { ScanTodayClient } from "./ScanTodayClient";
 import { ScanLogoutButton } from "@/components/ScanLogoutButton";
 import { ScanUserRoleBadge } from "@/components/ScanUserRoleBadge";
 import { ScanAssociateQRLink } from "@/components/ScanAssociateQRLink";
@@ -168,6 +169,8 @@ export default async function ScanLandingPage() {
           </p>
         </div>
       </section>
+
+      <ScanTodayClient />
 
       {/* ── Manual entry fallback (client component) ─────────────────── */}
       <ScanLandingManualEntry />

@@ -54,6 +54,7 @@ type CaseStatus =
   | "transit_out"
   | "deployed"
   | "flagged"
+  | "recalled"
   | "transit_in"
   | "received"
   | "archived";
@@ -318,6 +319,7 @@ function simulateGetCaseStatusCounts(allCases: CaseDoc[]): CaseStatusCounts {
     transit_out: 0,
     deployed: 0,
     flagged: 0,
+    recalled: 0,
     transit_in: 0,
     received: 0,
     archived: 0,
@@ -433,6 +435,7 @@ const CASE_STATUSES: CaseStatus[] = [
   "transit_out",
   "deployed",
   "flagged",
+  "recalled",
   "transit_in",
   "received",
   "archived",

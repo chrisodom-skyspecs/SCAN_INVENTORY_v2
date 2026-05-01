@@ -10,7 +10,7 @@
  *
  * `kind` covers every status value from the Convex schema:
  *   - Case lifecycle:      hangar | assembled | transit_out | deployed |
- *                          flagged | transit_in | received | archived
+ *                          flagged | recalled | transit_in | received | archived
  *   - Inspection:          pending | in_progress | completed | flagged
  *   - Shipment:            label_created | picked_up | in_transit |
  *                          out_for_delivery | delivered | exception
@@ -29,6 +29,7 @@ export type StatusKind =
   | "transit_out"
   | "deployed"
   | "flagged"
+  | "recalled"
   | "transit_in"
   | "received"
   | "archived"
@@ -62,6 +63,7 @@ const STATUS_LABELS: Record<StatusKind, string> = {
   transit_out: "Transit Out",
   deployed:    "Deployed",
   flagged:     "Flagged",
+  recalled:    "Recalled",
   transit_in:  "Transit In",
   received:    "Received",
   archived:    "Archived",
@@ -108,6 +110,7 @@ const STATUS_SIGNAL: Record<StatusKind, SignalKind> = {
   transit_out: "warning",  // in transit outbound — watch it
   deployed:    "success",  // actively in use at site — positive
   flagged:     "error",    // has outstanding issues — needs attention
+  recalled:    "error",    // action required by current custodian
   transit_in:  "warning",  // in transit inbound — watch it
   received:    "neutral",  // back at base
   archived:    "neutral",  // decommissioned

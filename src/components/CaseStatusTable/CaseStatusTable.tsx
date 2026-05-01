@@ -18,7 +18,7 @@
  *   All status values are rendered via <StatusPill kind={status} /> — never
  *   ad-hoc colored spans.  This ensures design-system compliance across all
  *   case status states (hangar, assembled, transit_out, deployed, flagged,
- *   transit_in, received, archived).
+ *   recalled, transit_in, received, archived).
  *
  * Status filter:
  *   A pill-shaped filter bar at the top lets operators click a status to
@@ -77,6 +77,7 @@ const CASE_STATUSES: CaseStatus[] = [
   "transit_out",
   "deployed",
   "flagged",
+  "recalled",
   "transit_in",
   "received",
   "archived",
@@ -92,6 +93,7 @@ const STATUS_FILTER_LABELS: Record<CaseStatus, string> = {
   transit_out: "Transit Out",
   deployed:    "Deployed",
   flagged:     "Flagged",
+  recalled:    "Recalled",
   transit_in:  "Transit In",
   received:    "Received",
   archived:    "Archived",
@@ -469,6 +471,7 @@ export function CaseStatusTable({
                     role="row"
                     aria-selected={isSelected}
                     aria-label={`Case ${caseDoc.label}, status: ${caseDoc.status}`}
+                    title={caseDoc.recallReason ? `Recall reason: ${caseDoc.recallReason}` : undefined}
                   >
                     {/* Case label — IBM Plex Mono, machine-readable identifier */}
                     <td className={`${styles.td} ${styles.labelCell}`}>
@@ -477,7 +480,9 @@ export function CaseStatusTable({
 
                     {/* Status — always rendered via <StatusPill> for design compliance */}
                     <td className={`${styles.td} ${styles.statusCell}`}>
-                      <StatusPill kind={caseDoc.status as StatusKind} />
+                      <span title={caseDoc.recallReason ? `Recall reason: ${caseDoc.recallReason}` : undefined}>
+                        <StatusPill kind={caseDoc.status as StatusKind} />
+                      </span>
                     </td>
 
                     {/* Location — optional; shows dash when not set */}

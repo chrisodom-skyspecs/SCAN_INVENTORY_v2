@@ -147,6 +147,7 @@ const swimLanePhaseValidator = v.union(
   v.literal("transit_out"),
   v.literal("deployed"),
   v.literal("flagged"),
+  v.literal("recalled"),
   v.literal("transit_in"),
   v.literal("received"),
   v.literal("archived"),
@@ -211,7 +212,7 @@ const MAX_BOARD_CASES = 500;
  *
  *   // Field-active phases only
  *   const board = useQuery(api["queries/swimLanes"].getSwimLaneBoard, {
- *     phases: ["transit_out", "deployed", "flagged", "transit_in"],
+ *     phases: ["transit_out", "deployed", "flagged", "recalled", "transit_in"],
  *   });
  *
  *   // My Cases swim-lane

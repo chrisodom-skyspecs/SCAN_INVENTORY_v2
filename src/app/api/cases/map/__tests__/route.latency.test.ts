@@ -49,6 +49,7 @@ const CASE_STATUSES = [
   "transit_out",
   "deployed",
   "flagged",
+  "recalled",
   "transit_in",
   "received",
   "archived",

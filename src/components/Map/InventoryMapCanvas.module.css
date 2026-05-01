@@ -1,0 +1,22 @@
+.root {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.emptyOverlay {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 20;
+  max-width: min(24rem, calc(100% - 2rem));
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.75rem;
+  background: var(--surface-overlay);
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+  box-shadow: var(--shadow-md);
+}

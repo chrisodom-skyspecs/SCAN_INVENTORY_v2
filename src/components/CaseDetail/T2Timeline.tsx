@@ -257,7 +257,7 @@ function toISOString(epochMs: number): string {
 function deriveStatusKind(stop: JourneyStop): string | null {
   const validCaseStatuses = new Set([
     "hangar", "assembled", "transit_out", "deployed",
-    "flagged", "transit_in", "received", "archived",
+    "flagged", "recalled", "transit_in", "received", "archived",
   ]);
 
   switch (stop.eventType) {

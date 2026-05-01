@@ -255,6 +255,18 @@ export const STATUS_MARKER_STYLES: Readonly<Record<CaseStatus, MarkerStyleDef>> 
     zPriority:   100,
   },
 
+  recalled: {
+    key:         "recalled",
+    colorToken:  "--layer-flagged-color",
+    bgToken:     "--layer-flagged-bg",
+    borderToken: "--layer-flagged-border",
+    subtleToken: "--layer-flagged-subtle",
+    shape:       "triangle",
+    icon:        "pin-recalled",
+    ariaLabel:   "Case recalled to hangar",
+    zPriority:   100,
+  },
+
   transit_in: {
     key:         "transit_in",
     colorToken:  "--layer-transit-color",

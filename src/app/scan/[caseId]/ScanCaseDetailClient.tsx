@@ -48,13 +48,18 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { useScanCaseDetail } from "../../../hooks/use-scan-queries";
 import { useFedExTracking } from "../../../hooks/use-fedex-tracking";
 import { StatusPill } from "../../../components/StatusPill";
 import { TrackingStatus } from "../../../components/TrackingStatus";
 import { useCurrentUser } from "../../../hooks/use-current-user";
+import { useLatestCustodyRecord } from "../../../hooks/use-custody";
 import { OPERATIONS } from "@/lib/rbac-client";
 import type { CaseStatus } from "../../../../convex/cases";
+import { scanMobileStatusLabel } from "@/lib/scan-mobile-data-contract";
 import styles from "./page.module.css";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -73,6 +78,20 @@ function formatDate(epochMs: number): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatRelativeDate(epochMs: number): string {
+  const diffMs = Date.now() - epochMs;
+  const minutes = Math.floor(diffMs / 60_000);
+  const hours = Math.floor(diffMs / 3_600_000);
+  const days = Math.floor(diffMs / 86_400_000);
+
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 30) return `${days}d ago`;
+
+  return formatDate(epochMs);
 }
 
 function truncateQR(payload: string, maxLen = 64): string {
@@ -302,6 +321,11 @@ export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
   // scanCheckIn, shipCase, etc.) — satisfying the ≤ 2-second real-time
   // fidelity requirement.
   const caseDoc = useScanCaseDetail(caseId);
+  const mobileSummary = useQuery(api.scanMobile.caseMobileSummary, {
+    caseId: caseId as Id<"cases">,
+    recentEventLimit: 4,
+  });
+  const latestCustody = useLatestCustodyRecord(caseId);
 
   // ── FedEx tracking subscription ───────────────────────────────────────────
   // Subscribes to api.shipping.listShipmentsByCase — a reactive Convex query
@@ -337,7 +361,9 @@ export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
   //   canGenerateQR     → QR_CODE_GENERATE required → technician + admin only
   // All other SCAN actions (Check In, Ship Case, Transfer Custody) are
   // permitted for admin, technician, and pilot (universal operations).
-  const { can, isLoading: rolesLoading } = useCurrentUser();
+  const currentUser = useCurrentUser();
+  const { can, isLoading: rolesLoading } = currentUser;
+  const handoffCustody = useMutation(api.custodyHandoffs.handoffCustody);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (caseDoc === undefined) {
@@ -389,6 +415,22 @@ export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
   // ── Derive QR linked state ─────────────────────────────────────────────────
   // qrCode is required in the schema but may be an empty string on new cases
   const hasQrCode = typeof caseDoc.qrCode === "string" && caseDoc.qrCode.trim().length > 0;
+  const currentHolderName = latestCustody?.toUserName ?? caseDoc.assigneeName ?? "Unassigned";
+  const currentHolderSince = latestCustody?.transferredAt ?? caseDoc.updatedAt;
+
+  const acknowledgeRecall = async () => {
+    await handoffCustody({
+      caseId: caseDoc._id as Id<"cases">,
+      fromUserId: caseDoc.assigneeId ?? currentUser.id,
+      fromUserName: caseDoc.assigneeName ?? currentUser.name,
+      toUserId: "hangar_logistics",
+      toUserName: "SkySpecs Hangar Logistics",
+      handoffAt: Date.now(),
+      locationName: "Return to SkySpecs Hangar",
+      notes: `Recall acknowledged in SCAN. Reason: ${caseDoc.recallReason ?? "No reason provided."}`,
+    });
+    router.push(`/scan/${caseId}/ship`);
+  };
 
   return (
     <div className={styles.page}>
@@ -396,7 +438,11 @@ export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
       <div className={styles.caseHeader}>
         <div className={styles.caseHeaderRow}>
           <h1 className={styles.caseLabel}>{caseDoc.label}</h1>
-          <StatusPill kind={caseDoc.status as CaseStatus} filled />
+          <StatusPill
+            kind={caseDoc.status as CaseStatus}
+            label={scanMobileStatusLabel(caseDoc.status as CaseStatus)}
+            filled
+          />
         </div>
 
         {/* Key metadata */}
@@ -410,7 +456,7 @@ export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
 
           {caseDoc.assigneeName && (
             <div className={styles.metaItem}>
-              <dt className={styles.metaLabel}>Assigned to</dt>
+              <dt className={styles.metaLabel}>Case assignee</dt>
               <dd className={styles.metaValue}>{caseDoc.assigneeName}</dd>
             </div>
           )}
@@ -422,7 +468,105 @@ export function ScanCaseDetailClient({ caseId }: ScanCaseDetailClientProps) {
         </dl>
       </div>
 
+      <section
+        className={styles.custodyCard}
+        aria-label="Current chain of custody"
+        data-testid="scan-current-custody"
+      >
+        <div className={styles.custodyHeader}>
+          <div>
+            <p className={styles.custodyEyebrow}>Current holder</p>
+            <h2 className={styles.custodyHolder}>{currentHolderName}</h2>
+          </div>
+          <span className={styles.custodyAge}>{formatRelativeDate(currentHolderSince)}</span>
+        </div>
+
+        {latestCustody === undefined ? (
+          <p className={styles.custodyBody}>Loading custody record...</p>
+        ) : latestCustody === null ? (
+          <p className={styles.custodyBody}>
+            No handoff has been recorded yet. SCAN will verify the next transfer
+            against the same custody record INVENTORY uses.
+          </p>
+        ) : (
+          <p className={styles.custodyBody}>
+            Last handoff: {latestCustody.fromUserName} to {latestCustody.toUserName}
+            {" "}on {formatDate(latestCustody.transferredAt)}.
+          </p>
+        )}
+
+        <div className={styles.custodyActions}>
+          <Link className={styles.custodyLink} href={`/scan/${caseId}/handoff`}>
+            Transfer custody
+          </Link>
+          <Link className={styles.custodyLink} href={`/inventory?case=${caseId}&panel=1`}>
+            Verify in INVENTORY
+          </Link>
+        </div>
+      </section>
+
+      {caseDoc.status === "recalled" && (
+        <section className={styles.recallBanner} role="alert">
+          <h2 className={styles.recallBannerTitle}>Return to hangar required</h2>
+          <p className={styles.recallBannerText}>
+            {caseDoc.recallReason ?? "This case has been recalled by operations."}
+          </p>
+          <button
+            className={styles.recallBannerButton}
+            type="button"
+            onClick={() => void acknowledgeRecall()}
+          >
+            Acknowledge - return to hangar
+          </button>
+        </section>
+      )}
+
       <hr className={styles.divider} aria-hidden="true" />
+
+      {mobileSummary && (
+        <>
+          <section className={styles.mobileSummaryGrid} aria-label="Manifest and condition summary">
+            <div className={styles.summaryTile}>
+              <span className={styles.summaryTileLabel}>Manifest</span>
+              <strong>
+                {mobileSummary.checklist.total - mobileSummary.checklist.unchecked}
+                {" / "}
+                {mobileSummary.checklist.total}
+              </strong>
+              <span>{mobileSummary.checklist.unchecked} unchecked</span>
+            </div>
+            <div className={styles.summaryTile}>
+              <span className={styles.summaryTileLabel}>Flags</span>
+              <strong>{mobileSummary.conditionNotes.length}</strong>
+              <span>
+                {mobileSummary.conditionNotes[0]?.severity
+                  ? `Latest: ${mobileSummary.conditionNotes[0].severity}`
+                  : "No active notes"}
+              </span>
+            </div>
+          </section>
+
+          {mobileSummary.recentEvents.length > 0 && (
+            <section className={styles.activityCard} aria-label="Recent activity">
+              <div className={styles.activityHeader}>
+                <h3 className={styles.sectionTitle}>Recent Activity</h3>
+                <span>{mobileSummary.recentEvents.length} events</span>
+              </div>
+              <ol className={styles.activityList}>
+                {mobileSummary.recentEvents.map((event) => (
+                  <li key={event._id} className={styles.activityItem}>
+                    <span className={styles.activityTime}>{formatRelativeDate(event.timestamp)}</span>
+                    <strong>{event.eventType.replaceAll("_", " ")}</strong>
+                    <span>{event.userName}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          <hr className={styles.divider} aria-hidden="true" />
+        </>
+      )}
 
       {/* ── QR code section ───────────────────────────────────────────── */}
       {/*

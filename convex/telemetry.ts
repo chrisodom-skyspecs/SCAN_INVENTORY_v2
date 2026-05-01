@@ -47,6 +47,10 @@ async function requireAuth(ctx: { auth: Auth }): Promise<UserIdentity> {
   return identity;
 }
 
+async function getOptionalAuth(ctx: { auth: Auth }): Promise<UserIdentity | null> {
+  return await ctx.auth.getUserIdentity();
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /**
@@ -106,7 +110,7 @@ export const persistTelemetryEvents = mutation({
   }),
 
   handler: async (ctx, { events }) => {
-    await requireAuth(ctx);
+    const identity = await getOptionalAuth(ctx);
     if (events.length > MAX_BATCH_SIZE) {
       throw new Error(
         `Batch size ${events.length} exceeds maximum of ${MAX_BATCH_SIZE} events.`
@@ -133,7 +137,7 @@ export const persistTelemetryEvents = mutation({
       const sessionId: string =
         typeof event.sessionId === "string" ? event.sessionId : "";
       const userId: string | undefined =
-        typeof event.userId === "string" ? event.userId : undefined;
+        typeof event.userId === "string" ? event.userId : identity?.subject;
       const caseId: string | undefined =
         typeof event.caseId === "string" ? event.caseId : undefined;
       const timestamp: number =
@@ -258,7 +262,7 @@ export const recordTelemetryBatch = mutation({
   }),
 
   handler: async (ctx, { events }) => {
-    await requireAuth(ctx);
+    const identity = await getOptionalAuth(ctx);
     if (events.length > MAX_BATCH_SIZE) {
       throw new Error(
         `Batch size ${events.length} exceeds maximum of ${MAX_BATCH_SIZE} events.`
@@ -285,7 +289,7 @@ export const recordTelemetryBatch = mutation({
       const sessionId: string =
         typeof event.sessionId === "string" ? event.sessionId : "";
       const userId: string | undefined =
-        typeof event.userId === "string" ? event.userId : undefined;
+        typeof event.userId === "string" ? event.userId : identity?.subject;
       const caseId: string | undefined =
         typeof event.caseId === "string" ? event.caseId : undefined;
       const timestamp: number =

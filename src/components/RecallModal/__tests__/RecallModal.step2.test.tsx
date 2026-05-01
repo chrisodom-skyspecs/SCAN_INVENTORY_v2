@@ -125,6 +125,12 @@ function renderRecallModalAtStep2(
   return { onClose, onConfirm, onSubmit, ...utils };
 }
 
+function fillRequiredReason(value = "Firmware upgrade recall") {
+  fireEvent.change(screen.getByTestId("recall-reason-textarea"), {
+    target: { value },
+  });
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("RecallModalStep2Reroute — Step 2 (Reroute)", () => {
@@ -369,6 +375,7 @@ describe("RecallModalStep2Reroute — Step 2 (Reroute)", () => {
     it("calls onSubmit with default fedex method and no notes on Submit click", () => {
       const onSubmit = vi.fn();
       renderStep2({ onSubmit });
+      fillRequiredReason();
       fireEvent.click(screen.getByTestId("recall-submit-btn"));
       expect(onSubmit).toHaveBeenCalledTimes(1);
       expect(onSubmit).toHaveBeenCalledWith(
@@ -382,6 +389,7 @@ describe("RecallModalStep2Reroute — Step 2 (Reroute)", () => {
     it("calls onSubmit with driver_pickup when that method is selected", () => {
       const onSubmit = vi.fn();
       renderStep2({ onSubmit });
+      fillRequiredReason();
       fireEvent.click(
         screen.getByTestId("recall-method-radio-driver_pickup")
       );
@@ -396,6 +404,7 @@ describe("RecallModalStep2Reroute — Step 2 (Reroute)", () => {
     it("calls onSubmit with warehouse_drop_off when that method is selected", () => {
       const onSubmit = vi.fn();
       renderStep2({ onSubmit });
+      fillRequiredReason();
       fireEvent.click(
         screen.getByTestId("recall-method-radio-warehouse_drop_off")
       );
@@ -410,6 +419,7 @@ describe("RecallModalStep2Reroute — Step 2 (Reroute)", () => {
     it("passes notes string when notes are entered", () => {
       const onSubmit = vi.fn();
       renderStep2({ onSubmit });
+      fillRequiredReason();
       fireEvent.change(screen.getByTestId("recall-notes-textarea"), {
         target: { value: "Return via morning route." },
       });
@@ -422,6 +432,7 @@ describe("RecallModalStep2Reroute — Step 2 (Reroute)", () => {
     it("notes is undefined in payload when textarea is only whitespace", () => {
       const onSubmit = vi.fn();
       renderStep2({ onSubmit });
+      fillRequiredReason();
       fireEvent.change(screen.getByTestId("recall-notes-textarea"), {
         target: { value: "   " },
       });
@@ -533,6 +544,7 @@ describe("RecallModalStep2Reroute — Step 2 (Reroute)", () => {
       const { onSubmit } = renderRecallModalAtStep2();
 
       await act(async () => {
+        fillRequiredReason();
         fireEvent.click(
           screen.getByTestId("recall-method-radio-driver_pickup")
         );

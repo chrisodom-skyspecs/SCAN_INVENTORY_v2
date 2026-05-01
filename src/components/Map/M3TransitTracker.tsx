@@ -38,6 +38,8 @@ import { useMapParams } from "@/hooks/use-map-params";
 import { useCaseMapData } from "@/hooks/use-case-map-data";
 import { MAP_VIEW_VALUES, type MapView } from "@/types/map";
 import { useIsDark } from "@/providers/theme-provider";
+import { InventoryMapCanvas } from "./InventoryMapCanvas";
+import { InventoryCaseMarkers } from "./InventoryCaseMarkers";
 import styles from "./M3TransitTracker.module.css";
 
 // ─── Mapbox style URLs ────────────────────────────────────────────────────────
@@ -337,10 +339,6 @@ export function M3TransitTracker({
       {/* ── Map canvas ── */}
       <main className={styles.mapCanvas} aria-label="Field mode map">
         {mapboxToken ? (
-          /* Map rendered by react-map-gl; M3 field-mode case pin data exposed via
-             data attributes for the Mapbox layer integration.  Each CaseMapRecord
-             carries inspection progress fields (inspectionProgress, checkedItems,
-             totalItems) for overlay rendering on the field map. */
           <div
             id="m3-map-container"
             className={styles.mapContainer}
@@ -349,7 +347,24 @@ export function M3TransitTracker({
             data-theme={isDark ? "dark" : "light"}
             data-pin-count={pins.length}
             data-loading={isLoading ? "true" : undefined}
-          />
+          >
+            <InventoryMapCanvas
+              mapboxToken={mapboxToken}
+              mapStyle={mapStyle}
+              aria-label="Field mode map"
+              showEmptyMessage={!isLoading && pins.length === 0}
+              emptyMessage="No field case locations to display yet."
+            >
+              <InventoryCaseMarkers
+                records={pins}
+                getMeta={(pin) =>
+                  pin.inspectionProgress !== undefined
+                    ? `${pin.inspectionProgress}%`
+                    : pin.locationName ?? pin.status
+                }
+              />
+            </InventoryMapCanvas>
+          </div>
         ) : (
           <div
             className={styles.mapPlaceholder}

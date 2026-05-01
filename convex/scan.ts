@@ -93,6 +93,7 @@ const caseStatusValidator = v.union(
   v.literal("transit_out"),
   v.literal("deployed"),
   v.literal("flagged"),
+  v.literal("recalled"),
   v.literal("transit_in"),
   v.literal("received"),
   v.literal("archived"),
@@ -137,8 +138,9 @@ const VALID_TRANSITIONS: Readonly<Record<string, ReadonlySet<string>>> = {
   hangar:      new Set(["assembled"]),
   assembled:   new Set(["transit_out", "deployed", "hangar"]),
   transit_out: new Set(["deployed", "received"]),
-  deployed:    new Set(["flagged", "transit_in", "assembled"]),
-  flagged:     new Set(["deployed", "transit_in", "assembled"]),
+  deployed:    new Set(["flagged", "recalled", "transit_in", "assembled"]),
+  flagged:     new Set(["deployed", "recalled", "transit_in", "assembled"]),
+  recalled:    new Set(["transit_in", "received"]),
   transit_in:  new Set(["received"]),
   received:    new Set(["assembled", "archived", "hangar"]),
   archived:    new Set([]),
@@ -336,6 +338,9 @@ export const scanCheckIn = mutation({
      * Stored in scans.deviceInfo for support diagnostics only; not indexed.
      */
     deviceInfo:     v.optional(v.string()),
+
+    /** Client-generated idempotency key for offline replay. */
+    clientId:       v.optional(v.string()),
   },
 
   handler: async (ctx, args): Promise<ScanCheckInResult> => {
@@ -343,6 +348,23 @@ export const scanCheckIn = mutation({
     await requireAuth(ctx);
 
     const now = args.timestamp;
+
+    if (args.clientId) {
+      const existing = await ctx.db
+        .query("scans")
+        .withIndex("by_client_id", (q) => q.eq("clientId", args.clientId))
+        .first();
+      if (existing) {
+        const existingCase = await ctx.db.get(existing.caseId);
+        return {
+          scanId: existing._id.toString(),
+          caseId: existing.caseId,
+          previousStatus: existingCase?.status ?? args.status,
+          newStatus: existingCase?.status ?? args.status,
+          inspectionId: existing.inspectionId?.toString(),
+        };
+      }
+    }
 
     // ── Verify case exists ────────────────────────────────────────────────────
     const caseDoc = await ctx.db.get(args.caseId);
@@ -421,7 +443,29 @@ export const scanCheckIn = mutation({
       locationName:  args.locationName,
       scanContext:   args.scanContext ?? "check_in",
       deviceInfo:    args.deviceInfo,
+      clientId:      args.clientId,
       // inspectionId linked below when a new inspection is created
+    });
+
+    await ctx.db.insert("scan_events", {
+      caseId: args.caseId,
+      userId: args.technicianId,
+      timestamp: now,
+      location:
+        args.lat !== undefined || args.lng !== undefined || args.locationName !== undefined
+          ? {
+              lat: args.lat,
+              lng: args.lng,
+              name: args.locationName,
+            }
+          : undefined,
+      scanType:
+        args.scanContext === "inspection" ||
+        args.scanContext === "handoff" ||
+        args.scanContext === "lookup"
+          ? args.scanContext
+          : "check_in",
+      clientId: args.clientId,
     });
 
     // ── Record status_change event (immutable audit) ──────────────────────────
@@ -442,6 +486,7 @@ export const scanCheckIn = mutation({
           notes:    args.notes,
           scanId:   scanId.toString(),
         },
+        clientId: args.clientId,
       });
     }
 

@@ -300,7 +300,7 @@ function deriveStatusKind(
 ): StatusKind | null {
   const validCaseStatuses = new Set([
     "hangar", "assembled", "transit_out", "deployed",
-    "flagged", "transit_in", "received", "archived",
+    "flagged", "recalled", "transit_in", "received", "archived",
   ]);
 
   switch (eventType) {

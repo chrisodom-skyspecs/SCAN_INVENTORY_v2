@@ -624,8 +624,8 @@ describe("SCAN query layer — type exports", () => {
   it("exports CaseStatus compatible values", () => {
     const statuses: Array<
       "hangar" | "assembled" | "transit_out" | "deployed" |
-      "flagged" | "transit_in" | "received" | "archived"
-    > = ["hangar", "assembled", "transit_out", "deployed", "flagged", "transit_in", "received", "archived"];
-    expect(statuses).toHaveLength(8);
+      "flagged" | "recalled" | "transit_in" | "received" | "archived"
+    > = ["hangar", "assembled", "transit_out", "deployed", "flagged", "recalled", "transit_in", "received", "archived"];
+    expect(statuses).toHaveLength(9);
   });
 });

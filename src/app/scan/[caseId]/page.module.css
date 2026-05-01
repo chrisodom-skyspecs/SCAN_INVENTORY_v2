@@ -35,6 +35,49 @@
   padding: 1.25rem 0 1rem;
 }
 
+.recallBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background-color: var(--signal-error-fill-subtle);
+  border: 1.5px solid var(--signal-error-border);
+  border-radius: 0.75rem;
+  box-shadow: var(--elevation-1);
+}
+
+.recallBannerTitle {
+  margin: 0;
+  color: var(--signal-error-text-subtle);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.recallBannerText {
+  margin: 0;
+  color: var(--ink-primary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.recallBannerButton {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--signal-error-border);
+  border-radius: 999px;
+  background: var(--signal-error-fill);
+  color: var(--signal-error-text);
+  cursor: pointer;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 800;
+  padding: 0 1rem;
+}
+
 .caseHeaderRow {
   display: flex;
   align-items: flex-start;
@@ -91,6 +134,175 @@
   font-weight: 400;
   color: var(--ink-secondary);
   letter-spacing: 0.01em;
+}
+
+/* ── Custody proof card ─────────────────────────────────────────────── */
+
+.custodyCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1rem;
+  background-color: var(--surface-raised);
+  border: 1.5px solid var(--border-warning, var(--border-brand));
+  border-radius: 0.75rem;
+  box-shadow: var(--elevation-1);
+}
+
+.custodyHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.custodyEyebrow {
+  margin: 0 0 0.25rem;
+  color: var(--ink-tertiary);
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.custodyHolder {
+  margin: 0;
+  color: var(--ink-primary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.custodyAge {
+  flex-shrink: 0;
+  color: var(--ink-secondary);
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.custodyBody {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.custodyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.custodyLink {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background-color: var(--surface-card, var(--surface-raised));
+  color: var(--ink-primary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  padding: 0 0.875rem;
+  text-decoration: none;
+}
+
+.mobileSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.summaryTile {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background-color: var(--surface-raised);
+  padding: 0.875rem;
+}
+
+.summaryTileLabel {
+  color: var(--ink-tertiary);
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryTile strong {
+  color: var(--ink-primary);
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 1.125rem;
+}
+
+.summaryTile span:last-child {
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+}
+
+.activityCard {
+  display: grid;
+  gap: 0.625rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background-color: var(--surface-raised);
+  padding: 0.875rem;
+}
+
+.activityHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.activityHeader span,
+.activityTime {
+  color: var(--ink-tertiary);
+  font-family: "IBM Plex Mono", "Menlo", monospace;
+  font-size: 0.6875rem;
+}
+
+.activityList {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activityItem {
+  display: grid;
+  gap: 0.125rem;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.625rem;
+}
+
+.activityItem:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.activityItem strong {
+  color: var(--ink-primary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.875rem;
+  text-transform: capitalize;
+}
+
+.activityItem span:last-child {
+  color: var(--ink-secondary);
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
 }
 
 /* ── Divider ────────────────────────────────────────────────────────── */
