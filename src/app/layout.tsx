@@ -9,6 +9,7 @@
  */
 
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "./providers";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "../styles/tokens/base.css";
@@ -70,6 +71,7 @@ export default function RootLayout({
       </head>
       <body>
         <Providers>{children}</Providers>
+        <Analytics />
       </body>
     </html>
   );
